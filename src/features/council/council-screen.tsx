@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
+import { AdvancedOptions } from '@/components/advanced-options';
 import { Icon } from '@/components/icons';
 import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { palette } from '@/theme/colors';
+import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { CouncilArena } from './council-arena';
 import { JudgePanel } from './judge-panel';
@@ -20,10 +22,11 @@ import {
 } from './use-council-run';
 import { VoteBar } from './vote-bar';
 
-export function CouncilScreen({ agent: _agent, threadId }: { agent: AgentDef; threadId?: string }) {
+export function CouncilScreen({ agent, threadId }: { agent: AgentDef; threadId?: string }) {
   const [tickerEdit, setTicker] = useState<string | null>(null);
   const [queryEdit, setQuery] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
   const run = useCouncilRun();
   const { data: savedThread } = useCall(threadId);
 
@@ -73,13 +76,20 @@ export function CouncilScreen({ agent: _agent, threadId }: { agent: AgentDef; th
           value={query}
           onChangeText={setQuery}
         />
+        {agent.advanced?.length ? (
+          <AdvancedOptions
+            fields={agent.advanced}
+            values={advanced}
+            onChange={(k, v) => setAdvanced((s) => ({ ...s, [k]: v }))}
+          />
+        ) : null}
         <Button
           title={streaming ? 'In session…' : 'Convene the council'}
           loading={streaming}
           disabled={!ticker.trim()}
           onPress={() => {
             setSelected(null);
-            run.start({ ticker, query });
+            run.start({ ticker, query }, buildOverrides(agent.advanced, advanced));
           }}
         />
         {streaming ? <Button title="Cancel" variant="ghost" onPress={run.cancel} /> : null}

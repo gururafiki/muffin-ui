@@ -4,10 +4,19 @@ import { storage } from '@/lib/storage';
 
 export type LlmProvider = 'openai' | 'anthropic' | 'openrouter';
 
+/** Research effort mode. Empty string = leave the server default unchanged. */
+export type ResearchMode = '' | 'speed' | 'balanced' | 'quality';
+
 /**
  * User-owned configuration. Per the "bring your own keys" model, these live
  * on-device only and are injected into each run's `configurable` — never
  * persisted server-side by the client.
+ *
+ * Field names here are UI-facing (camelCase); `configurable.ts` maps them to the
+ * snake_case keys the backend's `BaseConfiguration` subclasses read. The
+ * "Advanced configuration" block (everything below `openbbApiKey`) surfaces the
+ * model-role / MCP / research / store knobs the agents already honour at
+ * runtime — empty means "leave the server default".
  */
 export interface Settings {
   /** LangGraph server base URL. Web defaults to the same-origin `/api` proxy. */
@@ -23,6 +32,33 @@ export interface Settings {
   openrouterApiKey: string;
   /** OpenBB personal access token (BYO market-data key). */
   openbbApiKey: string;
+
+  // ── Advanced: model roles (ModelConfiguration) ───────────────────────
+  /** Sampling temperature (0–2). */
+  temperature: string;
+  /** Comma-separated model chain for the orchestrator role (primary, ...fallbacks). */
+  orchestratorModels: string;
+  /** Comma-separated model chain for the collector role. */
+  collectorModels: string;
+  /** Comma-separated model chain for the reasoner role. */
+  reasonerModels: string;
+  /** Cheap/fast model used to summarise tool failures into one-line lessons. */
+  summariserModel: string;
+
+  // ── Advanced: MCP servers (McpConfiguration) ─────────────────────────
+  openbbMcpUrl: string;
+  firecrawlMcpUrl: string;
+
+  // ── Advanced: research (ResearchConfiguration) ───────────────────────
+  researchDefaultMode: ResearchMode;
+  /** Cosine rerank cutoff for research evidence (0–1). */
+  rerankThreshold: string;
+  /** Max web-search results per research iteration. */
+  maxSearchResults: string;
+
+  // ── Advanced: store access (StoreConfiguration) ──────────────────────
+  /** Comma-separated namespace prefixes an agent may access (blank = unrestricted). */
+  storeAllowedNamespaces: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,6 +71,17 @@ export const DEFAULT_SETTINGS: Settings = {
   anthropicApiKey: '',
   openrouterApiKey: '',
   openbbApiKey: '',
+  temperature: '',
+  orchestratorModels: '',
+  collectorModels: '',
+  reasonerModels: '',
+  summariserModel: '',
+  openbbMcpUrl: '',
+  firecrawlMcpUrl: '',
+  researchDefaultMode: '',
+  rerankThreshold: '',
+  maxSearchResults: '',
+  storeAllowedNamespaces: '',
 };
 
 const STORAGE_KEY = 'muffin.settings.v1';

@@ -22,17 +22,22 @@ let seq = 0;
  * "updates") plus final state ("values"). If the live stream fails before any
  * event arrives — e.g. a platform without streaming-fetch — it transparently
  * falls back to a blocking `runs.wait` and surfaces the final state.
+ *
+ * `assistantId` overrides the run target (defaults to `agent.id`) so a saved
+ * preset assistant can be run through the same generic runner; the thread is
+ * still tagged with `agent.id` so reopening resolves the right `AgentDef`.
  */
-export function useAgentRun(agent: AgentDef) {
+export function useAgentRun(agent: AgentDef, assistantId?: string) {
   const [state, setState] = useState<RunState>(INITIAL);
   const abortRef = useRef<AbortController | null>(null);
+  const runTarget = assistantId ?? agent.id;
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
   const start = useCallback(
-    async (values: Record<string, string>) => {
+    async (values: Record<string, string>, overrides?: Record<string, unknown>) => {
       cancel();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -40,7 +45,8 @@ export function useAgentRun(agent: AgentDef) {
       const settings = getSettings();
       const client = makeClient(settings);
       const input = agent.buildInput(values);
-      const config = { configurable: buildConfigurable(settings) };
+      // Per-run overrides win over the global on-device settings.
+      const config = { configurable: { ...buildConfigurable(settings), ...(overrides ?? {}) } };
 
       setState({ ...INITIAL, status: 'streaming' });
 
@@ -54,7 +60,7 @@ export function useAgentRun(agent: AgentDef) {
         threadId = thread.thread_id;
         setState((s) => ({ ...s, threadId }));
 
-        const stream = client.runs.stream(threadId, agent.id, {
+        const stream = client.runs.stream(threadId, runTarget, {
           input,
           config,
           streamMode: ['updates', 'values'],
@@ -89,7 +95,7 @@ export function useAgentRun(agent: AgentDef) {
         // Streaming never produced an event → fall back to a blocking run.
         if (!receivedAny && threadId) {
           try {
-            const finalValues = await client.runs.wait(threadId, agent.id, { input, config });
+            const finalValues = await client.runs.wait(threadId, runTarget, { input, config });
             setState((s) => ({
               ...s,
               status: 'done',
@@ -105,7 +111,7 @@ export function useAgentRun(agent: AgentDef) {
         setState((s) => ({ ...s, status: 'error', error: errorMessage(err) }));
       }
     },
-    [agent, cancel],
+    [agent, cancel, runTarget],
   );
 
   const reset = useCallback(() => setState(INITIAL), []);

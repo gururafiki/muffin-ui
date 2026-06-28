@@ -48,10 +48,18 @@ emulator), enter an LLM key. Web defaults to the same-origin `/api` proxy (`EXPO
 ### Agent layer — `src/lib/agent/` (the core integration)
 The whole app is organised around **"one graph → one screen"**:
 - **`registry.ts`** maps a LangGraph `assistant_id` (from `muffin-agent/langgraph.json`:
-  `research`, `council`, `criteria_analysis`, `stock_evaluation`) → the inputs its UI collects,
-  a `buildInput` that shapes those into the run `input`, and the `resultKey` carrying the headline
-  output. **Adding an agent = adding one entry here.** A `custom` key opts an agent into a bespoke
-  screen (e.g. `council`) instead of the generic runner.
+  `research`, `council`, `criteria_analysis`, `stock_evaluation`, `trading_decision`) → the inputs
+  its UI collects, a `buildInput` that shapes those into the run `input`, and the `resultKey`
+  carrying the headline output. **Adding an agent = adding one entry here.** A `custom` key opts an
+  agent into a bespoke screen (e.g. `council`) instead of the generic runner. An optional
+  `advanced: AdvancedField[]` declares **per-run `configurable` overrides** surfaced in the runner's
+  "Advanced options" (`src/components/advanced-options.tsx`); `overrides.ts` (`initialOverrides` /
+  `buildOverrides`) turns the collected values into a `configurable` patch merged over global
+  settings at run start (used by both the generic runner and the council screen).
+- **`presets.ts`** wraps the SDK `assistants.search/create/delete` to save named, **non-secret**
+  configured assistants per graph (Agents tab). Presets store only the allowlisted `configurable`
+  from `buildPresetConfigurable` — never API keys / `user_id`; those are re-injected from on-device
+  settings when the preset runs (the generic runner accepts an `assistantId` to target a preset).
 - **`client.ts`** builds the `@langchain/langgraph-sdk` `Client`. `resolveApiUrl` resolves a
   relative `/api` to an absolute URL on web (the SDK builds every request with `new URL()`, which
   rejects relative bases).
@@ -63,10 +71,17 @@ The whole app is organised around **"one graph → one screen"**:
 
 ### Settings → `config.configurable` — `src/lib/settings/`
 On-device keys are injected into each run's `config.configurable`, never persisted server-side.
-**`configurable.ts` field names mirror `muffin-agent`'s `ModelConfiguration` / `McpConfiguration`
-(`llm_provider`, `model`, `openai_api_key`, `user_id`, …) — keep them in sync with the backend.**
-`store.ts` is a Zustand store persisted via the storage abstraction; `getSettings()` is a
-non-reactive snapshot for use outside React (building a run config).
+**`configurable.ts` field names mirror `muffin-agent`'s `BaseConfiguration` subclasses
+(`ModelConfiguration` / `McpConfiguration` / `ResearchConfiguration` / `StoreConfiguration`:
+`llm_provider`, `model`, `openai_api_key`, `user_id`, `orchestrator_models`, `temperature`,
+`openbb_mcp_url`, `research_default_mode`, `store_allowed_namespaces`, …) — keep them in sync with
+the backend.** `buildConfigurable` only emits non-empty values (with `putNum` / `putList` for
+numeric / comma-list knobs); the "Advanced configuration" Settings section feeds these. The agents
+read every key at runtime via `from_runnable_config`, so a knob takes effect as soon as the UI
+sends it — no backend change needed. `buildPresetConfigurable` is the no-secrets subset (strips
+`*_api_key` + `user_id`) used when saving an assistant preset. `store.ts` is a Zustand store
+persisted via the storage abstraction; `getSettings()` is a non-reactive snapshot for use outside
+React (building a run config).
 
 ### Platform-split files (Metro convention)
 `foo.web.ts` / `foo.native.ts` / `foo.ts` — Metro picks the web or native variant, `.ts` is the
