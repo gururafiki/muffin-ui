@@ -1,11 +1,27 @@
 /**
- * Muffin purple bakery design tokens.
+ * Muffin — kawaii blueberry-bakery design tokens.
  *
- * Flat-design, kawaii-doodle bakery aesthetic: a warm cream "dough" background,
- * a confident purple "frosting" primary, blueberry accents, and soft rounded
- * "muffin" radii. Colors are exposed as CSS variables (see src/global.css) so we
- * can theme light/dark without duplicating the Tailwind scale.
+ * Warm, dusty palette inspired by purple-plaid blueberry-bakery illustrations:
+ * a warm cream "dough" background, a confident grape "frosting" primary, deep
+ * "blueberry" berries, "butter" golden accents and green "leaf" mint. Thick
+ * "ink" doodle outlines, soft rounded "muffin"/"bun" radii and a cozy
+ * "blueberry-night" dark theme.
+ *
+ * Raw values are mirrored in src/theme/colors.ts for APIs that need plain
+ * colors (navigation theme, status bar, SVG fills, charts). Keep them in sync.
  */
+
+const sans = ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'];
+const mono = [
+  'ui-monospace',
+  'SFMono-Regular',
+  'Menlo',
+  'Monaco',
+  'Consolas',
+  'Liberation Mono',
+  'monospace',
+];
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
@@ -13,41 +29,84 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Brand purple ("frosting") — the hero color.
+        // Brand grape ("frosting") — the hero color.
         frosting: {
-          50: '#F6F1FE',
-          100: '#ECE3FD',
-          200: '#D7C6FB',
-          300: '#BCA0F6',
-          400: '#9D72EF',
-          500: '#7C4DE0', // primary
-          600: '#6838C6',
-          700: '#542CA0',
-          800: '#43257E',
-          900: '#382163',
+          50: '#F7F2FB',
+          100: '#EEE4F6',
+          200: '#DCC9EC',
+          300: '#C2A4DC',
+          400: '#A47EC6',
+          500: '#875DAE', // primary
+          600: '#6F4A93',
+          700: '#5A3C77', // deep grape — header/footer bands
+          800: '#46305C',
+          900: '#342346',
         },
-        // Blueberry accent (the muffin's berries).
+        // Deep blueberry berries — accent.
         blueberry: {
-          400: '#5B6CF0',
-          500: '#3F4BD6',
-          600: '#2F38AD',
+          300: '#6E63A6',
+          400: '#524785',
+          500: '#3C3366',
+          600: '#2C2550',
         },
-        // Bakery surfaces.
-        dough: '#FBF7FF', // app background (light)
-        crust: '#F1E9FB', // raised surface (light)
-        // Semantic signal colors (buy/sell/hold etc).
-        bullish: '#28A56B',
-        bearish: '#E2526B',
-        neutral: '#C9A23A',
+        // Golden baked-good accent — highlights, cheer, "neutral" signal.
+        butter: {
+          400: '#F3C06A',
+          500: '#E9A94D',
+          600: '#D98E3A',
+        },
+        // Mint leaf accent.
+        leaf: {
+          400: '#9BC97C',
+          500: '#7FB35C',
+          600: '#5E9440',
+        },
+        // Bakery surfaces (light).
+        dough: '#FBF3E3', // warm cream app background
+        crust: '#F3E7D2', // deeper cream raised surface
+        // Near-black grape — doodle outlines + body text on light.
+        ink: '#2E2140',
+        // Subtle plaid / gingham pattern.
+        plaid: {
+          DEFAULT: '#ECE0F4',
+          line: '#DBC8EC',
+        },
+        // "Blueberry night" dark theme surfaces (warm, not flat black).
+        night: {
+          bg: '#241B38',
+          surface: '#2E2447',
+          'surface-muted': '#3A2E57',
+          border: '#45396A',
+          text: '#F4ECDF', // warm cream
+          'text-muted': '#B6A6CE',
+        },
+        // Semantic signal colors (buy/sell/hold), warmed to fit the palette.
+        bullish: '#4FA86A',
+        bearish: '#E0697F',
+        neutral: '#E9A94D',
       },
       borderRadius: {
+        crumb: '12px',
         muffin: '20px',
         bun: '28px',
+        pill: '9999px',
       },
+      // Weight is baked into each family (custom fonts ignore fontWeight on
+      // native). Names match the expo-google-fonts keys loaded in _layout.tsx
+      // and the @font-face families expo-font registers on web.
       fontFamily: {
-        display: ['var(--font-display)'],
-        rounded: ['var(--font-rounded)'],
-        mono: ['var(--font-mono)'],
+        display: ['Baloo2_800ExtraBold', ...sans], // hero
+        title: ['Baloo2_700Bold', ...sans], // page titles
+        heading: ['Baloo2_600SemiBold', ...sans], // section headings
+        rounded: ['Baloo2_600SemiBold', ...sans],
+        body: ['Nunito_400Regular', ...sans], // default body
+        semibold: ['Nunito_600SemiBold', ...sans],
+        bold: ['Nunito_700Bold', ...sans],
+        mono,
+      },
+      boxShadow: {
+        // Soft offset "sticker" shadow (web; native uses style in Card).
+        sticker: '0px 4px 0px rgba(46, 33, 64, 0.12)',
       },
     },
   },

@@ -2,11 +2,14 @@ import { ScrollView, View, type ViewProps } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { cn } from '@/lib/cn';
+import { PlaidBackground } from './plaid-background';
 
 type ScreenProps = ViewProps & {
   scroll?: boolean;
   edges?: Edge[];
   contentClassName?: string;
+  /** Render the lavender plaid texture behind the content. */
+  plaid?: boolean;
 };
 
 /**
@@ -18,6 +21,7 @@ export function Screen({
   edges = ['top'],
   className,
   contentClassName,
+  plaid,
   children,
   ...props
 }: ScreenProps) {
@@ -30,7 +34,8 @@ export function Screen({
   );
 
   return (
-    <SafeAreaView edges={edges} className={cn('flex-1 bg-dough dark:bg-[#1A1126]', className)}>
+    <SafeAreaView edges={edges} className={cn('flex-1 bg-dough dark:bg-night-bg', className)}>
+      {plaid ? <PlaidBackground opacity={0.5} /> : null}
       {scroll ? (
         <ScrollView
           showsVerticalScrollIndicator={false}

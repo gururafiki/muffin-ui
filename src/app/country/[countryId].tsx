@@ -62,7 +62,7 @@ export default function CountryScreen() {
             key: s.id,
             title: s.name,
             subtitle: `${s.subSectors.length} sub-sectors`,
-            leading: s.emoji,
+            icon: s.icon,
             changePct: s.changePct,
           }))}
           onSelect={goSector}

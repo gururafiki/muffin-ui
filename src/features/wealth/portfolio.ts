@@ -6,6 +6,7 @@
  * for name/sector/asset-type). Single base currency for now (multi-currency is
  * a tracked follow-up). All numbers are illustrative SAMPLE data.
  */
+import type { IconName } from '@/components/icons';
 import { ASSETS, assetTypeMeta, type AssetType } from '@/features/markets/taxonomy';
 
 export type AccountType = 'sipp' | 'isa' | 'lisa' | 'gia' | 'cash' | 'property' | 'mortgage' | 'other';
@@ -13,21 +14,21 @@ export type AccountType = 'sipp' | 'isa' | 'lisa' | 'gia' | 'cash' | 'property' 
 export interface AccountTypeMeta {
   id: AccountType;
   name: string;
-  emoji: string;
+  icon: IconName;
   kind: 'asset' | 'liability';
   blurb: string;
   holdings: boolean; // true → holds securities; false → a single balance
 }
 
 export const ACCOUNT_TYPES: AccountTypeMeta[] = [
-  { id: 'sipp', name: 'SIPP', emoji: '🏖️', kind: 'asset', blurb: 'Self-invested pension', holdings: true },
-  { id: 'isa', name: 'ISA', emoji: '🛡️', kind: 'asset', blurb: 'Tax-free stocks & shares', holdings: true },
-  { id: 'lisa', name: 'LISA', emoji: '🔑', kind: 'asset', blurb: 'Lifetime ISA', holdings: true },
-  { id: 'gia', name: 'GIA', emoji: '📈', kind: 'asset', blurb: 'General investment account', holdings: true },
-  { id: 'cash', name: 'Cash', emoji: '💵', kind: 'asset', blurb: 'Savings & cash', holdings: false },
-  { id: 'property', name: 'Property', emoji: '🏠', kind: 'asset', blurb: 'Real estate', holdings: false },
-  { id: 'mortgage', name: 'Mortgage', emoji: '🏦', kind: 'liability', blurb: 'Home loan', holdings: false },
-  { id: 'other', name: 'Other', emoji: '📦', kind: 'asset', blurb: 'Other holdings', holdings: false },
+  { id: 'sipp', name: 'SIPP', icon: 'account-sipp', kind: 'asset', blurb: 'Self-invested pension', holdings: true },
+  { id: 'isa', name: 'ISA', icon: 'account-isa', kind: 'asset', blurb: 'Tax-free stocks & shares', holdings: true },
+  { id: 'lisa', name: 'LISA', icon: 'account-lisa', kind: 'asset', blurb: 'Lifetime ISA', holdings: true },
+  { id: 'gia', name: 'GIA', icon: 'account-gia', kind: 'asset', blurb: 'General investment account', holdings: true },
+  { id: 'cash', name: 'Cash', icon: 'account-cash', kind: 'asset', blurb: 'Savings & cash', holdings: false },
+  { id: 'property', name: 'Property', icon: 'account-property', kind: 'asset', blurb: 'Real estate', holdings: false },
+  { id: 'mortgage', name: 'Mortgage', icon: 'account-mortgage', kind: 'liability', blurb: 'Home loan', holdings: false },
+  { id: 'other', name: 'Other', icon: 'account-other', kind: 'asset', blurb: 'Other holdings', holdings: false },
 ];
 
 export const accountTypeMeta = (t: AccountType): AccountTypeMeta =>
@@ -52,7 +53,7 @@ export interface Account {
 export interface Goal {
   id: string;
   name: string;
-  emoji: string;
+  icon: IconName;
   targetAmount: number;
   currentAmount: number;
   /** ISO date (yyyy-mm-dd). */
@@ -161,6 +162,6 @@ export const DEMO_ACCOUNTS: Account[] = [
 ];
 
 export const DEMO_GOALS: Goal[] = [
-  { id: 'goal-retire', name: 'Retirement', emoji: '🏝️', targetAmount: 1000000, currentAmount: 58950, targetDate: '2050-01-01' },
-  { id: 'goal-house', name: 'House deposit', emoji: '🏡', targetAmount: 60000, currentAmount: 22000, targetDate: '2027-06-01' },
+  { id: 'goal-retire', name: 'Retirement', icon: 'goal-retirement', targetAmount: 1000000, currentAmount: 58950, targetDate: '2050-01-01' },
+  { id: 'goal-house', name: 'House deposit', icon: 'goal-house', targetAmount: 60000, currentAmount: 22000, targetDate: '2027-06-01' },
 ];

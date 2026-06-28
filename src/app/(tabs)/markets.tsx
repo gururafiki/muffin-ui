@@ -2,7 +2,9 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { Icon } from '@/components/icons';
 import { Badge, Button, Card, Chip, Screen, Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import { DrillList } from '@/features/markets/drill-list';
 import { SectorPie } from '@/features/markets/sector-pie';
 import {
@@ -42,9 +44,8 @@ export default function MarketsScreen() {
         {sector ? (
           <View className="gap-2">
             <View className="flex-row items-center gap-2">
-              <Text variant="heading">
-                {sector.emoji} {sector.name}
-              </Text>
+              <Icon name={sector.icon} size={22} color={palette.frosting[600]} />
+              <Text variant="heading">{sector.name}</Text>
               <Text variant="muted">{SECTOR_WEIGHTS[sector.id]}% weight</Text>
             </View>
             <Text variant="label">Sub-sectors</Text>
@@ -71,7 +72,8 @@ export default function MarketsScreen() {
           {ASSET_TYPES.map((t) => (
             <Chip
               key={t.id}
-              label={`${t.emoji} ${t.name}`}
+              icon={t.icon}
+              label={t.name}
               active={assetFilter === t.id}
               onPress={() => setAssetFilter(t.id)}
             />
@@ -87,7 +89,7 @@ export default function MarketsScreen() {
             subtitle: [a.sectorId ? getSector(a.sectorId)?.name : assetTypeMeta(a.assetType)?.name, a.country, a.style]
               .filter(Boolean)
               .join(' · '),
-            leading: assetTypeMeta(a.assetType)?.emoji,
+            icon: assetTypeMeta(a.assetType)?.icon,
             changePct: a.changePct,
           }))}
           onSelect={(symbol) => {

@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { Icon } from '@/components/icons';
 import { Badge, Card, Screen, Text } from '@/components/ui';
 import { changeTone } from '@/features/markets/taxonomy';
 import { palette } from '@/theme/colors';
@@ -38,9 +39,11 @@ export default function AccountScreen() {
     <Screen>
       <Stack.Screen options={{ title: account.name }} />
 
-      <Card className="mt-1 gap-2">
-        <View className="flex-row items-center gap-2">
-          <Text style={{ fontSize: 26 }}>{meta.emoji}</Text>
+      <Card tone="sticker" className="mt-1 gap-2">
+        <View className="flex-row items-center gap-3">
+          <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+            <Icon name={meta.icon} size={26} color={palette.frosting[600]} />
+          </View>
           <View className="flex-1">
             <Text variant="title">{account.name}</Text>
             <Badge label={meta.name} tone="info" />
@@ -79,9 +82,7 @@ export default function AccountScreen() {
                       ) : null}
                     </View>
                     <Pressable onPress={() => removeHolding(account.id, h.id)} hitSlop={8}>
-                      <Text variant="muted" className="text-frosting-400">
-                        ✕
-                      </Text>
+                      <Icon name="close" size={18} color={palette.frosting[400]} weight="bold" />
                     </Pressable>
                   </Card>
                 );

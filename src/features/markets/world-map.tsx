@@ -18,9 +18,19 @@ const PLACEMENT: Record<string, { cx: number; cy: number; rx: number; ry: number
 };
 
 const toneFill: Record<'bullish' | 'bearish' | 'neutral', string> = {
-  bullish: '#3FBE86',
-  bearish: '#E8748A',
-  neutral: '#C9A23A',
+  bullish: palette.bullish,
+  bearish: palette.bearish,
+  neutral: palette.butter[500],
+};
+
+// Short codes shown on each region blob (icons can't nest inside <Svg>).
+const CODE: Record<string, string> = {
+  'north-america': 'NA',
+  'latin-america': 'LATAM',
+  europe: 'EU',
+  mea: 'MEA',
+  'greater-china': 'CN',
+  'asia-pacific': 'APAC',
 };
 
 function mulberry(seed: number) {
@@ -78,15 +88,17 @@ function RegionBlob({
       <Path
         d={d}
         fill={fill}
-        stroke={selected ? palette.frosting[700] : palette.white}
-        strokeWidth={selected ? 2.5 : 1.5}
+        stroke={selected ? palette.ink : palette.dough}
+        strokeWidth={selected ? 3 : 2}
       />
       <SvgText
         x={place.cx}
-        y={place.cy + 6}
-        fontSize={18}
-        textAnchor="middle">
-        {region.emoji}
+        y={place.cy + 4}
+        fontSize={12}
+        fontWeight="bold"
+        textAnchor="middle"
+        fill="#FFFFFF">
+        {CODE[region.id] ?? ''}
       </SvgText>
     </G>
   );
@@ -101,7 +113,9 @@ export function WorldMap({
   selectedId?: string | null;
 }) {
   return (
-    <View className="overflow-hidden rounded-bun bg-frosting-100 dark:bg-[#2E2042]" style={{ width: '100%', aspectRatio: VB_W / VB_H }}>
+    <View
+      className="overflow-hidden rounded-bun border-2 border-ink/10 bg-frosting-100 dark:border-night-border dark:bg-night-surface-muted"
+      style={{ width: '100%', aspectRatio: VB_W / VB_H }}>
       <Svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`}>
         {REGIONS.map((r) => (
           <RegionBlob

@@ -5,5 +5,7 @@ export { Card } from './card';
 export { Chip } from './chip';
 export { Field } from './field';
 export { MuffinLogo } from './logo';
+export { PlaidBackground } from './plaid-background';
+export { ScallopDivider } from './scallop-divider';
 export { Screen } from './screen';
 export { Text } from './text';

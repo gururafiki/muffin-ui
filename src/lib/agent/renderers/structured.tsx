@@ -47,7 +47,7 @@ export function StructuredOutput({ value, depth = 0 }: { value: unknown; depth?:
     return (
       <View className="gap-2">
         {value.map((v, i) => (
-          <View key={i} className="border-l-2 border-frosting-200 pl-2 dark:border-[#3A2B52]">
+          <View key={i} className="border-l-2 border-frosting-200 pl-2 dark:border-night-border">
             <StructuredOutput value={v} depth={depth + 1} />
           </View>
         ))}

@@ -23,12 +23,10 @@ export function Avatar({
     <View
       style={{ width: size, height: size, borderRadius: size / 2 }}
       className={cn(
-        'items-center justify-center border-2 border-frosting-200 bg-frosting-100 dark:border-[#3A2B52] dark:bg-[#2E2042]',
+        'items-center justify-center border-2 border-frosting-200 bg-frosting-100 dark:border-night-border dark:bg-night-surface-muted',
         className,
       )}>
-      <Text className="font-display font-bold text-frosting-600 dark:text-frosting-200">
-        {initials}
-      </Text>
+      <Text className="font-title text-frosting-600 dark:text-frosting-200">{initials}</Text>
     </View>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { Icon } from '@/components/icons';
 import { Card, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { formatMoney, goalProgress, type Goal } from './portfolio';
@@ -32,17 +33,17 @@ export function GoalCard({
 
   return (
     <Pressable onPress={onPress} disabled={!onPress} className="active:opacity-80">
-      <Card className="gap-2">
+      <Card tone="sticker" className="gap-2">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
-            <Text style={{ fontSize: 22 }}>{goal.emoji}</Text>
+            <Icon name={goal.icon} size={22} color={palette.frosting[600]} />
             <Text variant="heading">{goal.name}</Text>
           </View>
           <Text variant="heading" style={{ color: palette.frosting[600] }}>
             {Math.round(progress * 100)}%
           </Text>
         </View>
-        <View className="h-3 overflow-hidden rounded-full bg-crust dark:bg-[#2E2042]">
+        <View className="h-3 overflow-hidden rounded-pill bg-crust dark:bg-night-surface-muted">
           <Animated.View style={[{ height: '100%', backgroundColor: palette.frosting[500] }, barStyle]} />
         </View>
         <View className="flex-row items-center justify-between">

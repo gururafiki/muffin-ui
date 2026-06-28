@@ -7,6 +7,8 @@
  * generic runner handles the rest. A `custom` key opts an agent into a bespoke
  * screen (e.g. the council avatars) instead of the generic transcript view.
  */
+import type { IconName } from '@/components/icons';
+
 export type CustomScreen = 'council';
 
 export interface AgentInputField {
@@ -21,7 +23,7 @@ export interface AgentDef {
   /** assistant_id / graph name registered in langgraph.json */
   id: string;
   title: string;
-  emoji: string;
+  icon: IconName;
   tagline: string;
   inputs: AgentInputField[];
   /** Shape the collected field values into the graph's run `input`. */
@@ -45,7 +47,7 @@ export const AGENTS: AgentDef[] = [
   {
     id: 'research',
     title: 'Deep Research',
-    emoji: '🔎',
+    icon: 'research',
     tagline: 'Web research with cited, reranked evidence.',
     inputs: [
       { key: 'query', label: 'Question', placeholder: 'What is driving NVDA revenue growth?', required: true },
@@ -57,7 +59,7 @@ export const AGENTS: AgentDef[] = [
   {
     id: 'council',
     title: 'Investor Council',
-    emoji: '🧑‍⚖️',
+    icon: 'council',
     tagline: '13 famous-investor personas debate, then a judge synthesises.',
     inputs: [ticker, { key: 'query', label: 'Focus (optional)', placeholder: 'Is the moat durable?' }],
     buildInput: (v) => ({ ticker: v.ticker?.toUpperCase(), ...(v.query ? { query: v.query } : {}) }),
@@ -67,7 +69,7 @@ export const AGENTS: AgentDef[] = [
   {
     id: 'criteria_analysis',
     title: 'Criteria Analysis',
-    emoji: '📊',
+    icon: 'criteria',
     tagline: 'Sector-aware, criteria-driven scoring and synthesis.',
     inputs: [ticker, { key: 'query', label: 'Focus (optional)', placeholder: 'Buy at current price?' }],
     // `sector`/`market` may arrive via initialValues from a sector/country
@@ -83,7 +85,7 @@ export const AGENTS: AgentDef[] = [
   {
     id: 'stock_evaluation',
     title: 'Stock Evaluation',
-    emoji: '🧁',
+    icon: 'evaluation',
     tagline: 'Full deep-agent evaluation: plan, collect, validate, analyse.',
     inputs: [
       { key: 'prompt', label: 'Prompt', placeholder: 'Evaluate AAPL as a long-term holding', required: true },

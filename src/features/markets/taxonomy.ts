@@ -8,12 +8,14 @@
  * muffin-agent's skill tags / criteria_analysis classification where possible.
  */
 
+import type { IconName } from '@/components/icons';
+
 export type Market = 'developed' | 'emerging';
 
 export interface Region {
   id: string;
   name: string;
-  emoji: string;
+  icon: IconName;
   blurb: string;
   changePct: number;
 }
@@ -30,7 +32,7 @@ export interface Country {
 export interface Sector {
   id: string;
   name: string;
-  emoji: string;
+  icon: IconName;
   subSectors: string[];
   changePct: number;
 }
@@ -43,12 +45,12 @@ export interface StockRef {
 }
 
 export const REGIONS: Region[] = [
-  { id: 'north-america', name: 'North America', emoji: '🌎', blurb: 'Deep, liquid developed markets led by US mega-caps.', changePct: 11.4 },
-  { id: 'europe', name: 'Europe', emoji: '🌍', blurb: 'Diversified developed markets, value & industrials tilt.', changePct: 6.1 },
-  { id: 'asia-pacific', name: 'Asia-Pacific', emoji: '🌏', blurb: 'Japan, Australia and fast-growing emerging Asia.', changePct: 8.7 },
-  { id: 'greater-china', name: 'Greater China', emoji: '🐉', blurb: 'China, Hong Kong and Taiwan — policy-sensitive.', changePct: -3.2 },
-  { id: 'latin-america', name: 'Latin America', emoji: '🌴', blurb: 'Commodity-rich emerging markets, higher beta.', changePct: 4.5 },
-  { id: 'mea', name: 'Middle East & Africa', emoji: '🕌', blurb: 'Energy exporters and frontier growth stories.', changePct: 2.3 },
+  { id: 'north-america', name: 'North America', icon: 'region-na', blurb: 'Deep, liquid developed markets led by US mega-caps.', changePct: 11.4 },
+  { id: 'europe', name: 'Europe', icon: 'region-eu', blurb: 'Diversified developed markets, value & industrials tilt.', changePct: 6.1 },
+  { id: 'asia-pacific', name: 'Asia-Pacific', icon: 'region-apac', blurb: 'Japan, Australia and fast-growing emerging Asia.', changePct: 8.7 },
+  { id: 'greater-china', name: 'Greater China', icon: 'region-china', blurb: 'China, Hong Kong and Taiwan — policy-sensitive.', changePct: -3.2 },
+  { id: 'latin-america', name: 'Latin America', icon: 'region-latam', blurb: 'Commodity-rich emerging markets, higher beta.', changePct: 4.5 },
+  { id: 'mea', name: 'Middle East & Africa', icon: 'region-mea', blurb: 'Energy exporters and frontier growth stories.', changePct: 2.3 },
 ];
 
 export const COUNTRIES: Country[] = [
@@ -80,17 +82,17 @@ export const COUNTRIES: Country[] = [
 ];
 
 export const SECTORS: Sector[] = [
-  { id: 'information-technology', name: 'Information Technology', emoji: '💻', subSectors: ['software-saas', 'semiconductors', 'hardware'], changePct: 18.9 },
-  { id: 'financials', name: 'Financials', emoji: '🏦', subSectors: ['banking', 'insurance', 'capital-markets'], changePct: 9.4 },
-  { id: 'health-care', name: 'Health Care', emoji: '🏥', subSectors: ['pharma', 'biotech', 'medical-devices'], changePct: 3.6 },
-  { id: 'consumer-discretionary', name: 'Consumer Discretionary', emoji: '🛍️', subSectors: ['retail', 'autos', 'travel-leisure'], changePct: 7.2 },
-  { id: 'consumer-staples', name: 'Consumer Staples', emoji: '🧺', subSectors: ['food-beverage', 'household-products'], changePct: 2.1 },
-  { id: 'communication-services', name: 'Communication Services', emoji: '📡', subSectors: ['media', 'telecom', 'interactive-media'], changePct: 10.8 },
-  { id: 'industrials', name: 'Industrials', emoji: '🏭', subSectors: ['aerospace-defense', 'machinery', 'transportation'], changePct: 6.4 },
-  { id: 'energy', name: 'Energy', emoji: '⛽', subSectors: ['oil-gas', 'renewables'], changePct: -2.5 },
-  { id: 'materials', name: 'Materials', emoji: '⛏️', subSectors: ['chemicals', 'metals-mining'], changePct: 1.9 },
-  { id: 'utilities', name: 'Utilities', emoji: '💡', subSectors: ['electric', 'water'], changePct: 4.0 },
-  { id: 'real-estate', name: 'Real Estate', emoji: '🏢', subSectors: ['reits', 'real-estate-management'], changePct: -0.8 },
+  { id: 'information-technology', name: 'Information Technology', icon: 'sector-tech', subSectors: ['software-saas', 'semiconductors', 'hardware'], changePct: 18.9 },
+  { id: 'financials', name: 'Financials', icon: 'sector-financials', subSectors: ['banking', 'insurance', 'capital-markets'], changePct: 9.4 },
+  { id: 'health-care', name: 'Health Care', icon: 'sector-health', subSectors: ['pharma', 'biotech', 'medical-devices'], changePct: 3.6 },
+  { id: 'consumer-discretionary', name: 'Consumer Discretionary', icon: 'sector-discretionary', subSectors: ['retail', 'autos', 'travel-leisure'], changePct: 7.2 },
+  { id: 'consumer-staples', name: 'Consumer Staples', icon: 'sector-staples', subSectors: ['food-beverage', 'household-products'], changePct: 2.1 },
+  { id: 'communication-services', name: 'Communication Services', icon: 'sector-comms', subSectors: ['media', 'telecom', 'interactive-media'], changePct: 10.8 },
+  { id: 'industrials', name: 'Industrials', icon: 'sector-industrials', subSectors: ['aerospace-defense', 'machinery', 'transportation'], changePct: 6.4 },
+  { id: 'energy', name: 'Energy', icon: 'sector-energy', subSectors: ['oil-gas', 'renewables'], changePct: -2.5 },
+  { id: 'materials', name: 'Materials', icon: 'sector-materials', subSectors: ['chemicals', 'metals-mining'], changePct: 1.9 },
+  { id: 'utilities', name: 'Utilities', icon: 'sector-utilities', subSectors: ['electric', 'water'], changePct: 4.0 },
+  { id: 'real-estate', name: 'Real Estate', icon: 'sector-realestate', subSectors: ['reits', 'real-estate-management'], changePct: -0.8 },
 ];
 
 export const REPRESENTATIVE_TICKERS: Record<string, StockRef[]> = {
@@ -166,6 +168,7 @@ export interface MoverItem {
   key: string;
   label: string;
   sublabel?: string;
+  icon?: IconName;
   changePct: number;
 }
 
@@ -178,11 +181,11 @@ export const sortMovers = (items: MoverItem[]) =>
   [...items].sort((a, b) => b.changePct - a.changePct);
 
 export const regionsAsMovers = (): MoverItem[] =>
-  REGIONS.map((r) => ({ key: r.id, label: r.name, sublabel: r.emoji, changePct: r.changePct }));
+  REGIONS.map((r) => ({ key: r.id, label: r.name, icon: r.icon, changePct: r.changePct }));
 export const countriesAsMovers = (regionId: string): MoverItem[] =>
   countriesInRegion(regionId).map((c) => ({ key: c.id, label: c.name, sublabel: c.flag, changePct: c.changePct }));
 export const sectorsAsMovers = (): MoverItem[] =>
-  SECTORS.map((s) => ({ key: s.id, label: s.name, sublabel: s.emoji, changePct: s.changePct }));
+  SECTORS.map((s) => ({ key: s.id, label: s.name, icon: s.icon, changePct: s.changePct }));
 export const stocksAsMovers = (sectorId: string): MoverItem[] =>
   stocksInSector(sectorId).map((s) => ({ key: s.ticker, label: `${s.ticker} · ${s.name}`, sublabel: s.country, changePct: s.changePct }));
 
@@ -228,19 +231,19 @@ export type Style = 'growth' | 'value' | 'blend';
 export interface AssetTypeMeta {
   id: AssetType;
   name: string;
-  emoji: string;
+  icon: IconName;
 }
 
 export const ASSET_TYPES: AssetTypeMeta[] = [
-  { id: 'equity', name: 'Equities', emoji: '📈' },
-  { id: 'etf', name: 'ETFs', emoji: '🧺' },
-  { id: 'commodity', name: 'Commodities', emoji: '🛢️' },
-  { id: 'crypto', name: 'Crypto', emoji: '🪙' },
-  { id: 'bond', name: 'Bonds', emoji: '📜' },
-  { id: 'real-estate', name: 'Real Estate', emoji: '🏢' },
-  { id: 'cash', name: 'Cash', emoji: '💵' },
-  { id: 'mutual-fund', name: 'Mutual Funds', emoji: '🏦' },
-  { id: 'derivative', name: 'Derivatives', emoji: '🎲' },
+  { id: 'equity', name: 'Equities', icon: 'asset-equities' },
+  { id: 'etf', name: 'ETFs', icon: 'asset-etf' },
+  { id: 'commodity', name: 'Commodities', icon: 'asset-commodities' },
+  { id: 'crypto', name: 'Crypto', icon: 'asset-crypto' },
+  { id: 'bond', name: 'Bonds', icon: 'asset-bonds' },
+  { id: 'real-estate', name: 'Real Estate', icon: 'asset-realestate' },
+  { id: 'cash', name: 'Cash', icon: 'asset-cash' },
+  { id: 'mutual-fund', name: 'Mutual Funds', icon: 'asset-funds' },
+  { id: 'derivative', name: 'Derivatives', icon: 'asset-derivatives' },
 ];
 
 export interface AssetRef {

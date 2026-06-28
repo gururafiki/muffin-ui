@@ -11,7 +11,7 @@ import {
   type AllocationSlice,
 } from './portfolio';
 
-const COLORS = ['#7C4DE0', '#9D72EF', '#5B6CF0', '#3F4BD6', '#B07CF2', '#6838C6', '#8E63E8', '#4F8DE0', '#A98CF0'];
+const COLORS = ['#875DAE', '#A47EC6', '#6E63A6', '#E9A94D', '#C2A4DC', '#6F4A93', '#7FB35C', '#524785', '#B79AD8'];
 
 function Row({ slice, total, color, currency }: { slice: AllocationSlice; total: number; color: string; currency: string }) {
   const frac = total ? slice.value / total : 0;
@@ -32,7 +32,7 @@ function Row({ slice, total, color, currency }: { slice: AllocationSlice; total:
           {formatMoney(slice.value, currency)} · {Math.round(frac * 100)}%
         </Text>
       </View>
-      <View className="h-2 overflow-hidden rounded-full bg-crust dark:bg-[#2E2042]">
+      <View className="h-2 overflow-hidden rounded-pill bg-crust dark:bg-night-surface-muted">
         <Animated.View style={[{ height: '100%', backgroundColor: color }, barStyle]} />
       </View>
     </View>

@@ -6,26 +6,48 @@
  * sync with tailwind.config.js.
  */
 export const palette = {
+  // Brand grape ("frosting").
   frosting: {
-    50: '#F6F1FE',
-    100: '#ECE3FD',
-    200: '#D7C6FB',
-    300: '#BCA0F6',
-    400: '#9D72EF',
-    500: '#7C4DE0',
-    600: '#6838C6',
-    700: '#542CA0',
-    800: '#43257E',
-    900: '#382163',
+    50: '#F7F2FB',
+    100: '#EEE4F6',
+    200: '#DCC9EC',
+    300: '#C2A4DC',
+    400: '#A47EC6',
+    500: '#875DAE',
+    600: '#6F4A93',
+    700: '#5A3C77',
+    800: '#46305C',
+    900: '#342346',
   },
-  blueberry: { 400: '#5B6CF0', 500: '#3F4BD6', 600: '#2F38AD' },
-  dough: '#FBF7FF',
-  crust: '#F1E9FB',
-  bullish: '#28A56B',
-  bearish: '#E2526B',
-  neutral: '#C9A23A',
+  // Deep blueberry berries.
+  blueberry: { 300: '#6E63A6', 400: '#524785', 500: '#3C3366', 600: '#2C2550' },
+  // Golden baked-good accent.
+  butter: { 400: '#F3C06A', 500: '#E9A94D', 600: '#D98E3A' },
+  // Mint leaf accent.
+  leaf: { 400: '#9BC97C', 500: '#7FB35C', 600: '#5E9440' },
+  // Bakery surfaces (light).
+  dough: '#FBF3E3',
+  crust: '#F3E7D2',
+  // Near-black grape — outlines + text on light.
+  ink: '#2E2140',
+  // Plaid / gingham pattern.
+  plaid: { base: '#ECE0F4', line: '#DBC8EC' },
+  // "Blueberry night" dark surfaces.
+  night: {
+    bg: '#241B38',
+    surface: '#2E2447',
+    surfaceMuted: '#3A2E57',
+    border: '#45396A',
+    text: '#F4ECDF',
+    textMuted: '#B6A6CE',
+  },
+  // Semantic signals.
+  bullish: '#4FA86A',
+  bearish: '#E0697F',
+  neutral: '#E9A94D',
   white: '#FFFFFF',
-  black: '#1A1126',
+  // Back-compat alias (was the old "almost black"); now the grape ink.
+  black: '#2E2140',
 } as const;
 
 export const theme = {
@@ -33,19 +55,21 @@ export const theme = {
     background: palette.dough,
     surface: palette.white,
     surfaceMuted: palette.crust,
-    text: palette.black,
-    textMuted: '#6B5E7E',
+    text: palette.ink,
+    textMuted: '#7A6A92',
     primary: palette.frosting[500],
-    border: palette.frosting[100],
+    accent: palette.butter[500],
+    border: palette.frosting[200],
   },
   dark: {
-    background: '#1A1126',
-    surface: '#241834',
-    surfaceMuted: '#2E2042',
-    text: '#F6F1FE',
-    textMuted: '#B9A9D1',
-    primary: palette.frosting[400],
-    border: '#3A2B52',
+    background: palette.night.bg,
+    surface: palette.night.surface,
+    surfaceMuted: palette.night.surfaceMuted,
+    text: palette.night.text,
+    textMuted: palette.night.textMuted,
+    primary: palette.frosting[300],
+    accent: palette.butter[400],
+    border: palette.night.border,
   },
 } as const;
 

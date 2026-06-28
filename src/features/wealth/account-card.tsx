@@ -1,5 +1,6 @@
 import { Pressable, View } from 'react-native';
 
+import { Icon } from '@/components/icons';
 import { Badge, Card, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { accountTypeMeta, accountValue, formatMoney, type Account } from './portfolio';
@@ -19,8 +20,10 @@ export function AccountCard({
 
   return (
     <Pressable onPress={onPress} disabled={!onPress} className="active:opacity-80">
-      <Card className="flex-row items-center gap-3">
-        <Text style={{ fontSize: 28 }}>{meta.emoji}</Text>
+      <Card tone="sticker" className="flex-row items-center gap-3">
+        <View className="h-11 w-11 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+          <Icon name={meta.icon} size={24} color={palette.frosting[600]} />
+        </View>
         <View className="flex-1">
           <Text variant="heading">{account.name}</Text>
           <View className="mt-0.5 flex-row items-center gap-2">

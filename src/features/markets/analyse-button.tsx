@@ -13,7 +13,7 @@ export function AnalyseButton({
 }: {
   title: string;
   query: string;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'butter';
 }) {
   const router = useRouter();
   return (

@@ -2,7 +2,9 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Field, Screen, Text } from '@/components/ui';
+import { Icon } from '@/components/icons';
+import { Button, Field, Screen } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import { useWealth } from '@/features/wealth/store';
 
 export default function GoalScreen() {
@@ -13,7 +15,7 @@ export default function GoalScreen() {
   const { addGoal, updateGoal, removeGoal } = useWealth();
 
   const [name, setName] = useState(existing?.name ?? '');
-  const [emoji, setEmoji] = useState(existing?.emoji ?? '🎯');
+  const icon = existing?.icon ?? 'goal-default';
   const [target, setTarget] = useState(existing ? String(existing.targetAmount) : '');
   const [current, setCurrent] = useState(existing ? String(existing.currentAmount) : '0');
   const [date, setDate] = useState(existing?.targetDate ?? '');
@@ -24,7 +26,7 @@ export default function GoalScreen() {
     if (!canSave) return;
     const data = {
       name: name.trim(),
-      emoji: emoji.trim() || '🎯',
+      icon,
       targetAmount: Number(target),
       currentAmount: Number(current) || 0,
       targetDate: date.trim() || undefined,
@@ -39,9 +41,9 @@ export default function GoalScreen() {
       <Stack.Screen options={{ title: isNew ? 'New goal' : 'Edit goal' }} />
 
       <View className="mt-2 gap-3">
-        <View className="flex-row gap-3">
-          <View className="w-20">
-            <Field label="Emoji" value={emoji} onChangeText={setEmoji} />
+        <View className="flex-row items-center gap-3">
+          <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+            <Icon name={icon} size={26} color={palette.frosting[600]} />
           </View>
           <View className="flex-1">
             <Field label="Name" placeholder="House deposit" value={name} onChangeText={setName} />
