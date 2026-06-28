@@ -105,7 +105,9 @@ export function useCouncilRun() {
       let receivedAny = false;
 
       try {
-        const thread = await client.threads.create();
+        const thread = await client.threads.create({
+          metadata: { agentId: 'council', inputs: values },
+        });
         threadId = thread.thread_id;
         setState((s) => ({ ...s, threadId }));
 

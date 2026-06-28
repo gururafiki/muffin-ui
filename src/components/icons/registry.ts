@@ -28,6 +28,7 @@ import {
   CheckIcon,
   CheckCircleIcon,
   ChefHatIcon,
+  ClockCounterClockwiseIcon,
   CoffeeIcon,
   CpuIcon,
   CubeIcon,
@@ -78,6 +79,7 @@ export const iconRegistry = {
   markets: ChartPieSliceIcon,
   portfolio: WalletIcon,
   agents: ChefHatIcon,
+  history: ClockCounterClockwiseIcon,
   settings: GearIcon,
 
   // ── Agents ─────────────────────────────────────────────────────────

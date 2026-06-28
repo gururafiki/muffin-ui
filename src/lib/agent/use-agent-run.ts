@@ -48,7 +48,9 @@ export function useAgentRun(agent: AgentDef) {
       let receivedAny = false;
 
       try {
-        const thread = await client.threads.create();
+        const thread = await client.threads.create({
+          metadata: { agentId: agent.id, inputs: values },
+        });
         threadId = thread.thread_id;
         setState((s) => ({ ...s, threadId }));
 
