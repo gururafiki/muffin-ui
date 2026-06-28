@@ -33,6 +33,12 @@ export interface AgentDef {
   /** Optional tailored renderer for the result (else generic StructuredOutput). */
   resultRenderer?: 'research';
   custom?: CustomScreen;
+  /**
+   * Conversational agent: drive it through the multi-turn chat screen
+   * (resume a thread, send follow-up messages) instead of the single-shot
+   * runner. Requires the graph to operate on a `messages` state key.
+   */
+  chat?: boolean;
 }
 
 const ticker: AgentInputField = {
@@ -92,6 +98,7 @@ export const AGENTS: AgentDef[] = [
     ],
     buildInput: (v) => ({ messages: [{ type: 'human', content: v.prompt }] }),
     resultKey: 'messages',
+    chat: true,
   },
 ];
 

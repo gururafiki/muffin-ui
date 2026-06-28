@@ -4,6 +4,8 @@ import { View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { Badge, Button, Card, Field, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
+import { threadInputs } from '@/features/agent-calls/threads';
+import { useCall } from '@/features/agent-calls/use-calls';
 import type { AgentDef } from '@/lib/agent/registry';
 import { ResearchResult, StructuredOutput, TimelineItemCard } from '@/lib/agent/renderers';
 import { useAgentRun } from '@/lib/agent/use-agent-run';
@@ -26,14 +28,26 @@ export function AgentRunner({
   renderResult,
   initialValues,
   autoStart,
+  threadId,
 }: {
   agent: AgentDef;
   renderResult?: RunnerRender;
   initialValues?: Record<string, string>;
   autoStart?: boolean;
+  /** Reopen a past run: seed the saved result + inputs from this thread. */
+  threadId?: string;
 }) {
-  const [values, setValues] = useState<Record<string, string>>(initialValues ?? {});
+  const [edits, setEdits] = useState<Record<string, string>>(initialValues ?? {});
   const run = useAgentRun(agent);
+  const { data: savedThread } = useCall(threadId);
+
+  // Effective form values: the reopened thread's stored inputs, overridden by
+  // anything the user has typed. (Avoids seeding state from the async fetch.)
+  const values = useMemo(
+    () => ({ ...(savedThread ? threadInputs(savedThread) : undefined), ...edits }),
+    [savedThread, edits],
+  );
+  const setValues = setEdits;
 
   const canRun = useMemo(
     () => agent.inputs.every((f) => !f.required || (values[f.key]?.trim()?.length ?? 0) > 0),
@@ -49,7 +63,16 @@ export function AgentRunner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, canRun]);
 
-  const result = agent.resultKey ? run.values?.[agent.resultKey] : run.values;
+  const liveResult = agent.resultKey ? run.values?.[agent.resultKey] : run.values;
+  // Until a fresh run starts, show the reopened thread's saved result.
+  const savedValues = savedThread?.values as Record<string, unknown> | undefined;
+  const savedResult =
+    run.status === 'idle' && savedValues
+      ? agent.resultKey
+        ? savedValues[agent.resultKey]
+        : savedValues
+      : undefined;
+  const result = liveResult ?? savedResult;
   const streaming = run.status === 'streaming';
 
   return (
@@ -111,7 +134,7 @@ export function AgentRunner({
           RESULT_RENDERERS[agent.resultRenderer](result)
         ) : (
           <Card className="gap-2">
-            <Badge label={run.status === 'done' ? 'result' : 'streaming result'} tone="info" />
+            <Badge label={streaming ? 'streaming result' : 'result'} tone="info" />
             <StructuredOutput value={result} />
           </Card>
         )

@@ -1,26 +1,50 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
 import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
+import { threadInputs } from '@/features/agent-calls/threads';
+import { useCall } from '@/features/agent-calls/use-calls';
 import { palette } from '@/theme/colors';
 import type { AgentDef } from '@/lib/agent/registry';
 import { CouncilArena } from './council-arena';
 import { JudgePanel } from './judge-panel';
-import { getPersonaMeta } from './personas';
-import { signalTone, useCouncilRun } from './use-council-run';
+import { COUNCIL_PERSONAS, getPersonaMeta, normalizeSlug } from './personas';
+import {
+  signalTone,
+  useCouncilRun,
+  type PersonaSignal,
+  type PersonaStage,
+  type VoteTally,
+} from './use-council-run';
 import { VoteBar } from './vote-bar';
 
-export function CouncilScreen(_props: { agent: AgentDef }) {
-  const [ticker, setTicker] = useState('');
-  const [query, setQuery] = useState('');
+export function CouncilScreen({ agent: _agent, threadId }: { agent: AgentDef; threadId?: string }) {
+  const [tickerEdit, setTicker] = useState<string | null>(null);
+  const [queryEdit, setQuery] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const run = useCouncilRun();
+  const { data: savedThread } = useCall(threadId);
+
+  // Effective inputs: the reopened thread's stored inputs, overridden by edits.
+  const savedInputs = savedThread ? threadInputs(savedThread) : undefined;
+  const ticker = tickerEdit ?? savedInputs?.ticker ?? '';
+  const query = queryEdit ?? savedInputs?.query ?? '';
+
+  // Until a fresh session starts, render the reopened thread's saved verdict.
+  const saved = useMemo(() => deriveSaved(savedThread?.values as Record<string, unknown> | undefined), [savedThread]);
+  const live = run.status !== 'idle';
+
+  const signals = live ? run.signals : saved.signals;
+  const stages = live ? run.stages : saved.stages;
+  const synthesis = live ? run.synthesis : saved.synthesis;
+  const tally = live ? run.tally : saved.tally;
+  const judging = live && run.judging;
 
   const streaming = run.status === 'streaming';
-  const totalVotes = run.tally.bullish + run.tally.bearish + run.tally.neutral;
-  const selSignal = selected ? run.signals[selected] : undefined;
+  const totalVotes = tally.bullish + tally.bearish + tally.neutral;
+  const selSignal = selected ? signals[selected] : undefined;
   const selMeta = selected ? getPersonaMeta(selected) : undefined;
 
   return (
@@ -76,14 +100,14 @@ export function CouncilScreen(_props: { agent: AgentDef }) {
 
       {streaming || totalVotes > 0 ? (
         <Card className="gap-2">
-          <VoteBar tally={run.tally} />
+          <VoteBar tally={tally} />
         </Card>
       ) : null}
 
       {streaming || totalVotes > 0 ? (
         <CouncilArena
-          stages={run.stages}
-          signals={run.signals}
+          stages={stages}
+          signals={signals}
           selected={selected}
           onSelect={(slug) => setSelected((cur) => (cur === slug ? null : slug))}
           active={streaming}
@@ -115,11 +139,34 @@ export function CouncilScreen(_props: { agent: AgentDef }) {
         </Animated.View>
       ) : null}
 
-      {run.judging || run.synthesis ? (
+      {judging || synthesis ? (
         <Animated.View entering={FadeInDown.duration(300)}>
-          <JudgePanel synthesis={run.synthesis} judging={run.judging} />
+          <JudgePanel synthesis={synthesis} judging={judging} />
         </Animated.View>
       ) : null}
     </View>
   );
+}
+
+/** Rebuild the council verdict (signals, stages, tally, synthesis) from saved thread state. */
+function deriveSaved(values: Record<string, unknown> | undefined): {
+  signals: Record<string, PersonaSignal>;
+  stages: Record<string, PersonaStage>;
+  synthesis: Record<string, unknown> | null;
+  tally: VoteTally;
+} {
+  const list = (values?.persona_signals as PersonaSignal[] | undefined) ?? [];
+  const signals: Record<string, PersonaSignal> = {};
+  const tally: VoteTally = { bullish: 0, bearish: 0, neutral: 0 };
+  for (const sig of list) {
+    const slug = normalizeSlug(sig.agent_id);
+    if (!slug) continue;
+    signals[slug] = sig;
+    tally[signalTone(sig.signal)] += 1;
+  }
+  const stages = Object.fromEntries(
+    COUNCIL_PERSONAS.map((p) => [p.slug, (signals[p.slug] ? 'done' : 'pending') as PersonaStage]),
+  );
+  const synthesis = (values?.council_synthesis as Record<string, unknown>) ?? null;
+  return { signals, stages, synthesis, tally };
 }

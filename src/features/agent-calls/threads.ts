@@ -30,6 +30,12 @@ export function threadAgentId(thread: Thread): string | undefined {
   return typeof id === 'string' ? id : undefined;
 }
 
+/** The raw input field values we tagged onto the thread at creation, if any. */
+export function threadInputs(thread: Thread): Record<string, string> | undefined {
+  const inputs = (thread.metadata as Record<string, unknown> | undefined)?.inputs;
+  return inputs && typeof inputs === 'object' ? (inputs as Record<string, string>) : undefined;
+}
+
 /** Human label for a thread: the agent's title, or a generic fallback. */
 export function agentTitleForThread(thread: Thread): string {
   const id = threadAgentId(thread);

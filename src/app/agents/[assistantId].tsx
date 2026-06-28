@@ -2,6 +2,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 
 import { AgentRunner } from '@/components/agent-runner';
 import { Card, Screen, Text } from '@/components/ui';
+import { ChatScreen } from '@/features/agent-chat/chat-screen';
 import { CouncilScreen } from '@/features/council/council-screen';
 import { getAgent } from '@/lib/agent/registry';
 
@@ -11,6 +12,7 @@ export default function AgentRunnerRoute() {
   const params = useLocalSearchParams<Record<string, string>>();
   const assistantId = params.assistantId;
   const agent = getAgent(assistantId);
+  const threadId = params.threadId || undefined;
 
   // Seed the runner from any field-shaped params (e.g. an "Analyse" deep link).
   const initialValues: Record<string, string> = {};
@@ -28,14 +30,25 @@ export default function AgentRunnerRoute() {
     );
   }
 
+  // Conversational agents own their layout (chat transcript + composer).
+  if (agent.chat) {
+    return (
+      <>
+        <Stack.Screen options={{ title: agent.title }} />
+        <ChatScreen agent={agent} threadId={threadId} />
+      </>
+    );
+  }
+
   return (
     <Screen>
       <Stack.Screen options={{ title: agent.title }} />
       {agent.custom === 'council' ? (
-        <CouncilScreen agent={agent} />
+        <CouncilScreen agent={agent} threadId={threadId} />
       ) : (
         <AgentRunner
           agent={agent}
+          threadId={threadId}
           initialValues={Object.keys(initialValues).length ? initialValues : undefined}
           autoStart={autoStart}
         />
