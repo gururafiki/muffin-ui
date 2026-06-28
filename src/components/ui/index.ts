@@ -3,6 +3,7 @@ export { Badge, type Signal } from './badge';
 export { Button } from './button';
 export { Card } from './card';
 export { Chip } from './chip';
+export { Collapsible } from './collapsible';
 export { Field } from './field';
 export { MuffinLogo } from './logo';
 export { PlaidBackground } from './plaid-background';

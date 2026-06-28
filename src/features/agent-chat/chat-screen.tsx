@@ -1,32 +1,49 @@
 import { useStream } from '@langchain/langgraph-sdk/react';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+} from 'react-native';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Field, Screen, Text } from '@/components/ui';
+import { Badge, Card, Chip, Field, Screen, Text } from '@/components/ui';
+import type { AnyMessage, Todo } from '@/lib/agent/renderers';
 import { makeClient } from '@/lib/agent/client';
 import type { AgentDef } from '@/lib/agent/registry';
-import { MessageList } from '@/lib/agent/renderers';
+import { describeStep, type RunStep } from '@/lib/agent/steps';
 import { queryClient } from '@/lib/query';
 import { buildConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
 import { palette } from '@/theme/colors';
+import { InterruptCard } from './interrupt';
+import { Transcript, type ViewMode } from './transcript';
 
-type ChatState = { messages: unknown[] };
+type ChatState = { messages: unknown[]; todos?: Todo[] };
+
+let stepSeq = 0;
 
 /**
  * Multi-turn chat screen for conversational agents (`agent.chat`). Powered by
  * the LangGraph SDK `useStream` hook: passing a `threadId` resumes an existing
  * thread (loading its messages), and `submit` streams a follow-up onto the same
- * thread. New threads are tagged with the agent id so they appear, labelled, in
- * the Calls list.
+ * thread. Intermediate work (tools, sub-agents, to-dos, middleware) is captured
+ * as a hierarchical step timeline; a toggle switches summary/verbose layouts.
  */
 export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentDef; threadId?: string }) {
   const router = useRouter();
   const client = useMemo(() => makeClient(getSettings()), []);
   const [threadId, setThreadId] = useState<string | undefined>(initialThreadId);
   const [draft, setDraft] = useState('');
+  const [steps, setSteps] = useState<RunStep[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('summary');
+  const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
 
   const stream = useStream<ChatState>({
@@ -39,30 +56,97 @@ export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentD
     onThreadId: (id) => {
       setThreadId(id);
       router.setParams({ threadId: id });
-      // Tag the freshly-created thread so the Calls list can label it, then
-      // refresh that list. `useStream` creates the thread without metadata.
       client.threads.update(id, { metadata: { agentId: agent.id } }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: ['threads'] });
+    },
+    onUpdateEvent: (data, options) => {
+      const namespace = options?.namespace ?? [];
+      const nodes = Object.keys((data ?? {}) as Record<string, unknown>);
+      if (nodes.length === 0) return;
+      setSteps((prev) => [
+        ...prev,
+        ...nodes.map((node) => ({
+          id: `s${stepSeq++}`,
+          node,
+          namespace,
+          ts: Date.now(),
+          ...describeStep(node),
+        })),
+      ]);
     },
   });
 
   const messages = stream.messages;
   const busy = stream.isLoading;
+  const todos = (stream.values as ChatState | undefined)?.todos;
 
   const send = () => {
     const text = draft.trim();
     if (!text || busy) return;
     setDraft('');
+    setSteps([]);
     const human = { type: 'human', content: text };
     const settings = getSettings();
     stream.submit(
       { messages: [human] },
       {
         config: { configurable: buildConfigurable(settings) },
-        streamMode: ['values'],
+        streamMode: ['values', 'updates'],
+        streamSubgraphs: true,
         optimisticValues: (prev) => ({ ...prev, messages: [...(prev.messages ?? []), human] }),
       },
     );
+  };
+
+  const runOpts = () => ({
+    config: { configurable: buildConfigurable(getSettings()) },
+    streamMode: ['values', 'updates'] as ('values' | 'updates')[],
+    streamSubgraphs: true,
+  });
+
+  // Resume a human-in-the-loop interrupt with the user's decision.
+  const resume = (resumeValue: unknown) => {
+    setSteps([]);
+    stream.submit(undefined, { ...runOpts(), command: { resume: resumeValue } });
+  };
+
+  // Edit a previous (human) message → fork the thread from its parent checkpoint.
+  const editFork = (message: AnyMessage, text: string) => {
+    const meta = stream.getMessagesMetadata(message as never);
+    setSteps([]);
+    stream.submit(
+      { messages: [{ type: 'human', content: text }] },
+      { ...runOpts(), checkpoint: meta?.firstSeenState?.parent_checkpoint },
+    );
+  };
+
+  // Regenerate an answer → re-run from the message's parent checkpoint.
+  const regenerate = (message: AnyMessage) => {
+    const meta = stream.getMessagesMetadata(message as never);
+    setSteps([]);
+    stream.submit(undefined, { ...runOpts(), checkpoint: meta?.firstSeenState?.parent_checkpoint });
+  };
+
+  const branchInfo = (message: AnyMessage) => {
+    const meta = stream.getMessagesMetadata(message as never);
+    const opts = meta?.branchOptions;
+    if (!opts || opts.length <= 1 || !meta?.branch) return undefined;
+    const index = opts.indexOf(meta.branch);
+    return { index, total: opts.length, prev: opts[index - 1], next: opts[index + 1] };
+  };
+
+  const actions = {
+    busy,
+    onCopy: (text: string) => Clipboard.setStringAsync(text).catch(() => {}),
+    onEdit: editFork,
+    onRegenerate: regenerate,
+    branchInfo,
+    onSetBranch: stream.setBranch,
+  };
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    setAtBottom(contentSize.height - layoutMeasurement.height - contentOffset.y < 80);
   };
 
   return (
@@ -70,12 +154,19 @@ export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentD
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View className="flex-row gap-2 pb-2">
+          <Chip label="Summary" active={viewMode === 'summary'} onPress={() => setViewMode('summary')} />
+          <Chip label="Verbose" active={viewMode === 'verbose'} onPress={() => setViewMode('verbose')} />
+        </View>
+
         <ScrollView
           ref={scrollRef}
           className="flex-1"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingVertical: 8, gap: 8 }}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          onScroll={onScroll}
+          scrollEventThrottle={100}
+          onContentSizeChange={() => atBottom && scrollRef.current?.scrollToEnd({ animated: true })}
           keyboardShouldPersistTaps="handled">
           {messages.length === 0 ? (
             <Card tone="sticker" className="mt-2 gap-2">
@@ -91,14 +182,18 @@ export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentD
               <Text variant="muted">Send a message to start the conversation.</Text>
             </Card>
           ) : (
-            <MessageList messages={messages as never} />
+            <Transcript
+              messages={messages as never}
+              steps={steps}
+              todos={todos}
+              viewMode={viewMode}
+              busy={busy}
+              actions={actions}
+            />
           )}
 
-          {stream.interrupts && stream.interrupts.length > 0 ? (
-            <Card tone="outline" className="gap-1">
-              <Badge label="waiting for input" tone="info" />
-              <Text variant="muted">The agent paused for input. Reply below to continue.</Text>
-            </Card>
+          {stream.interrupt ? (
+            <InterruptCard value={stream.interrupt.value} busy={busy} onResume={resume} />
           ) : null}
 
           {stream.error ? (
@@ -110,6 +205,14 @@ export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentD
             </Card>
           ) : null}
         </ScrollView>
+
+        {!atBottom ? (
+          <Pressable
+            onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            className="absolute bottom-20 right-1 h-10 w-10 items-center justify-center rounded-pill border-2 border-frosting-300 bg-white active:opacity-80 dark:border-night-border dark:bg-night-surface">
+            <Icon name="arrow-down" size={20} color={palette.frosting[600]} weight="bold" />
+          </Pressable>
+        ) : null}
 
         <View className="flex-row items-end gap-2 border-t border-frosting-100 pt-2 dark:border-night-border">
           <Field
