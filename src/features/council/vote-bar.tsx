@@ -31,7 +31,7 @@ export function VoteBar({ tally }: { tally: VoteTally }) {
         <Text variant="label">Votes in</Text>
         <Text variant="muted">{total} / 13</Text>
       </View>
-      <View className="h-3 flex-row overflow-hidden rounded-full bg-crust dark:bg-[#2E2042]">
+      <View className="h-3 flex-row overflow-hidden rounded-pill bg-crust dark:bg-night-surface-muted">
         {SEGMENTS.map((s) => (
           <Segment key={s.key} frac={total ? tally[s.key] / 13 : 0} color={s.color} />
         ))}

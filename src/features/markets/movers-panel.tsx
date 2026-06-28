@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { Icon } from '@/components/icons';
 import { Badge, Card, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { changeTone, sortMovers, type MoverItem } from './taxonomy';
@@ -30,16 +31,19 @@ function MoverRow({
 
   return (
     <Pressable onPress={onPress} disabled={!onPress} className="gap-1 active:opacity-80">
-      <View className="flex-row items-center justify-between">
-        <Text variant="body" numberOfLines={1} className="flex-1">
-          {item.sublabel ? `${item.sublabel} ` : ''}
-          {item.label}
-        </Text>
-        <Text variant="body" style={{ color }} className="font-semibold">
+      <View className="flex-row items-center justify-between gap-2">
+        <View className="flex-1 flex-row items-center gap-1.5">
+          {item.icon ? <Icon name={item.icon} size={18} color={palette.frosting[500]} /> : null}
+          <Text variant="body" numberOfLines={1} className="flex-1">
+            {item.sublabel ? `${item.sublabel} ` : ''}
+            {item.label}
+          </Text>
+        </View>
+        <Text variant="body" style={{ color }} className="font-heading">
           {fmt(item.changePct)}
         </Text>
       </View>
-      <View className="h-2 overflow-hidden rounded-full bg-crust dark:bg-[#2E2042]">
+      <View className="h-2 overflow-hidden rounded-pill bg-crust dark:bg-night-surface-muted">
         <Animated.View style={[{ height: '100%', backgroundColor: color }, barStyle]} />
       </View>
     </Pressable>

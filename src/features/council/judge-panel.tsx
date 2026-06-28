@@ -2,7 +2,9 @@ import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { useEffect } from 'react';
 
+import { Icon } from '@/components/icons';
 import { Badge, Card, Text, type Signal } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import { StructuredOutput } from '@/lib/agent/renderers';
 import { signalTone } from './use-council-run';
 
@@ -49,7 +51,9 @@ export function JudgePanel({
   if (judging) {
     return (
       <Card tone="muted" className="items-center gap-2 py-6">
-        <Animated.Text style={[{ fontSize: 40 }, shimmerStyle]}>🧑‍⚖️</Animated.Text>
+        <Animated.View style={shimmerStyle}>
+          <Icon name="council" size={44} color={palette.frosting[500]} />
+        </Animated.View>
         <Text variant="heading">The judge is deliberating…</Text>
         <Text variant="muted">Weighing 13 verdicts into a consensus.</Text>
       </Card>
@@ -68,7 +72,7 @@ export function JudgePanel({
   return (
     <Card className="gap-3">
       <View className="flex-row items-center gap-2">
-        <Text style={{ fontSize: 26 }}>🧑‍⚖️</Text>
+        <Icon name="council" size={24} color={palette.frosting[600]} />
         <Text variant="heading">Council Verdict</Text>
       </View>
 

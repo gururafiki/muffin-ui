@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 
-import { Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import { SECTORS, SECTOR_WEIGHTS, type Sector } from './taxonomy';
 
-// Categorical palette harmonised with the brand purples/blueberries + accents.
+// Categorical palette harmonised with the brand grape/blueberry + butter accents.
 const SLICE_COLORS = [
-  '#7C4DE0', '#9D72EF', '#5B6CF0', '#3F4BD6', '#B07CF2', '#6838C6',
-  '#8E63E8', '#4F8DE0', '#A98CF0', '#7E5BD6', '#C2A0F6',
+  '#875DAE', '#A47EC6', '#6E63A6', '#524785', '#C2A4DC', '#6F4A93',
+  '#9B7BC4', '#E9A94D', '#B79AD8', '#7FB35C', '#5A3C77',
 ];
 
 const SIZE = 240;
@@ -74,28 +74,34 @@ export function SectorPie({
         {slices.map((s) => {
           const isSel = s.sector.id === selectedId;
           const mid = (s.start + s.end) / 2;
-          const labelPos = polar(C, C, (isSel ? R_SEL : R) + 0.0 - 28, mid);
+          const labelPos = polar(C, C, (isSel ? R_SEL : R) - 28, mid);
           return (
-            <G key={s.sector.id} onPress={() => onSelect(s.sector.id)} opacity={isSel || !selectedId ? 1 : 0.55}>
+            <G key={s.sector.id} onPress={() => onSelect(s.sector.id)} opacity={isSel || !selectedId ? 1 : 0.5}>
               <Path
                 d={arc(C, C, isSel ? R_SEL : R, INNER, s.start, s.end)}
                 fill={s.color}
-                stroke="#FBF7FF"
-                strokeWidth={2}
+                stroke={palette.dough}
+                strokeWidth={2.5}
               />
               {s.weight >= 6 ? (
-                <SvgText x={labelPos.x} y={labelPos.y + 5} fontSize={15} textAnchor="middle">
-                  {s.sector.emoji}
+                <SvgText
+                  x={labelPos.x}
+                  y={labelPos.y + 5}
+                  fontSize={13}
+                  fontWeight="bold"
+                  textAnchor="middle"
+                  fill="#FFFFFF">
+                  {s.weight}%
                 </SvgText>
               ) : null}
             </G>
           );
         })}
         {/* Center label */}
-        <SvgText x={C} y={C - 4} fontSize={13} fontWeight="bold" textAnchor="middle" fill="#542CA0">
+        <SvgText x={C} y={C - 4} fontSize={14} fontWeight="bold" textAnchor="middle" fill={palette.frosting[700]}>
           {selected ? selected.sector.name.split(' ')[0] : 'Sectors'}
         </SvgText>
-        <SvgText x={C} y={C + 14} fontSize={12} textAnchor="middle" fill="#6B5E7E">
+        <SvgText x={C} y={C + 15} fontSize={12} textAnchor="middle" fill="#7A6A92">
           {selected ? `${selected.weight}% wt` : 'tap a slice'}
         </SvgText>
       </Svg>

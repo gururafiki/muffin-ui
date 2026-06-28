@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { Icon } from '@/components/icons';
 import { Button, Card, Field, Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import { ASSETS, assetTypeMeta } from '@/features/markets/taxonomy';
 import { useWealth } from './store';
 
@@ -37,7 +39,7 @@ export function AddHoldingForm({ accountId }: { accountId: string }) {
       <Text variant="heading">Add holding</Text>
 
       {symbol ? (
-        <View className="flex-row items-center justify-between rounded-muffin bg-frosting-50 px-3 py-2 dark:bg-[#2E2042]">
+        <View className="flex-row items-center justify-between rounded-crumb bg-frosting-50 px-3 py-2 dark:bg-night-surface-muted">
           <Text variant="body">{symbol}</Text>
           <Pressable onPress={() => setSymbol('')}>
             <Text variant="muted" className="text-frosting-500">
@@ -65,8 +67,8 @@ export function AddHoldingForm({ accountId }: { accountId: string }) {
                 setSymbol(a.symbol);
                 setQuery('');
               }}
-              className="flex-row items-center gap-2 rounded-muffin px-2 py-2 active:opacity-70">
-              <Text>{assetTypeMeta(a.assetType)?.emoji}</Text>
+              className="flex-row items-center gap-2 rounded-crumb px-2 py-2 active:opacity-70">
+              <Icon name={assetTypeMeta(a.assetType)?.icon ?? 'asset-equities'} size={18} color={palette.frosting[500]} />
               <Text variant="body" className="flex-1">
                 {a.symbol} · {a.name}
               </Text>

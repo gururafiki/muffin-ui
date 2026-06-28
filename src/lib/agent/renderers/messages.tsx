@@ -44,7 +44,7 @@ export function MessageBubble({ message }: { message: AnyMessage }) {
       {toolCalls.length > 0 && (
         <View className="gap-1">
           {toolCalls.map((tc, i) => (
-            <View key={i} className="rounded-muffin bg-frosting-50 p-2 dark:bg-[#2E2042]">
+            <View key={i} className="rounded-crumb bg-frosting-50 p-2 dark:bg-night-surface-muted">
               <Text variant="label">calls {tc.name}</Text>
               <JsonBlock value={tc.args} />
             </View>

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
+import { Icon } from '@/components/icons';
 import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import type { AgentDef } from '@/lib/agent/registry';
 import { CouncilArena } from './council-arena';
 import { JudgePanel } from './judge-panel';
@@ -23,9 +25,11 @@ export function CouncilScreen(_props: { agent: AgentDef }) {
 
   return (
     <View className="gap-4">
-      <Card className="gap-3">
-        <View className="flex-row items-center gap-2">
-          <Text style={{ fontSize: 28 }}>🧑‍⚖️</Text>
+      <Card tone="sticker" className="gap-3">
+        <View className="flex-row items-center gap-3">
+          <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+            <Icon name="council" size={26} color={palette.frosting[600]} />
+          </View>
           <View className="flex-1">
             <Text variant="heading">Investor Council</Text>
             <Text variant="muted">13 legends debate, a judge decides.</Text>

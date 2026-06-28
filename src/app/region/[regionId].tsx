@@ -1,7 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
+import { Icon } from '@/components/icons';
 import { Card, Screen, Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
@@ -33,11 +35,14 @@ export default function RegionScreen() {
       <Stack.Screen options={{ title: region.name }} />
       <Breadcrumb crumbs={[{ label: 'Globe', href: '/' }, { label: region.name }]} />
 
-      <Card className="mt-1 gap-1">
-        <Text variant="title">
-          {region.emoji} {region.name}
-        </Text>
-        <Text variant="muted">{region.blurb}</Text>
+      <Card tone="sticker" className="mt-1 flex-row items-center gap-3">
+        <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+          <Icon name={region.icon} size={28} color={palette.frosting[600]} />
+        </View>
+        <View className="flex-1">
+          <Text variant="title">{region.name}</Text>
+          <Text variant="muted">{region.blurb}</Text>
+        </View>
       </Card>
 
       <View className="mt-4">

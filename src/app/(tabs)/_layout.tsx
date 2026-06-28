@@ -1,12 +1,15 @@
 import { Tabs } from 'expo-router';
 import { useColorScheme, type ColorValue } from 'react-native';
 
-import { Text } from '@/components/ui';
+import { Icon, type IconName } from '@/components/icons';
 import { palette } from '@/theme/colors';
 
-function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
-  return <Text style={{ color, fontSize: 22 }}>{emoji}</Text>;
-}
+const tabIcon = (name: IconName) => {
+  function TabBarIcon({ color, focused }: { color: ColorValue; focused: boolean }) {
+    return <Icon name={name} size={26} color={color as string} weight={focused ? 'fill' : 'duotone'} />;
+  }
+  return TabBarIcon;
+};
 
 export default function TabsLayout() {
   const dark = useColorScheme() === 'dark';
@@ -16,33 +19,19 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: dark ? palette.frosting[300] : palette.frosting[600],
-        tabBarInactiveTintColor: dark ? '#6E5E86' : '#B6A8CC',
+        tabBarInactiveTintColor: dark ? palette.night.textMuted : '#BCA9D2',
         tabBarStyle: {
-          backgroundColor: dark ? '#241834' : palette.white,
-          borderTopColor: dark ? '#3A2B52' : palette.frosting[100],
+          backgroundColor: dark ? palette.night.surface : palette.white,
+          borderTopColor: dark ? palette.night.border : palette.frosting[100],
+          borderTopWidth: 1,
         },
-        tabBarLabelStyle: { fontWeight: '600', fontSize: 11 },
+        tabBarLabelStyle: { fontFamily: 'Nunito_700Bold', fontSize: 11 },
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{ title: 'Globe', tabBarIcon: ({ color }) => <TabIcon emoji="🌍" color={color} /> }}
-      />
-      <Tabs.Screen
-        name="markets"
-        options={{ title: 'Markets', tabBarIcon: ({ color }) => <TabIcon emoji="🥧" color={color} /> }}
-      />
-      <Tabs.Screen
-        name="portfolio"
-        options={{ title: 'Portfolio', tabBarIcon: ({ color }) => <TabIcon emoji="💰" color={color} /> }}
-      />
-      <Tabs.Screen
-        name="agents"
-        options={{ title: 'Agents', tabBarIcon: ({ color }) => <TabIcon emoji="🧁" color={color} /> }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{ title: 'Settings', tabBarIcon: ({ color }) => <TabIcon emoji="⚙️" color={color} /> }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'Globe', tabBarIcon: tabIcon('globe') }} />
+      <Tabs.Screen name="markets" options={{ title: 'Markets', tabBarIcon: tabIcon('markets') }} />
+      <Tabs.Screen name="portfolio" options={{ title: 'Portfolio', tabBarIcon: tabIcon('portfolio') }} />
+      <Tabs.Screen name="agents" options={{ title: 'Agents', tabBarIcon: tabIcon('agents') }} />
+      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings') }} />
     </Tabs>
   );
 }

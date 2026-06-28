@@ -1,20 +1,47 @@
 import '@/global.css';
 
+import {
+  Baloo2_600SemiBold,
+  Baloo2_700Bold,
+  Baloo2_800ExtraBold,
+} from '@expo-google-fonts/baloo-2';
+import { Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '@/lib/query';
-import { palette } from '@/theme/colors';
+import { theme } from '@/theme/colors';
 
 export const unstable_settings = { initialRouteName: '(tabs)' };
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const scheme = useColorScheme();
   const dark = scheme === 'dark';
+  const t = dark ? theme.dark : theme.light;
+
+  const [fontsLoaded] = useFonts({
+    Baloo2_600SemiBold,
+    Baloo2_700Bold,
+    Baloo2_800ExtraBold,
+    Nunito_400Regular,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -24,10 +51,10 @@ export default function RootLayout() {
           <Stack
             screenOptions={{
               headerShown: false,
-              headerTintColor: dark ? palette.frosting[100] : palette.frosting[700],
-              headerStyle: { backgroundColor: dark ? '#241834' : palette.white },
-              headerTitleStyle: { fontWeight: '700' },
-              contentStyle: { backgroundColor: dark ? '#1A1126' : palette.dough },
+              headerTintColor: t.primary,
+              headerStyle: { backgroundColor: t.surface },
+              headerTitleStyle: { fontFamily: 'Baloo2_700Bold', color: t.text },
+              contentStyle: { backgroundColor: t.background },
             }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen

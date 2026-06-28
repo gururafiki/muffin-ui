@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, useColorScheme, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import type { PersonaMeta } from './personas';
@@ -46,6 +47,7 @@ export function PersonaAvatar({
   onPress?: () => void;
   selected?: boolean;
 }) {
+  const dark = useColorScheme() === 'dark';
   const pulse = useSharedValue(0);
   const pop = useSharedValue(1);
   const accent = signal ? toneColor[signalTone(signal.signal)] : palette.frosting[400];
@@ -89,15 +91,24 @@ export function PersonaAvatar({
               width: 52,
               borderRadius: 26,
               borderWidth: 2,
-              borderColor: stage === 'done' ? accent : palette.frosting[200],
-              backgroundColor: selected ? palette.frosting[100] : palette.white,
+              borderColor: stage === 'done' ? accent : dark ? palette.night.border : palette.frosting[200],
+              backgroundColor: selected
+                ? palette.frosting[100]
+                : dark
+                  ? palette.night.surface
+                  : palette.white,
               opacity: dim ? 0.45 : 1,
               alignItems: 'center',
               justifyContent: 'center',
             },
             circleStyle,
           ]}>
-          <Text style={{ fontSize: 24 }}>{meta.emoji}</Text>
+          <Icon
+            name={meta.icon}
+            size={26}
+            weight="duotone"
+            color={dark ? palette.frosting[300] : palette.frosting[600]}
+          />
         </Animated.View>
       </View>
 

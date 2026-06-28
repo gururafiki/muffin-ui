@@ -1,7 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
+import { Icon } from '@/components/icons';
 import { Card, Chip, Screen, Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb, type Crumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
@@ -49,10 +51,15 @@ export default function SectorScreen() {
       <Stack.Screen options={{ title: sector.name }} />
       <Breadcrumb crumbs={crumbs} />
 
-      <Card className="mt-1 gap-2">
-        <Text variant="title">
-          {sector.emoji} {sector.name}
-        </Text>
+      <Card tone="sticker" className="mt-1 gap-3">
+        <View className="flex-row items-center gap-3">
+          <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+            <Icon name={sector.icon} size={28} color={palette.frosting[600]} />
+          </View>
+          <Text variant="title" className="flex-1">
+            {sector.name}
+          </Text>
+        </View>
         <View className="flex-row flex-wrap gap-2">
           {sector.subSectors.map((s) => (
             <Chip key={s} label={s.replace(/-/g, ' ')} />

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { Icon } from '@/components/icons';
 import { Badge, Button, Card, Field, Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import type { AgentDef } from '@/lib/agent/registry';
 import { ResearchResult, StructuredOutput, TimelineItemCard } from '@/lib/agent/renderers';
 import { useAgentRun } from '@/lib/agent/use-agent-run';
@@ -52,9 +54,11 @@ export function AgentRunner({
 
   return (
     <View className="gap-4">
-      <Card className="gap-3">
-        <View className="flex-row items-center gap-2">
-          <Text style={{ fontSize: 28 }}>{agent.emoji}</Text>
+      <Card tone="sticker" className="gap-3">
+        <View className="flex-row items-center gap-3">
+          <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+            <Icon name={agent.icon} size={26} color={palette.frosting[600]} />
+          </View>
           <View className="flex-1">
             <Text variant="heading">{agent.title}</Text>
             <Text variant="muted">{agent.tagline}</Text>
