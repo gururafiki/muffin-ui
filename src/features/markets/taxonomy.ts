@@ -12,8 +12,16 @@ import type { IconName } from '@/components/icons';
 
 export type Market = 'developed' | 'emerging';
 
+export type RegionId =
+  | 'north-america'
+  | 'europe'
+  | 'asia-pacific'
+  | 'greater-china'
+  | 'latin-america'
+  | 'mea';
+
 export interface Region {
-  id: string;
+  id: RegionId;
   name: string;
   icon: IconName;
   blurb: string;
@@ -23,7 +31,9 @@ export interface Region {
 export interface Country {
   id: string;
   name: string;
-  regionId: string;
+  regionId: RegionId;
+  /** ISO-3166 alpha-2 — links to world-geo.ts + classification.ts. */
+  iso: string;
   flag: string;
   market: Market;
   changePct: number;
@@ -55,31 +65,34 @@ export const REGIONS: Region[] = [
 
 export const COUNTRIES: Country[] = [
   // North America
-  { id: 'united-states', name: 'United States', regionId: 'north-america', flag: '🇺🇸', market: 'developed', changePct: 12.6 },
-  { id: 'canada', name: 'Canada', regionId: 'north-america', flag: '🇨🇦', market: 'developed', changePct: 7.0 },
-  { id: 'mexico', name: 'Mexico', regionId: 'north-america', flag: '🇲🇽', market: 'emerging', changePct: 5.4 },
+  { id: 'united-states', name: 'United States', regionId: 'north-america', iso: 'US', flag: '🇺🇸', market: 'developed', changePct: 12.6 },
+  { id: 'canada', name: 'Canada', regionId: 'north-america', iso: 'CA', flag: '🇨🇦', market: 'developed', changePct: 7.0 },
+  { id: 'mexico', name: 'Mexico', regionId: 'north-america', iso: 'MX', flag: '🇲🇽', market: 'emerging', changePct: 5.4 },
   // Europe
-  { id: 'united-kingdom', name: 'United Kingdom', regionId: 'europe', flag: '🇬🇧', market: 'developed', changePct: 5.2 },
-  { id: 'germany', name: 'Germany', regionId: 'europe', flag: '🇩🇪', market: 'developed', changePct: 7.8 },
-  { id: 'france', name: 'France', regionId: 'europe', flag: '🇫🇷', market: 'developed', changePct: 4.1 },
-  { id: 'switzerland', name: 'Switzerland', regionId: 'europe', flag: '🇨🇭', market: 'developed', changePct: 6.6 },
+  { id: 'united-kingdom', name: 'United Kingdom', regionId: 'europe', iso: 'GB', flag: '🇬🇧', market: 'developed', changePct: 5.2 },
+  { id: 'germany', name: 'Germany', regionId: 'europe', iso: 'DE', flag: '🇩🇪', market: 'developed', changePct: 7.8 },
+  { id: 'france', name: 'France', regionId: 'europe', iso: 'FR', flag: '🇫🇷', market: 'developed', changePct: 4.1 },
+  { id: 'switzerland', name: 'Switzerland', regionId: 'europe', iso: 'CH', flag: '🇨🇭', market: 'developed', changePct: 6.6 },
   // Asia-Pacific
-  { id: 'japan', name: 'Japan', regionId: 'asia-pacific', flag: '🇯🇵', market: 'developed', changePct: 14.2 },
-  { id: 'australia', name: 'Australia', regionId: 'asia-pacific', flag: '🇦🇺', market: 'developed', changePct: 6.9 },
-  { id: 'india', name: 'India', regionId: 'asia-pacific', flag: '🇮🇳', market: 'emerging', changePct: 13.1 },
-  { id: 'south-korea', name: 'South Korea', regionId: 'asia-pacific', flag: '🇰🇷', market: 'emerging', changePct: 3.4 },
+  { id: 'japan', name: 'Japan', regionId: 'asia-pacific', iso: 'JP', flag: '🇯🇵', market: 'developed', changePct: 14.2 },
+  { id: 'australia', name: 'Australia', regionId: 'asia-pacific', iso: 'AU', flag: '🇦🇺', market: 'developed', changePct: 6.9 },
+  { id: 'india', name: 'India', regionId: 'asia-pacific', iso: 'IN', flag: '🇮🇳', market: 'emerging', changePct: 13.1 },
+  { id: 'south-korea', name: 'South Korea', regionId: 'asia-pacific', iso: 'KR', flag: '🇰🇷', market: 'emerging', changePct: 3.4 },
   // Greater China
-  { id: 'china', name: 'China', regionId: 'greater-china', flag: '🇨🇳', market: 'emerging', changePct: -5.1 },
-  { id: 'hong-kong', name: 'Hong Kong', regionId: 'greater-china', flag: '🇭🇰', market: 'developed', changePct: -1.8 },
-  { id: 'taiwan', name: 'Taiwan', regionId: 'greater-china', flag: '🇹🇼', market: 'emerging', changePct: 9.3 },
+  { id: 'china', name: 'China', regionId: 'greater-china', iso: 'CN', flag: '🇨🇳', market: 'emerging', changePct: -5.1 },
+  { id: 'hong-kong', name: 'Hong Kong', regionId: 'greater-china', iso: 'HK', flag: '🇭🇰', market: 'developed', changePct: -1.8 },
+  { id: 'taiwan', name: 'Taiwan', regionId: 'greater-china', iso: 'TW', flag: '🇹🇼', market: 'emerging', changePct: 9.3 },
   // Latin America
-  { id: 'brazil', name: 'Brazil', regionId: 'latin-america', flag: '🇧🇷', market: 'emerging', changePct: 6.2 },
-  { id: 'chile', name: 'Chile', regionId: 'latin-america', flag: '🇨🇱', market: 'emerging', changePct: 2.7 },
+  { id: 'brazil', name: 'Brazil', regionId: 'latin-america', iso: 'BR', flag: '🇧🇷', market: 'emerging', changePct: 6.2 },
+  { id: 'chile', name: 'Chile', regionId: 'latin-america', iso: 'CL', flag: '🇨🇱', market: 'emerging', changePct: 2.7 },
   // Middle East & Africa
-  { id: 'saudi-arabia', name: 'Saudi Arabia', regionId: 'mea', flag: '🇸🇦', market: 'emerging', changePct: 3.8 },
-  { id: 'south-africa', name: 'South Africa', regionId: 'mea', flag: '🇿🇦', market: 'emerging', changePct: 1.1 },
-  { id: 'united-arab-emirates', name: 'United Arab Emirates', regionId: 'mea', flag: '🇦🇪', market: 'emerging', changePct: 4.6 },
+  { id: 'saudi-arabia', name: 'Saudi Arabia', regionId: 'mea', iso: 'SA', flag: '🇸🇦', market: 'emerging', changePct: 3.8 },
+  { id: 'south-africa', name: 'South Africa', regionId: 'mea', iso: 'ZA', flag: '🇿🇦', market: 'emerging', changePct: 1.1 },
+  { id: 'united-arab-emirates', name: 'United Arab Emirates', regionId: 'mea', iso: 'AE', flag: '🇦🇪', market: 'emerging', changePct: 4.6 },
 ];
+
+/** Look up a modelled country by ISO-2 (links globe/classification to drill pages). */
+export const getCountryByIso = (iso: string) => COUNTRIES.find((c) => c.iso === iso);
 
 export const SECTORS: Sector[] = [
   { id: 'information-technology', name: 'Information Technology', icon: 'sector-tech', subSectors: ['software-saas', 'semiconductors', 'hardware'], changePct: 18.9 },

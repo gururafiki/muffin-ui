@@ -61,6 +61,7 @@ export default function RootLayout() {
               name="agents/[assistantId]"
               options={{ headerShown: true, title: 'Agent' }}
             />
+            <Stack.Screen name="group/[groupId]" options={{ headerShown: true, title: 'Group' }} />
             <Stack.Screen name="region/[regionId]" options={{ headerShown: true, title: 'Region' }} />
             <Stack.Screen name="country/[countryId]" options={{ headerShown: true, title: 'Country' }} />
             <Stack.Screen name="sector/[sectorId]" options={{ headerShown: true, title: 'Sector' }} />
