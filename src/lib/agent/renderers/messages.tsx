@@ -2,16 +2,19 @@ import { View } from 'react-native';
 
 import { Badge, Card, Text } from '@/components/ui';
 import { JsonBlock } from './json-block';
+import { Markdown } from './markdown';
 
-type AnyMessage = {
+export type AnyMessage = {
+  id?: string;
   type?: string;
   role?: string;
   content?: unknown;
   name?: string;
-  tool_calls?: { name?: string; args?: unknown }[];
+  tool_calls?: { name?: string; args?: unknown; id?: string }[];
 };
 
-function textContent(content: unknown): string {
+/** Flatten message content (string or content-blocks) to plain text. */
+export function messageText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content
@@ -20,6 +23,13 @@ function textContent(content: unknown): string {
   }
   return '';
 }
+
+/** Normalised message kind: 'human' | 'ai' | 'tool'. */
+export function messageKind(message: AnyMessage): string {
+  return (message.type ?? message.role ?? 'ai').toLowerCase();
+}
+
+const textContent = messageText;
 
 /** Render a single LangChain message (human / ai / tool). */
 export function MessageBubble({ message }: { message: AnyMessage }) {
@@ -40,7 +50,7 @@ export function MessageBubble({ message }: { message: AnyMessage }) {
   return (
     <Card tone={isHuman ? 'outline' : 'raised'} className="gap-2">
       <Badge label={isHuman ? 'you' : (message.name ?? 'agent')} tone="info" />
-      {body ? <Text variant="body">{body}</Text> : null}
+      {body ? isHuman ? <Text variant="body">{body}</Text> : <Markdown value={body} /> : null}
       {toolCalls.length > 0 && (
         <View className="gap-1">
           {toolCalls.map((tc, i) => (

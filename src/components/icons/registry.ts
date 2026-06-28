@@ -10,8 +10,10 @@
  * the two-tone "sticker" bakery look.
  */
 import {
+  ArrowDownIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowsClockwiseIcon,
   BankIcon,
   BasketIcon,
   BirdIcon,
@@ -30,10 +32,12 @@ import {
   ChefHatIcon,
   ClockCounterClockwiseIcon,
   CoffeeIcon,
+  CopyIcon,
   CpuIcon,
   CubeIcon,
   CurrencyBtcIcon,
   FactoryIcon,
+  FolderIcon,
   FirstAidKitIcon,
   FunctionIcon,
   GasPumpIcon,
@@ -52,6 +56,7 @@ import {
   MountainsIcon,
   PackageIcon,
   PawPrintIcon,
+  PencilSimpleIcon,
   PlantIcon,
   PlayIcon,
   PlusIcon,
@@ -70,6 +75,7 @@ import {
   WalletIcon,
   WarningIcon,
   WavesIcon,
+  WrenchIcon,
   XIcon,
 } from 'phosphor-react-native';
 
@@ -87,6 +93,11 @@ export const iconRegistry = {
   council: ScalesIcon,
   criteria: ListChecksIcon,
   evaluation: ChartLineUpIcon,
+
+  // ── Run-timeline steps (deep-agent middleware / tools) ──────────────
+  thinking: BrainIcon,
+  tools: WrenchIcon,
+  files: FolderIcon,
 
   // ── Regions (differentiated by color; globe variant by hemisphere) ──
   'region-na': GlobeHemisphereWestIcon,
@@ -153,6 +164,10 @@ export const iconRegistry = {
   // ── Generic UI ─────────────────────────────────────────────────────
   'chevron-right': CaretRightIcon,
   'chevron-down': CaretDownIcon,
+  copy: CopyIcon,
+  edit: PencilSimpleIcon,
+  regenerate: ArrowsClockwiseIcon,
+  'arrow-down': ArrowDownIcon,
   'arrow-right': ArrowRightIcon,
   'arrow-left': ArrowLeftIcon,
   plus: PlusIcon,

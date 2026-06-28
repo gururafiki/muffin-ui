@@ -2,6 +2,7 @@ import { Linking, Pressable, View } from 'react-native';
 
 import { Badge, Card, Text } from '@/components/ui';
 import { JsonBlock } from './json-block';
+import { Markdown } from './markdown';
 
 type ResearchOutput = {
   answer_markdown?: string;
@@ -13,8 +14,7 @@ type ResearchOutput = {
 
 /**
  * Tailored renderer for the research agent's ResearchOutput. Renders the answer
- * text (line breaks preserved), key findings, tappable sources and a confidence
- * badge. Full markdown styling (headings/bold) is a tracked follow-up.
+ * as markdown, plus key findings, tappable sources and a confidence badge.
  */
 export function ResearchResult({ value }: { value: unknown }) {
   if (!value || typeof value !== 'object') return <JsonBlock value={value} />;
@@ -29,7 +29,7 @@ export function ResearchResult({ value }: { value: unknown }) {
         ) : null}
       </View>
 
-      {out.answer_markdown ? <Text variant="body">{out.answer_markdown}</Text> : null}
+      {out.answer_markdown ? <Markdown value={out.answer_markdown} /> : null}
 
       {out.key_findings && out.key_findings.length > 0 ? (
         <View className="gap-1">
