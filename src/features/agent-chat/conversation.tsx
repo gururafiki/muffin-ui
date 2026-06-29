@@ -1,0 +1,382 @@
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+
+import { Icon, type IconName } from '@/components/icons';
+import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
+import { cn } from '@/lib/cn';
+import {
+  JsonBlock,
+  Markdown,
+  messageKind,
+  messageText,
+  TodoList,
+  isTodoList,
+  type AnyMessage,
+  type Todo,
+} from '@/lib/agent/renderers';
+import { toolStepMeta } from '@/lib/agent/steps';
+import { palette } from '@/theme/colors';
+
+export type ViewMode = 'summary' | 'verbose';
+
+export type MessageActions = {
+  busy: boolean;
+  onCopy: (text: string) => void;
+  onEdit: (message: AnyMessage, text: string) => void;
+  onRegenerate: (message: AnyMessage) => void;
+  branchInfo: (message: AnyMessage) => { index: number; total: number; prev?: string; next?: string } | undefined;
+  onSetBranch: (branch: string) => void;
+};
+
+type ToolCall = { name?: string; args?: Record<string, unknown>; id?: string };
+type Step =
+  | { kind: 'think'; id: string; text: string }
+  | { kind: 'tool'; id: string; call: ToolCall; result?: AnyMessage; error?: boolean };
+type Turn = { human?: AnyMessage; steps: Step[]; answer?: AnyMessage };
+
+/** Split a message list into turns, pairing tool calls with their results. */
+function buildTurns(messages: AnyMessage[]): Turn[] {
+  const toolById = new Map<string, AnyMessage>();
+  for (const m of messages) {
+    if (messageKind(m) === 'tool') {
+      const id = (m as { tool_call_id?: string }).tool_call_id;
+      if (id) toolById.set(id, m);
+    }
+  }
+
+  const turns: Turn[] = [];
+  let cur: Turn | null = null;
+  const aiSeq: { turn: Turn; m: AnyMessage }[] = [];
+
+  for (const m of messages) {
+    const kind = messageKind(m);
+    if (kind === 'human' || kind === 'user') {
+      cur = { steps: [] };
+      cur.human = m;
+      turns.push(cur);
+      continue;
+    }
+    if (kind === 'tool') continue;
+    if (!cur) {
+      cur = { steps: [] };
+      turns.push(cur);
+    }
+    aiSeq.push({ turn: cur, m });
+  }
+
+  // Within each turn, the final content-only AI message is the answer; the rest
+  // become "thinking" + tool steps.
+  for (const t of turns) {
+    const ais = aiSeq.filter((x) => x.turn === t).map((x) => x.m);
+    ais.forEach((m, i) => {
+      const text = messageText(m.content).trim();
+      const calls = (m.tool_calls ?? []) as ToolCall[];
+      const isLast = i === ais.length - 1;
+      if (isLast && text && calls.length === 0) {
+        t.answer = m;
+        return;
+      }
+      if (text) t.steps.push({ kind: 'think', id: `${m.id ?? 't'}-think`, text });
+      for (const c of calls) {
+        const result = c.id ? toolById.get(c.id) : undefined;
+        t.steps.push({
+          kind: 'tool',
+          id: c.id ?? `${m.id}-${c.name}`,
+          call: c,
+          result,
+          error: (result as { status?: string } | undefined)?.status === 'error',
+        });
+      }
+    });
+  }
+  return turns;
+}
+
+/** Render a tool result: pretty JSON if it parses, otherwise markdown/text. */
+function ToolResult({ message }: { message?: AnyMessage }) {
+  if (!message) return <Text variant="muted" className="text-xs">No output captured.</Text>;
+  const raw = messageText(message.content);
+  if (!raw.trim()) return <Text variant="muted" className="text-xs">Empty result.</Text>;
+  const capped = raw.length > 8000 ? raw.slice(0, 8000) + '\n… (truncated)' : raw;
+  const t = capped.trim();
+  const json = tryParseJson(t);
+  if (json !== undefined) return <JsonBlock value={json} />;
+  return <Markdown value={capped} />;
+}
+
+function tryParseJson(t: string): unknown {
+  if (!(t.startsWith('{') || t.startsWith('[')) || t.length >= 8000) return undefined;
+  try {
+    return JSON.parse(t);
+  } catch {
+    return undefined;
+  }
+}
+
+function RailNode({ icon, error, last }: { icon: IconName; error?: boolean; last?: boolean }) {
+  return (
+    <View className="w-6 items-center">
+      {!last ? (
+        <View
+          style={{ position: 'absolute', top: 14, bottom: -10, width: 2 }}
+          className="bg-frosting-100 dark:bg-night-border"
+        />
+      ) : null}
+      <View
+        className={cn(
+          'z-10 h-6 w-6 items-center justify-center rounded-pill',
+          error ? 'bg-bearish/15' : 'bg-frosting-100 dark:bg-night-surface-muted',
+        )}>
+        <Icon name={error ? 'close' : icon} size={13} color={error ? palette.bearish : palette.frosting[500]} />
+      </View>
+    </View>
+  );
+}
+
+function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  const meta =
+    step.kind === 'think'
+      ? { label: 'Thinking', icon: 'thinking' as IconName, sublabel: undefined, isSubagent: false }
+      : toolStepMeta(step.call.name ?? 'tool', step.call.args ?? {});
+  const error = step.kind === 'tool' && step.error;
+
+  return (
+    <View className="flex-row gap-3">
+      <RailNode icon={meta.icon} error={error} last={last} />
+      <Pressable onPress={() => setOpen((o) => !o)} className="flex-1 pb-3 active:opacity-70">
+        <View className="flex-row items-center gap-2">
+          <Text variant="body" className={cn('flex-1 text-sm', meta.isSubagent && 'font-heading')}>
+            {meta.label}
+          </Text>
+          {meta.isSubagent ? <Badge label="sub-agent" tone="info" /> : null}
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+        </View>
+        {meta.sublabel ? (
+          <Text variant="muted" className="mt-0.5 text-xs" numberOfLines={open ? undefined : 1}>
+            {meta.sublabel}
+          </Text>
+        ) : null}
+        {open ? (
+          <View className="mt-2 gap-2">
+            {step.kind === 'think' ? (
+              <Markdown value={step.text} />
+            ) : (
+              <>
+                {step.call.args && Object.keys(step.call.args).length > 0 && !meta.isSubagent ? (
+                  <JsonBlock value={step.call.args} />
+                ) : null}
+                <ToolResult message={step.result} />
+              </>
+            )}
+          </View>
+        ) : null}
+      </Pressable>
+    </View>
+  );
+}
+
+type ToolStepT = Extract<Step, { kind: 'tool' }>;
+type TimelineNode =
+  | { kind: 'leaf'; step: Step }
+  | { kind: 'sub'; name: string; calls: ToolStepT[] };
+
+/** Group a flat step list into an orchestrator tree: parent steps stay as
+ * leaves, while sub-agent (`task`) calls collapse under one node per agent. */
+function groupTimeline(steps: Step[]): { nodes: TimelineNode[]; subCount: number } {
+  const nodes: TimelineNode[] = [];
+  const subByName = new Map<string, Extract<TimelineNode, { kind: 'sub' }>>();
+  for (const step of steps) {
+    if (step.kind === 'tool') {
+      const meta = toolStepMeta(step.call.name ?? 'tool', step.call.args ?? {});
+      if (meta.isSubagent) {
+        let node = subByName.get(meta.label);
+        if (!node) {
+          node = { kind: 'sub', name: meta.label, calls: [] };
+          subByName.set(meta.label, node);
+          nodes.push(node);
+        }
+        node.calls.push(step);
+        continue;
+      }
+    }
+    nodes.push({ kind: 'leaf', step });
+  }
+  return { nodes, subCount: subByName.size };
+}
+
+const RAIL = { position: 'absolute' as const, top: 14, bottom: -10, width: 2 };
+
+function SubAgentGroup({ name, calls, last, defaultOpen }: { name: string; calls: ToolStepT[]; last: boolean; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const error = calls.some((c) => c.error);
+  const brief = (c: ToolStepT) => toolStepMeta(c.call.name ?? 'tool', c.call.args ?? {}).sublabel;
+
+  return (
+    <View className="flex-row gap-3">
+      <View className="w-6 items-center">
+        {!last ? <View style={RAIL} className="bg-frosting-100 dark:bg-night-border" /> : null}
+        <View className={cn('z-10 rounded-pill', error && 'border-2 border-bearish')}>
+          <Avatar name={name} size={24} />
+        </View>
+      </View>
+      <Pressable onPress={() => setOpen((o) => !o)} className="flex-1 pb-3 active:opacity-70">
+        <View className="flex-row items-center gap-2">
+          <Text variant="body" className="flex-1 text-sm font-heading">{name}</Text>
+          {calls.length > 1 ? <Text variant="muted" className="text-xs">×{calls.length}</Text> : null}
+          <Badge label="sub-agent" tone="info" />
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+        </View>
+        {!open && brief(calls[0]) ? (
+          <Text variant="muted" className="mt-0.5 text-xs" numberOfLines={1}>{brief(calls[0])}</Text>
+        ) : null}
+        {open ? (
+          <View className="mt-2 gap-3">
+            {calls.map((c, i) => (
+              <View key={c.id + i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
+                {calls.length > 1 ? <Text variant="label">Task {i + 1}</Text> : null}
+                {brief(c) ? <Text variant="muted" className="text-xs">{brief(c)}</Text> : null}
+                <ToolResult message={c.result} />
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </Pressable>
+    </View>
+  );
+}
+
+function StepTimeline({ steps, viewMode }: { steps: Step[]; viewMode: ViewMode }) {
+  if (steps.length === 0) return null;
+  const { nodes, subCount } = groupTimeline(steps);
+  return (
+    <Card tone="muted" className="gap-0">
+      <View className="mb-1 flex-row items-center gap-2">
+        <Icon name="sparkle" size={14} color={palette.frosting[500]} />
+        <Text variant="label">
+          {steps.length} steps{subCount > 0 ? ` · ${subCount} sub-agents` : ''}
+        </Text>
+      </View>
+      {nodes.map((n, i) =>
+        n.kind === 'sub' ? (
+          <SubAgentGroup key={'s' + i} name={n.name} calls={n.calls} last={i === nodes.length - 1} defaultOpen={viewMode === 'verbose'} />
+        ) : (
+          <StepRow key={'l' + i} step={n.step} last={i === nodes.length - 1} defaultOpen={viewMode === 'verbose'} />
+        ),
+      )}
+    </Card>
+  );
+}
+
+function BranchControls({ message, actions }: { message: AnyMessage; actions: MessageActions }) {
+  const b = actions.branchInfo(message);
+  if (!b || b.total <= 1) return null;
+  return (
+    <View className="flex-row items-center">
+      <Pressable disabled={!b.prev} onPress={() => b.prev && actions.onSetBranch(b.prev)} className="p-1 active:opacity-60">
+        <Icon name="arrow-left" size={14} color={b.prev ? palette.frosting[400] : palette.frosting[200]} />
+      </Pressable>
+      <Text variant="muted" className="text-xs">{b.index + 1}/{b.total}</Text>
+      <Pressable disabled={!b.next} onPress={() => b.next && actions.onSetBranch(b.next)} className="p-1 active:opacity-60">
+        <Icon name="arrow-right" size={14} color={b.next ? palette.frosting[400] : palette.frosting[200]} />
+      </Pressable>
+    </View>
+  );
+}
+
+function ActionBtn({ icon, onPress, disabled }: { icon: IconName; onPress: () => void; disabled?: boolean }) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} className={cn('h-7 w-7 items-center justify-center active:opacity-60', disabled && 'opacity-40')}>
+      <Icon name={icon} size={15} color={palette.frosting[400]} />
+    </Pressable>
+  );
+}
+
+function HumanBubble({ message, actions }: { message: AnyMessage; actions?: MessageActions }) {
+  const body = messageText(message.content);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(body);
+
+  if (editing && actions) {
+    return (
+      <Card tone="outline" className="gap-2">
+        <Field value={text} onChangeText={setText} multiline autoFocus />
+        <View className="flex-row gap-2">
+          <Button title="Save & resend" size="sm" disabled={actions.busy || !text.trim()} onPress={() => { setEditing(false); actions.onEdit(message, text.trim()); }} />
+          <Button title="Cancel" size="sm" variant="ghost" onPress={() => setEditing(false)} />
+        </View>
+      </Card>
+    );
+  }
+
+  return (
+    <Card tone="outline" className="gap-1 self-end" style={{ maxWidth: '90%' }}>
+      <Text variant="body">{body}</Text>
+      {actions ? (
+        <View className="flex-row items-center justify-end gap-0.5 pt-1">
+          <BranchControls message={message} actions={actions} />
+          <ActionBtn icon="copy" onPress={() => actions.onCopy(body)} />
+          <ActionBtn icon="edit" disabled={actions.busy} onPress={() => { setText(body); setEditing(true); }} />
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+function AnswerBlock({ message, actions }: { message: AnyMessage; actions?: MessageActions }) {
+  const body = messageText(message.content);
+  return (
+    <Card tone="raised" className="gap-2">
+      <Markdown value={body} />
+      {actions ? (
+        <View className="flex-row items-center justify-end gap-0.5 pt-1">
+          <BranchControls message={message} actions={actions} />
+          <ActionBtn icon="copy" onPress={() => actions.onCopy(body)} />
+          <ActionBtn icon="regenerate" disabled={actions.busy} onPress={() => actions.onRegenerate(message)} />
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+/**
+ * Render a LangGraph conversation from its persisted messages — used live (the
+ * messages grow as the run streams) and when reopening a past thread. Each
+ * assistant turn becomes a minimal, expandable step timeline (sub-agents shown
+ * as emphasised rows) followed by the markdown answer.
+ */
+export function Conversation({
+  messages,
+  todos,
+  viewMode,
+  busy,
+  actions,
+}: {
+  messages: AnyMessage[];
+  todos?: Todo[];
+  viewMode: ViewMode;
+  busy?: boolean;
+  actions?: MessageActions;
+}) {
+  const turns = buildTurns(messages);
+
+  return (
+    <View className="gap-3">
+      {isTodoList(todos) ? <TodoList todos={todos} title="Plan" /> : null}
+      {turns.map((turn, ti) => (
+        <View key={ti} className="gap-3">
+          {turn.human ? <HumanBubble message={turn.human} actions={actions} /> : null}
+          <StepTimeline steps={turn.steps} viewMode={viewMode} />
+          {turn.answer ? <AnswerBlock message={turn.answer} actions={actions} /> : null}
+          {busy && ti === turns.length - 1 ? (
+            <View className="flex-row items-center gap-2 px-1">
+              <ActivityIndicator size="small" color={palette.frosting[400]} />
+              <Text variant="muted" className="text-sm">Working…</Text>
+            </View>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
+}

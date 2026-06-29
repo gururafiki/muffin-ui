@@ -53,3 +53,53 @@ export function describeStep(node: string): StepInfo {
   }
   return { label: humanize(node), icon: 'sparkle' };
 }
+
+function titleCase(s: string): string {
+  return s.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function firstString(args: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = args[k];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
+export interface ToolStep extends StepInfo {
+  /** Secondary one-liner (e.g. a sub-agent's brief, a file path). */
+  sublabel?: string;
+  /** A sub-agent delegation (`task`) — render as an emphasised section. */
+  isSubagent: boolean;
+}
+
+/**
+ * Friendly, informative metadata for one tool call, derived from its name and
+ * arguments. Turns opaque deep-agent tool names into a readable timeline row.
+ */
+export function toolStepMeta(name: string, args: Record<string, unknown> = {}): ToolStep {
+  const n = (name ?? '').toLowerCase();
+
+  if (n === 'task' || /sub_?agent|delegate/.test(n)) {
+    const type = firstString(args, ['subagent_type', 'subagent', 'name']);
+    return {
+      label: type ? titleCase(type) : 'Sub-agent',
+      icon: 'agents',
+      sublabel: firstString(args, ['description', 'prompt', 'query', 'instructions']),
+      isSubagent: true,
+    };
+  }
+  if (/write_todos|todo/.test(n)) {
+    const todos = Array.isArray(args.todos) ? (args.todos as unknown[]).length : undefined;
+    return { label: 'Updated the to-do list', icon: 'criteria', sublabel: todos ? `${todos} items` : undefined, isSubagent: false };
+  }
+  if (/discover.*cache|cache.*discover/.test(n)) return { label: 'Discovered cached data', icon: 'research', isSubagent: false };
+  if (/write_cached|cache/.test(n)) return { label: 'Saved tool output', icon: 'files', sublabel: firstString(args, ['tool_name', 'name', 'path', 'file_path']), isSubagent: false };
+  if (/get_tool_output_schema|schema/.test(n)) return { label: 'Inspected a tool schema', icon: 'tools', sublabel: firstString(args, ['tool_name', 'name']), isSubagent: false };
+  if (/read_file|read/.test(n)) return { label: 'Read a file', icon: 'files', sublabel: firstString(args, ['file_path', 'path', 'file']), isSubagent: false };
+  if (/write_file|edit_file|write|edit/.test(n)) return { label: 'Wrote a file', icon: 'files', sublabel: firstString(args, ['file_path', 'path', 'file']), isSubagent: false };
+  if (n === 'ls' || /list|glob/.test(n)) return { label: 'Listed files', icon: 'files', sublabel: firstString(args, ['path', 'dir']), isSubagent: false };
+  if (/search|web|fetch|retriev/.test(n)) return { label: 'Searched', icon: 'research', sublabel: firstString(args, ['query', 'q', 'url']), isSubagent: false };
+
+  return { label: titleCase(name || 'tool'), icon: 'tools', sublabel: firstString(args, ['query', 'description', 'path', 'file_path']), isSubagent: false };
+}

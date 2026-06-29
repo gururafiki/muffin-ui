@@ -8,7 +8,9 @@ import {
   threadStatusTone,
 } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
-import { StructuredOutput } from '@/lib/agent/renderers';
+import { Conversation } from '@/features/agent-chat/conversation';
+import { isMessageArray, StructuredOutput } from '@/lib/agent/renderers';
+import type { Todo } from '@/lib/agent/renderers';
 
 export default function CallDetailRoute() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
@@ -44,16 +46,25 @@ export default function CallDetailRoute() {
             </Text>
           </Card>
 
-          {thread.values && Object.keys(thread.values).length > 0 ? (
-            <Card tone="raised" className="gap-2">
-              <Text variant="label">Result</Text>
-              <StructuredOutput value={thread.values} />
-            </Card>
-          ) : (
-            <Card tone="muted">
-              <Text variant="muted">This call has no stored result.</Text>
-            </Card>
-          )}
+          {(() => {
+            const values = thread.values as { messages?: unknown; todos?: Todo[] } | undefined;
+            if (values && isMessageArray(values.messages)) {
+              return <Conversation messages={values.messages} todos={values.todos} viewMode="summary" />;
+            }
+            if (values && Object.keys(values).length > 0) {
+              return (
+                <Card tone="raised" className="gap-2">
+                  <Text variant="label">Result</Text>
+                  <StructuredOutput value={values} />
+                </Card>
+              );
+            }
+            return (
+              <Card tone="muted">
+                <Text variant="muted">This call has no stored result.</Text>
+              </Card>
+            );
+          })()}
         </View>
       )}
     </Screen>
