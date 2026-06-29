@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Badge, Text, type Signal } from '@/components/ui';
 import { isMessageArray, MessageList } from './messages';
 import { JsonBlock } from './json-block';
+import { Markdown } from './markdown';
 
 function humanize(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -24,7 +25,10 @@ export function StructuredOutput({ value, depth = 0 }: { value: unknown; depth?:
 
   if (typeof value === 'string') {
     const tone = depth > 0 ? null : signalTone(value);
-    return tone ? <Badge label={value} tone={tone} /> : <Text variant="body">{value}</Text>;
+    if (tone) return <Badge label={value} tone={tone} />;
+    // Prose / report strings → render as markdown (headings, tables, code, …).
+    if (/[\n#`|]|\*\*/.test(value) || value.length > 160) return <Markdown value={value} />;
+    return <Text variant="body">{value}</Text>;
   }
 
   if (typeof value === 'number' || typeof value === 'boolean') {

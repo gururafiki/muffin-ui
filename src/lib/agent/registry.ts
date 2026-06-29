@@ -51,7 +51,7 @@ export interface AgentDef {
   /** State key holding the final structured output, for headline rendering. */
   resultKey?: string;
   /** Optional tailored renderer for the result (else generic StructuredOutput). */
-  resultRenderer?: 'research';
+  resultRenderer?: 'research' | 'criteria' | 'trading';
   /** Per-run `configurable` overrides shown in the runner's "Advanced options". */
   advanced?: AdvancedField[];
   custom?: CustomScreen;
@@ -121,7 +121,7 @@ export const AGENTS: AgentDef[] = [
       ...(v.sector ? { sector: v.sector } : {}),
       ...(v.market ? { market: v.market } : {}),
     }),
-    resultKey: 'synthesis',
+    resultRenderer: 'criteria',
   },
   {
     id: 'stock_evaluation',
@@ -150,7 +150,9 @@ export const AGENTS: AgentDef[] = [
       ...(v.query ? { query: v.query } : {}),
       ...(v.narrative ? { narrative: v.narrative } : {}),
     }),
-    resultKey: 'portfolio_decision',
+    // No `resultKey`: the trading widget renders the whole state (reports,
+    // debate, judge, portfolio decision), not just one field.
+    resultRenderer: 'trading',
     advanced: [
       { key: 'max_investment_debate_rounds', label: 'Bull/bear debate rounds', type: 'number', placeholder: '2' },
       { key: 'max_risk_debate_rounds', label: 'Risk debate rounds', type: 'number', placeholder: '1' },

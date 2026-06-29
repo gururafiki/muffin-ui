@@ -10,7 +10,13 @@ import { useCall } from '@/features/agent-calls/use-calls';
 import { useCreatePreset } from '@/features/presets/use-presets';
 import type { AgentDef } from '@/lib/agent/registry';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
-import { ResearchResult, StructuredOutput, TimelineItemCard } from '@/lib/agent/renderers';
+import {
+  CriteriaResult,
+  ResearchResult,
+  StructuredOutput,
+  TimelineItemCard,
+  TradingResult,
+} from '@/lib/agent/renderers';
 import { useAgentRun } from '@/lib/agent/use-agent-run';
 import type { RunState } from '@/lib/agent/types';
 import { buildPresetConfigurable } from '@/lib/settings/configurable';
@@ -20,6 +26,8 @@ type RunnerRender = (run: RunState) => React.ReactNode;
 
 const RESULT_RENDERERS: Record<string, (value: unknown) => React.ReactNode> = {
   research: (value) => <ResearchResult value={value} />,
+  criteria: (value) => <CriteriaResult value={value} />,
+  trading: (value) => <TradingResult value={value} />,
 };
 
 /**
