@@ -25,8 +25,9 @@ share the research. Purple flat-design bakery aesthetic, muffin mascot.
   (see `deploy/muffin-deployment.patch` from M1 for the pattern). Tasks are tagged
   **[app]** (in-scope) or **[backend-patch]** accordingly.
 - **Backend facts that shape these milestones** (from `muffin-agent`):
-  - 4 graphs registered in `langgraph.json`: `stock_evaluation`, `criteria_analysis`,
-    `research`, `council`. **`trading_decision` exists in code but is NOT registered.**
+  - 5 graphs registered in `langgraph.json`: `stock_evaluation`, `criteria_analysis`,
+    `research`, `council`, and `trading_decision` (the last via the config-only async factory
+    `trading_decision/graph.py:make_graph`, with integration coverage). All are runnable from the app.
   - Config flows through `config.configurable`, parsed by `BaseConfiguration`
     subclasses (`src/muffin_agent/`): `ModelConfiguration` (model, temperature,
     `llm_provider`, per-provider API keys, `orchestrator_models`/`collector_models`/
@@ -50,6 +51,27 @@ functional Settings (API URL, auth token, LLM provider + keys); LangGraph client
 native streaming via `expo/fetch` + polling fallback; generic agent runner (streamed
 timeline + structured output); council stub; deployment Dockerfile + Swarm/Traefik/
 Cloudflare wiring (`muffin.*` app, `muffin-chat.*` legacy chat UI).
+
+## ✅ Milestone 2 — Configuration depth (per-user agent customisation)
+The full per-user config surface — *everything configurable, keys stay private*:
+- **Advanced configuration** in Settings (collapsible): per-role model chains
+  (`orchestrator_models`/`collector_models`/`reasoner_models`), `summariser_model`, `temperature`,
+  MCP URLs (`openbb_mcp_url`/`firecrawl_mcp_url`), research knobs
+  (`research_default_mode`/`rerank_threshold`/`max_search_results`), `store_allowed_namespaces`.
+  Persisted on-device and emitted by `buildConfigurable` (`src/lib/settings/`).
+- **Per-run overrides** — `AgentDef.advanced` → a shared `AdvancedOptions` block in the generic
+  runner *and* the council screen, merged into that run's `configurable`: council
+  `include_specialists`, trading-decision debate-round counts + `reflection_enabled`, research
+  mode + max results. (`src/lib/agent/overrides.ts`, `src/components/advanced-options.tsx`.)
+- **`trading_decision` registered** in the app (`src/lib/agent/registry.ts`) — already a deployed
+  graph; the per-run debate/reflection knobs drive it live.
+- **Assistant presets** (`src/lib/agent/presets.ts` + Agents tab): save a named, **non-secret**
+  configured assistant per graph (`buildPresetConfigurable` strips API keys + `user_id`) and run it
+  via the generic runner; keys are re-injected from on-device settings at run time.
+
+Deferred (need new backend work — see backlog): dynamic config forms from each graph's
+`config_schema` (no graph declares one yet), per-agent `ToolSelectionMiddleware` / extra MCP
+servers, and the custom deep-agent builder.
 
 ## ✅ Milestone 3 — Council showcase
 13 investor avatars with personality, live per-persona stages via `streamSubgraphs`
@@ -75,65 +97,13 @@ Locally-editable seeded portfolio persisted on-device (zustand + storage).
 
 ---
 
-## ⬜ Milestone 2 — Configuration depth (per-user agent customisation)
-
-**Goal.** Let each user fully customise the agents from the app — provider/model per role,
-per-agent MCP servers and tool sets, agent-specific knobs, and saved "assistant" presets —
-delivering the brand promise that *everything is configurable, keys stay private*. Split
-into what the app can do today against the existing `configurable` surface vs. backend
-plumbing that must be added.
-
-**[app] — surface the configurable knobs that already work**
-- [ ] Add an **"Advanced configuration"** section to `src/app/(tabs)/settings.tsx`
-      (collapsible): per-role model chains (`orchestrator_models` / `collector_models` /
-      `reasoner_models` as comma lists), `summariser_model`, temperature, MCP URLs
-      (`openbb_mcp_url`, `firecrawl_mcp_url`), research knobs (`research_default_mode`,
-      `rerank_threshold`, `max_search_results`), `store_allowed_namespaces`.
-- [ ] Extend `src/lib/settings/store.ts` (`Settings`) + `src/lib/settings/configurable.ts`
-      (`buildConfigurable`) to persist and emit these (only non-empty values, as today).
-- [ ] **Per-run overrides in the runner.** Add a collapsible "Advanced" block to
-      `src/components/agent-runner.tsx` exposing agent-specific `configurable` (e.g.
-      council `include_specialists` toggle; trading-decision debate-round counts; research
-      mode) and merge them into that run's `config.configurable`.
-- [ ] **Dynamic config forms from the graph schema.** Use the SDK
-      `client.assistants.getSchemas(assistantId)` to read each graph's `config_schema` and
-      render a form automatically; fall back to the static knobs above when a schema isn't
-      published. (Lands fully once graphs declare schemas — see backend.)
-- [ ] **Assistant presets.** Use `client.assistants.search/create/update` to save named
-      configured assistants per graph (e.g. "Buffett-only council", "Fast research"); list
-      them on the Agents tab and run a preset directly.
-- [ ] Verification: a run reflects the chosen provider/models (confirm via LangSmith trace
-      / server logs); the council specialists toggle changes the executed graph.
-
-**[backend-patch] — `muffin-agent` plumbing (deliver as a patch)**
-- [ ] **Register `trading_decision`** in `langgraph.json` (ensure a module-level `graph`
-      export in `src/muffin_agent/agents/trading_decision/graph.py`); then add it to the
-      app registry (`src/lib/agent/registry.ts`).
-- [ ] **Declare `config_schema`** on each graph (wire the `BaseConfiguration` subclasses as
-      the StateGraph config schema) so the app's dynamic forms work.
-- [ ] **Per-agent tool sets.** Add a `ToolSelectionMiddleware` (or `configurable["{agent}_tools"]`)
-      so the hardcoded `_MCP_TOOLS` lists in `src/muffin_agent/agents/data_collection/*` can
-      be narrowed/extended at runtime.
-- [ ] **Per-agent MCP servers.** Extend `McpConfiguration` to accept additional user MCP
-      servers (name → transport) merged into `get_mcp_connections()`.
-- [ ] **Custom deep-agent builder (stretch).** Define a JSON spec for a user-built agent
-      (tools + middlewares + skills + MCP), stored in the LangGraph Store per user and
-      instantiated by a factory graph; expose a builder screen in the app.
-
-**Dependencies:** unblocks M4's trading-decision dashboard (needs the graph registered) and
-M2 dynamic forms (needs `config_schema`). **Acceptance:** user configures provider/models +
-agent knobs from the app and runs reflect them; `trading_decision` is runnable; (stretch)
-saved presets and dynamic schema forms work.
-
----
-
 ## ⬜ Milestone 4 — Custom agent dashboards + rich renderers
 
 **Goal.** Move beyond the generic structured-output view: bespoke, emotional dashboards per
 agent and a richer renderer library, all hung off the existing renderer registry
 (`src/lib/agent/renderers/`, selected via `AgentDef.resultRenderer` /
-`AgentDef.custom`). Most of this is pure app work; the trading dashboard needs the graph
-registered (M2).
+`AgentDef.custom`). All pure app work now — `trading_decision` is registered (M2), so the
+trading dashboard can wire to live data immediately.
 
 **[app] — renderers & dashboards**
 - [ ] **Criteria-analysis breakdown** renderer (`resultRenderer: 'criteria'`): weighted
@@ -156,18 +126,17 @@ registered (M2).
 - [ ] **Trading-decision dashboard** (`custom` screen): bull/bear cases, conviction gauge,
       the trader plan (action, entry/stop/take-profit, position sizing from `TraderOutput`),
       and the risk-debate transcript (name-tagged `risk_debate_messages`). Build against a
-      sample payload first; wire live once the graph is registered (M2).
+      sample payload first; wire live against the registered `trading_decision` graph.
 - [ ] **Stock-evaluation timeline** polish: render the deep-agent plan→collect→validate→
       analyse→reflect stages as a readable narrative.
 - [ ] Verification: each renderer validated against a captured sample payload (committed as
       a fixture) and live where the graph is registered; screenshots in the smoke test.
 
 **[backend-patch] — optional richer signals**
-- [ ] Register `trading_decision` (shared with M2) for live dashboard data.
 - [ ] Emit structured progress via `stream_mode: "custom"` (e.g. a chart-building subagent,
       explicit data-collection success/failure events) for higher-fidelity UI.
 
-**Dependencies:** trading dashboard ← M2 registration. **Acceptance:** criteria, trading and
+**Dependencies:** none (`trading_decision` is registered). **Acceptance:** criteria, trading and
 sub-graph views render richly from real (or fixture) payloads; charts draw from tool data.
 
 ---
@@ -250,6 +219,11 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 ## Cross-cutting backlog (from completed milestones)
 - **M1:** real illustrated muffin mascot; token-level (`stream_mode: "messages"`) streaming
   (now folded into M4); extract to own repo (now in M9).
+- **M2 (deferred backend work):** declare `config_schema` on each graph so the app can render
+  **dynamic config forms** via `client.assistants.getSchemas` (none declare one today — static
+  knobs are the fallback); per-agent `ToolSelectionMiddleware` (or `configurable["{agent}_tools"]`)
+  to narrow the hardcoded `_MCP_TOOLS` lists at runtime; extend `McpConfiguration` for per-agent
+  user MCP servers; the custom deep-agent builder (JSON spec → factory graph + builder screen).
 - **M3:** persona-vs-persona debate transcript; circular arena layout with connection lines.
 - **M5:** live market data (needs a backend screening/discovery graph) for the movers panels;
   full markdown styling for `research-result`; richer sub-sector pages.

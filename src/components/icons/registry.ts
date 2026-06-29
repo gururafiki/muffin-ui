@@ -93,6 +93,7 @@ export const iconRegistry = {
   council: ScalesIcon,
   criteria: ListChecksIcon,
   evaluation: ChartLineUpIcon,
+  trading: TrendUpIcon,
 
   // ── Run-timeline steps (deep-agent middleware / tools) ──────────────
   thinking: BrainIcon,

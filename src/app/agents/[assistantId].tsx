@@ -13,6 +13,8 @@ export default function AgentRunnerRoute() {
   const assistantId = params.assistantId;
   const agent = getAgent(assistantId);
   const threadId = params.threadId || undefined;
+  // A saved preset run targets its own assistant_id (the route param stays the graph id).
+  const presetId = params.preset || undefined;
 
   // Seed the runner from any field-shaped params (e.g. an "Analyse" deep link).
   const initialValues: Record<string, string> = {};
@@ -55,6 +57,7 @@ export default function AgentRunnerRoute() {
         <AgentRunner
           agent={agent}
           threadId={threadId}
+          assistantId={presetId}
           initialValues={Object.keys(initialValues).length ? initialValues : undefined}
           autoStart={autoStart}
         />

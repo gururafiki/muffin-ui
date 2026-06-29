@@ -81,7 +81,7 @@ export function useCouncilRun() {
   };
 
   const start = useCallback(
-    async (values: Record<string, string>) => {
+    async (values: Record<string, string>, overrides?: Record<string, unknown>) => {
       cancel();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -92,7 +92,8 @@ export function useCouncilRun() {
         ticker: values.ticker?.toUpperCase(),
         ...(values.query ? { query: values.query } : {}),
       };
-      const config = { configurable: buildConfigurable(settings) };
+      // Per-run overrides (e.g. include_specialists) win over global settings.
+      const config = { configurable: { ...buildConfigurable(settings), ...(overrides ?? {}) } };
 
       // All personas start in parallel → show them all thinking immediately.
       setState({

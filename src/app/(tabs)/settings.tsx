@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Card, Chip, Field, Screen, Text } from '@/components/ui';
-import { DEFAULT_SETTINGS, useSettings, type LlmProvider } from '@/lib/settings/store';
+import { Button, Card, Chip, Collapsible, Field, Screen, Text } from '@/components/ui';
+import {
+  DEFAULT_SETTINGS,
+  useSettings,
+  type LlmProvider,
+  type ResearchMode,
+} from '@/lib/settings/store';
 
 const PROVIDERS: LlmProvider[] = ['openrouter', 'openai', 'anthropic'];
+const RESEARCH_MODES: Exclude<ResearchMode, ''>[] = ['speed', 'balanced', 'quality'];
 
 export default function SettingsScreen() {
   const settings = useSettings();
@@ -100,6 +106,110 @@ export default function SettingsScreen() {
           onChangeText={(v) => update({ openbbApiKey: v })}
         />
       </Card>
+
+      <Collapsible title="Advanced configuration" icon="settings" className="mt-4">
+        <Card tone="muted" className="gap-3">
+          <Text variant="heading">Model roles</Text>
+          <Text variant="muted">
+            Per-role model chains — comma-separated (primary first, then fallbacks). Blank uses the
+            server default.
+          </Text>
+          <Field
+            label="Orchestrator models"
+            autoCapitalize="none"
+            placeholder="openai/gpt-oss-120b, anthropic/claude-3-5-sonnet"
+            value={settings.orchestratorModels}
+            onChangeText={(v) => update({ orchestratorModels: v })}
+          />
+          <Field
+            label="Collector models"
+            autoCapitalize="none"
+            value={settings.collectorModels}
+            onChangeText={(v) => update({ collectorModels: v })}
+          />
+          <Field
+            label="Reasoner models"
+            autoCapitalize="none"
+            value={settings.reasonerModels}
+            onChangeText={(v) => update({ reasonerModels: v })}
+          />
+          <Field
+            label="Summariser model"
+            autoCapitalize="none"
+            placeholder="openai/gpt-4o-mini"
+            value={settings.summariserModel}
+            onChangeText={(v) => update({ summariserModel: v })}
+          />
+          <Field
+            label="Temperature"
+            keyboardType="decimal-pad"
+            placeholder="0.1"
+            value={settings.temperature}
+            onChangeText={(v) => update({ temperature: v })}
+          />
+        </Card>
+
+        <Card tone="muted" className="mt-3 gap-3">
+          <Text variant="heading">MCP servers</Text>
+          <Field
+            label="OpenBB MCP URL"
+            autoCapitalize="none"
+            placeholder="http://127.0.0.1:8001/mcp"
+            value={settings.openbbMcpUrl}
+            onChangeText={(v) => update({ openbbMcpUrl: v })}
+          />
+          <Field
+            label="Firecrawl MCP URL"
+            autoCapitalize="none"
+            placeholder="http://127.0.0.1:3000/mcp"
+            value={settings.firecrawlMcpUrl}
+            onChangeText={(v) => update({ firecrawlMcpUrl: v })}
+          />
+        </Card>
+
+        <Card tone="muted" className="mt-3 gap-3">
+          <Text variant="heading">Research</Text>
+          <Text variant="label">Default mode</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {RESEARCH_MODES.map((m) => (
+              <Chip
+                key={m}
+                label={m}
+                active={settings.researchDefaultMode === m}
+                onPress={() =>
+                  update({ researchDefaultMode: settings.researchDefaultMode === m ? '' : m })
+                }
+              />
+            ))}
+          </View>
+          <Field
+            label="Rerank threshold"
+            keyboardType="decimal-pad"
+            placeholder="0.5"
+            value={settings.rerankThreshold}
+            onChangeText={(v) => update({ rerankThreshold: v })}
+          />
+          <Field
+            label="Max search results"
+            keyboardType="number-pad"
+            placeholder="8"
+            value={settings.maxSearchResults}
+            onChangeText={(v) => update({ maxSearchResults: v })}
+          />
+        </Card>
+
+        <Card tone="muted" className="mt-3 gap-3">
+          <Text variant="heading">Store access</Text>
+          <Field
+            label="Allowed namespaces"
+            autoCapitalize="none"
+            placeholder="memories, tool_lessons"
+            hint="Comma-separated namespace prefixes. Blank = unrestricted."
+            value={settings.storeAllowedNamespaces}
+            onChangeText={(v) => update({ storeAllowedNamespaces: v })}
+          />
+        </Card>
+      </Collapsible>
 
       <View className="mt-4 flex-row items-center gap-3">
         <Button

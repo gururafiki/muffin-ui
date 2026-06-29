@@ -19,6 +19,26 @@ export interface AgentInputField {
   autoCapitalize?: 'characters' | 'none';
 }
 
+/**
+ * A per-run override surfaced in the runner's "Advanced options" block. `key` is
+ * the `config.configurable` key sent to the backend (read by the graph's
+ * `BaseConfiguration` subclass). `number`/`select` are only sent when set;
+ * `boolean` is always sent its current value (initialised to `default`) so a
+ * user can flip a server default that is `true` (e.g. `reflection_enabled`).
+ */
+export interface AdvancedField {
+  key: string;
+  label: string;
+  type: 'number' | 'select' | 'boolean';
+  /** Options for `type: 'select'`. */
+  options?: string[];
+  /** Placeholder for `type: 'number'` (typically the backend default). */
+  placeholder?: string;
+  hint?: string;
+  /** Initial + always-sent value for `type: 'boolean'`. */
+  default?: boolean;
+}
+
 export interface AgentDef {
   /** assistant_id / graph name registered in langgraph.json */
   id: string;
@@ -32,6 +52,8 @@ export interface AgentDef {
   resultKey?: string;
   /** Optional tailored renderer for the result (else generic StructuredOutput). */
   resultRenderer?: 'research' | 'criteria' | 'trading';
+  /** Per-run `configurable` overrides shown in the runner's "Advanced options". */
+  advanced?: AdvancedField[];
   custom?: CustomScreen;
   /**
    * Conversational agent: drive it through the multi-turn chat screen
@@ -61,6 +83,10 @@ export const AGENTS: AgentDef[] = [
     buildInput: (v) => ({ query: v.query }),
     resultKey: 'output',
     resultRenderer: 'research',
+    advanced: [
+      { key: 'research_default_mode', label: 'Research mode', type: 'select', options: ['speed', 'balanced', 'quality'] },
+      { key: 'max_search_results', label: 'Max search results', type: 'number', placeholder: '8' },
+    ],
   },
   {
     id: 'council',
@@ -70,6 +96,15 @@ export const AGENTS: AgentDef[] = [
     inputs: [ticker, { key: 'query', label: 'Focus (optional)', placeholder: 'Is the moat durable?' }],
     buildInput: (v) => ({ ticker: v.ticker?.toUpperCase(), ...(v.query ? { query: v.query } : {}) }),
     resultKey: 'council_synthesis',
+    advanced: [
+      {
+        key: 'include_specialists',
+        label: 'Include specialist signals',
+        type: 'boolean',
+        default: false,
+        hint: 'Adds 6 deterministic specialist analysts (technicals, sentiment, fundamentals, growth, valuation, news) to the council.',
+      },
+    ],
     custom: 'council',
   },
   {
@@ -103,11 +138,32 @@ export const AGENTS: AgentDef[] = [
   {
     id: 'trading_decision',
     title: 'Trading Decision',
-    icon: 'evaluation',
-    tagline: 'Bull/bear debate, a judge, and a trader produce a portfolio call.',
-    inputs: [ticker, { key: 'query', label: 'Focus (optional)', placeholder: 'Swing trade or long-term?' }],
-    buildInput: (v) => ({ ticker: v.ticker?.toUpperCase(), ...(v.query ? { query: v.query } : {}) }),
+    icon: 'trading',
+    tagline: 'Analyst reports → bull/bear debate → risk debate → a portfolio call.',
+    inputs: [
+      ticker,
+      { key: 'query', label: 'Focus (optional)', placeholder: 'Entry on a pullback?' },
+      { key: 'narrative', label: 'Narrative (optional)', placeholder: 'Your current thesis / position' },
+    ],
+    buildInput: (v) => ({
+      ticker: v.ticker?.toUpperCase(),
+      ...(v.query ? { query: v.query } : {}),
+      ...(v.narrative ? { narrative: v.narrative } : {}),
+    }),
+    // No `resultKey`: the trading widget renders the whole state (reports,
+    // debate, judge, portfolio decision), not just one field.
     resultRenderer: 'trading',
+    advanced: [
+      { key: 'max_investment_debate_rounds', label: 'Bull/bear debate rounds', type: 'number', placeholder: '2' },
+      { key: 'max_risk_debate_rounds', label: 'Risk debate rounds', type: 'number', placeholder: '1' },
+      {
+        key: 'reflection_enabled',
+        label: 'Reflection memory',
+        type: 'boolean',
+        default: true,
+        hint: 'Learn from past decisions on this ticker (needs a persistent store + user id).',
+      },
+    ],
   },
 ];
 

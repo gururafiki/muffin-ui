@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { AdvancedOptions } from '@/components/advanced-options';
 import { Icon } from '@/components/icons';
-import { Badge, Button, Card, Field, Text } from '@/components/ui';
+import { Badge, Button, Card, Collapsible, Field, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
+import { useCreatePreset } from '@/features/presets/use-presets';
 import type { AgentDef } from '@/lib/agent/registry';
+import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import {
   CriteriaResult,
   ResearchResult,
@@ -16,6 +19,8 @@ import {
 } from '@/lib/agent/renderers';
 import { useAgentRun } from '@/lib/agent/use-agent-run';
 import type { RunState } from '@/lib/agent/types';
+import { buildPresetConfigurable } from '@/lib/settings/configurable';
+import { getSettings } from '@/lib/settings/store';
 
 type RunnerRender = (run: RunState) => React.ReactNode;
 
@@ -37,6 +42,7 @@ export function AgentRunner({
   initialValues,
   autoStart,
   threadId,
+  assistantId,
 }: {
   agent: AgentDef;
   renderResult?: RunnerRender;
@@ -44,9 +50,14 @@ export function AgentRunner({
   autoStart?: boolean;
   /** Reopen a past run: seed the saved result + inputs from this thread. */
   threadId?: string;
+  /** Run a saved preset assistant instead of the bare graph (defaults to agent.id). */
+  assistantId?: string;
 }) {
   const [edits, setEdits] = useState<Record<string, string>>(initialValues ?? {});
-  const run = useAgentRun(agent);
+  const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
+  const [presetName, setPresetName] = useState('');
+  const createPreset = useCreatePreset();
+  const run = useAgentRun(agent, assistantId);
   const { data: savedThread } = useCall(threadId);
 
   // Effective form values: the reopened thread's stored inputs, overridden by
@@ -66,7 +77,7 @@ export function AgentRunner({
   useEffect(() => {
     if (autoStart && !started.current && canRun) {
       started.current = true;
-      run.start(values);
+      run.start(values, buildOverrides(agent.advanced, advanced));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, canRun]);
@@ -108,16 +119,62 @@ export function AgentRunner({
           />
         ))}
 
+        {agent.advanced?.length ? (
+          <AdvancedOptions
+            fields={agent.advanced}
+            values={advanced}
+            onChange={(k, v) => setAdvanced((s) => ({ ...s, [k]: v }))}
+          />
+        ) : null}
+
         <Button
           title={streaming ? 'Running…' : 'Run agent'}
           loading={streaming}
           disabled={!canRun}
-          onPress={() => run.start(values)}
+          onPress={() => run.start(values, buildOverrides(agent.advanced, advanced))}
         />
         {streaming ? (
           <Button title="Cancel" variant="ghost" onPress={run.cancel} />
         ) : null}
       </Card>
+
+      <Collapsible title="Save as preset" icon="sparkle">
+        <View className="gap-2">
+          <Text variant="muted">
+            Save this graph + the current advanced options as a reusable assistant. API keys stay on
+            this device — only non-secret settings are stored.
+          </Text>
+          <Field
+            placeholder="Preset name"
+            autoCapitalize="none"
+            value={presetName}
+            onChangeText={setPresetName}
+          />
+          <Button
+            title="Save preset"
+            variant="secondary"
+            loading={createPreset.isPending}
+            disabled={!presetName.trim() || createPreset.isPending}
+            onPress={() =>
+              createPreset.mutate(
+                {
+                  graphId: agent.id,
+                  name: presetName.trim(),
+                  configurable: {
+                    ...buildPresetConfigurable(getSettings()),
+                    ...buildOverrides(agent.advanced, advanced),
+                  },
+                },
+                { onSuccess: () => setPresetName('') },
+              )
+            }
+          />
+          {createPreset.isSuccess ? <Text variant="muted">Preset saved ✓</Text> : null}
+          {createPreset.isError ? (
+            <Text variant="muted">Could not save preset — check the API URL / auth in Settings.</Text>
+          ) : null}
+        </View>
+      </Collapsible>
 
       {run.status === 'error' ? (
         <Card tone="outline" className="gap-1">

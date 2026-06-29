@@ -4,10 +4,13 @@ import { Pressable, View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { Badge, Card, Screen, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
-import { AGENTS } from '@/lib/agent/registry';
+import { usePresets, useDeletePreset } from '@/features/presets/use-presets';
+import { AGENTS, getAgent } from '@/lib/agent/registry';
 
 export default function AgentsScreen() {
   const router = useRouter();
+  const presets = usePresets();
+  const deletePreset = useDeletePreset();
 
   return (
     <Screen plaid>
@@ -38,6 +41,40 @@ export default function AgentsScreen() {
           </Pressable>
         ))}
       </View>
+
+      {presets.data?.length ? (
+        <View className="mt-6 gap-3">
+          <Text variant="heading">Saved presets</Text>
+          <Text variant="muted">Named configurations you saved. Tap to run.</Text>
+          {presets.data.map((p) => (
+            <Pressable
+              key={p.id}
+              onPress={() =>
+                router.push({
+                  pathname: '/agents/[assistantId]',
+                  params: { assistantId: p.graphId, preset: p.id },
+                })
+              }
+              className="active:opacity-80">
+              <Card className="flex-row items-center gap-3">
+                <View className="h-10 w-10 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+                  <Icon name="sparkle" size={22} color={palette.frosting[600]} />
+                </View>
+                <View className="flex-1 gap-0.5">
+                  <Text variant="heading">{p.name}</Text>
+                  <Text variant="muted">{getAgent(p.graphId)?.title ?? p.graphId}</Text>
+                </View>
+                <Pressable
+                  onPress={() => deletePreset.mutate(p.id)}
+                  hitSlop={8}
+                  className="p-1 active:opacity-60">
+                  <Icon name="close" size={18} color={palette.frosting[300]} />
+                </Pressable>
+              </Card>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </Screen>
   );
 }
