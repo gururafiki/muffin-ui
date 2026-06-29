@@ -17,31 +17,27 @@ import { Badge, Card, Chip, Field, Screen, Text } from '@/components/ui';
 import type { AnyMessage, Todo } from '@/lib/agent/renderers';
 import { makeClient } from '@/lib/agent/client';
 import type { AgentDef } from '@/lib/agent/registry';
-import { describeStep, type RunStep } from '@/lib/agent/steps';
 import { queryClient } from '@/lib/query';
 import { buildConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
 import { palette } from '@/theme/colors';
+import { Conversation, type ViewMode } from './conversation';
 import { InterruptCard } from './interrupt';
-import { Transcript, type ViewMode } from './transcript';
 
 type ChatState = { messages: unknown[]; todos?: Todo[] };
-
-let stepSeq = 0;
 
 /**
  * Multi-turn chat screen for conversational agents (`agent.chat`). Powered by
  * the LangGraph SDK `useStream` hook: passing a `threadId` resumes an existing
  * thread (loading its messages), and `submit` streams a follow-up onto the same
- * thread. Intermediate work (tools, sub-agents, to-dos, middleware) is captured
- * as a hierarchical step timeline; a toggle switches summary/verbose layouts.
+ * thread. The conversation (steps timeline + answer) is derived from the
+ * messages, so it renders identically live and on resume.
  */
 export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentDef; threadId?: string }) {
   const router = useRouter();
   const client = useMemo(() => makeClient(getSettings()), []);
   const [threadId, setThreadId] = useState<string | undefined>(initialThreadId);
   const [draft, setDraft] = useState('');
-  const [steps, setSteps] = useState<RunStep[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
@@ -59,71 +55,38 @@ export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentD
       client.threads.update(id, { metadata: { agentId: agent.id } }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: ['threads'] });
     },
-    onUpdateEvent: (data, options) => {
-      const namespace = options?.namespace ?? [];
-      const nodes = Object.keys((data ?? {}) as Record<string, unknown>);
-      if (nodes.length === 0) return;
-      setSteps((prev) => [
-        ...prev,
-        ...nodes.map((node) => ({
-          id: `s${stepSeq++}`,
-          node,
-          namespace,
-          ts: Date.now(),
-          ...describeStep(node),
-        })),
-      ]);
-    },
   });
 
   const messages = stream.messages;
   const busy = stream.isLoading;
   const todos = (stream.values as ChatState | undefined)?.todos;
 
+  const runOpts = () => ({
+    config: { configurable: buildConfigurable(getSettings()) },
+    streamMode: ['values'] as ('values')[],
+  });
+
   const send = () => {
     const text = draft.trim();
     if (!text || busy) return;
     setDraft('');
-    setSteps([]);
     const human = { type: 'human', content: text };
-    const settings = getSettings();
     stream.submit(
       { messages: [human] },
-      {
-        config: { configurable: buildConfigurable(settings) },
-        streamMode: ['values', 'updates'],
-        streamSubgraphs: true,
-        optimisticValues: (prev) => ({ ...prev, messages: [...(prev.messages ?? []), human] }),
-      },
+      { ...runOpts(), optimisticValues: (prev) => ({ ...prev, messages: [...(prev.messages ?? []), human] }) },
     );
   };
 
-  const runOpts = () => ({
-    config: { configurable: buildConfigurable(getSettings()) },
-    streamMode: ['values', 'updates'] as ('values' | 'updates')[],
-    streamSubgraphs: true,
-  });
-
-  // Resume a human-in-the-loop interrupt with the user's decision.
-  const resume = (resumeValue: unknown) => {
-    setSteps([]);
+  const resume = (resumeValue: unknown) =>
     stream.submit(undefined, { ...runOpts(), command: { resume: resumeValue } });
-  };
 
-  // Edit a previous (human) message → fork the thread from its parent checkpoint.
   const editFork = (message: AnyMessage, text: string) => {
     const meta = stream.getMessagesMetadata(message as never);
-    setSteps([]);
-    stream.submit(
-      { messages: [{ type: 'human', content: text }] },
-      { ...runOpts(), checkpoint: meta?.firstSeenState?.parent_checkpoint },
-    );
+    stream.submit({ messages: [{ type: 'human', content: text }] }, { ...runOpts(), checkpoint: meta?.firstSeenState?.parent_checkpoint });
   };
 
-  // Regenerate an answer → re-run from the message's parent checkpoint.
   const regenerate = (message: AnyMessage) => {
     const meta = stream.getMessagesMetadata(message as never);
-    setSteps([]);
     stream.submit(undefined, { ...runOpts(), checkpoint: meta?.firstSeenState?.parent_checkpoint });
   };
 
@@ -151,9 +114,7 @@ export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentD
 
   return (
     <Screen scroll={false}>
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View className="flex-row gap-2 pb-2">
           <Chip label="Summary" active={viewMode === 'summary'} onPress={() => setViewMode('summary')} />
           <Chip label="Verbose" active={viewMode === 'verbose'} onPress={() => setViewMode('verbose')} />
@@ -182,26 +143,15 @@ export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentD
               <Text variant="muted">Send a message to start the conversation.</Text>
             </Card>
           ) : (
-            <Transcript
-              messages={messages as never}
-              steps={steps}
-              todos={todos}
-              viewMode={viewMode}
-              busy={busy}
-              actions={actions}
-            />
+            <Conversation messages={messages as never} todos={todos} viewMode={viewMode} busy={busy} actions={actions} />
           )}
 
-          {stream.interrupt ? (
-            <InterruptCard value={stream.interrupt.value} busy={busy} onResume={resume} />
-          ) : null}
+          {stream.interrupt ? <InterruptCard value={stream.interrupt.value} busy={busy} onResume={resume} /> : null}
 
           {stream.error ? (
             <Card tone="outline" className="gap-1">
               <Badge label="error" tone="bearish" />
-              <Text variant="muted">
-                {stream.error instanceof Error ? stream.error.message : String(stream.error)}
-              </Text>
+              <Text variant="muted">{stream.error instanceof Error ? stream.error.message : String(stream.error)}</Text>
             </Card>
           ) : null}
         </ScrollView>
