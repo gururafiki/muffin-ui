@@ -1,4 +1,5 @@
 export { CodeBlock } from './code-block';
+export { CriteriaResult } from './criteria-result';
 export { JsonBlock } from './json-block';
 export { Markdown } from './markdown';
 export {
@@ -13,3 +14,4 @@ export { ResearchResult } from './research-result';
 export { StructuredOutput } from './structured';
 export { TimelineItemCard } from './timeline-item';
 export { TodoList, isTodoList, type Todo } from './todo-list';
+export { TradingResult } from './trading-result';

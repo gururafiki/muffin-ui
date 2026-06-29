@@ -7,7 +7,13 @@ import { palette } from '@/theme/colors';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
 import type { AgentDef } from '@/lib/agent/registry';
-import { ResearchResult, StructuredOutput, TimelineItemCard } from '@/lib/agent/renderers';
+import {
+  CriteriaResult,
+  ResearchResult,
+  StructuredOutput,
+  TimelineItemCard,
+  TradingResult,
+} from '@/lib/agent/renderers';
 import { useAgentRun } from '@/lib/agent/use-agent-run';
 import type { RunState } from '@/lib/agent/types';
 
@@ -15,6 +21,8 @@ type RunnerRender = (run: RunState) => React.ReactNode;
 
 const RESULT_RENDERERS: Record<string, (value: unknown) => React.ReactNode> = {
   research: (value) => <ResearchResult value={value} />,
+  criteria: (value) => <CriteriaResult value={value} />,
+  trading: (value) => <TradingResult value={value} />,
 };
 
 /**

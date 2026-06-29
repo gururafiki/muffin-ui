@@ -22,7 +22,10 @@ export function Markdown({ value }: { value: string }) {
   const border = dark ? palette.night.border : palette.frosting[200];
   const link = dark ? palette.frosting[300] : palette.frosting[600];
 
-  const elements = useMarkdown(value ?? '', {
+  // react-native-marked doesn't interpret inline HTML; models often emit <br>
+  // (notably inside table cells) — turn them into spaces so they don't show raw.
+  const cleaned = (value ?? '').replace(/<br\s*\/?>/gi, ' ');
+  const elements = useMarkdown(cleaned, {
     colorScheme: dark ? 'dark' : 'light',
     renderer,
     styles: {

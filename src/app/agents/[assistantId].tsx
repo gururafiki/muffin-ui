@@ -32,10 +32,16 @@ export default function AgentRunnerRoute() {
 
   // Conversational agents own their layout (chat transcript + composer).
   if (agent.chat) {
+    // Pre-fill the composer when arriving from a stock/deep link.
+    const initialPrompt =
+      params.prompt ||
+      (params.ticker
+        ? `Evaluate ${params.ticker.toUpperCase()} as a long-term holding. Cover the thesis, valuation and key risks.`
+        : undefined);
     return (
       <>
         <Stack.Screen options={{ title: agent.title }} />
-        <ChatScreen agent={agent} threadId={threadId} />
+        <ChatScreen agent={agent} threadId={threadId} initialPrompt={initialPrompt} />
       </>
     );
   }

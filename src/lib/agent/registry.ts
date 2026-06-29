@@ -31,7 +31,7 @@ export interface AgentDef {
   /** State key holding the final structured output, for headline rendering. */
   resultKey?: string;
   /** Optional tailored renderer for the result (else generic StructuredOutput). */
-  resultRenderer?: 'research';
+  resultRenderer?: 'research' | 'criteria' | 'trading';
   custom?: CustomScreen;
   /**
    * Conversational agent: drive it through the multi-turn chat screen
@@ -86,7 +86,7 @@ export const AGENTS: AgentDef[] = [
       ...(v.sector ? { sector: v.sector } : {}),
       ...(v.market ? { market: v.market } : {}),
     }),
-    resultKey: 'synthesis',
+    resultRenderer: 'criteria',
   },
   {
     id: 'stock_evaluation',
@@ -99,6 +99,15 @@ export const AGENTS: AgentDef[] = [
     buildInput: (v) => ({ messages: [{ type: 'human', content: v.prompt }] }),
     resultKey: 'messages',
     chat: true,
+  },
+  {
+    id: 'trading_decision',
+    title: 'Trading Decision',
+    icon: 'evaluation',
+    tagline: 'Bull/bear debate, a judge, and a trader produce a portfolio call.',
+    inputs: [ticker, { key: 'query', label: 'Focus (optional)', placeholder: 'Swing trade or long-term?' }],
+    buildInput: (v) => ({ ticker: v.ticker?.toUpperCase(), ...(v.query ? { query: v.query } : {}) }),
+    resultRenderer: 'trading',
   },
 ];
 

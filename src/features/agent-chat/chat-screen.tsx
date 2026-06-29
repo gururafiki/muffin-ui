@@ -33,11 +33,21 @@ type ChatState = { messages: unknown[]; todos?: Todo[] };
  * thread. The conversation (steps timeline + answer) is derived from the
  * messages, so it renders identically live and on resume.
  */
-export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentDef; threadId?: string }) {
+export function ChatScreen({
+  agent,
+  threadId: initialThreadId,
+  initialPrompt,
+}: {
+  agent: AgentDef;
+  threadId?: string;
+  initialPrompt?: string;
+}) {
   const router = useRouter();
   const client = useMemo(() => makeClient(getSettings()), []);
   const [threadId, setThreadId] = useState<string | undefined>(initialThreadId);
-  const [draft, setDraft] = useState('');
+  // Seed the composer from a deep link only when starting a fresh conversation.
+  const [draft, setDraft] = useState(initialThreadId ? '' : initialPrompt ?? '');
+  const [inputH, setInputH] = useState(44);
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
@@ -167,20 +177,26 @@ export function ChatScreen({ agent, threadId: initialThreadId }: { agent: AgentD
         <View className="flex-row items-end gap-2 border-t border-frosting-100 pt-2 dark:border-night-border">
           <Field
             className="flex-1"
-            placeholder="Message…"
+            placeholder={busy ? 'Streaming…' : 'Message the agent…'}
             value={draft}
             onChangeText={setDraft}
             multiline
+            textAlignVertical="top"
+            style={{ height: inputH, maxHeight: 132 }}
+            onContentSizeChange={(e) =>
+              setInputH(Math.min(132, Math.max(44, e.nativeEvent.contentSize.height + 8)))
+            }
             onSubmitEditing={send}
             blurOnSubmit={false}
           />
           <Pressable
             onPress={busy ? () => stream.stop() : send}
             disabled={!busy && !draft.trim()}
-            className={`h-12 w-12 items-center justify-center rounded-pill ${
+            accessibilityLabel={busy ? 'Stop' : 'Send'}
+            className={`h-11 w-11 items-center justify-center rounded-pill ${
               busy ? 'bg-bearish' : draft.trim() ? 'bg-frosting-500' : 'bg-frosting-200 dark:bg-night-surface-muted'
             }`}>
-            <Icon name={busy ? 'close' : 'arrow-right'} size={22} color={palette.white} weight="bold" />
+            <Icon name={busy ? 'close' : 'arrow-right'} size={20} color={palette.white} weight="bold" />
           </Pressable>
         </View>
       </KeyboardAvoidingView>

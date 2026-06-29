@@ -247,9 +247,18 @@ function SubAgentGroup({ name, calls, last, defaultOpen }: { name: string; calls
   );
 }
 
+/** In summary view, keep only high-signal steps (sub-agents + to-do updates);
+ * hide the orchestrator's plumbing (caching, file reads, schema, thinking). */
+function isSignificant(step: Step): boolean {
+  if (step.kind === 'think') return false;
+  const name = (step.call.name ?? '').toLowerCase();
+  return toolStepMeta(name, step.call.args ?? {}).isSubagent || /write_todos|todo/.test(name);
+}
+
 function StepTimeline({ steps, viewMode }: { steps: Step[]; viewMode: ViewMode }) {
-  if (steps.length === 0) return null;
-  const { nodes, subCount } = groupTimeline(steps);
+  const shown = viewMode === 'verbose' ? steps : steps.filter(isSignificant);
+  if (shown.length === 0) return null;
+  const { nodes, subCount } = groupTimeline(shown);
   return (
     <Card tone="muted" className="gap-0">
       <View className="mb-1 flex-row items-center gap-2">
@@ -367,7 +376,7 @@ export function Conversation({
       {turns.map((turn, ti) => (
         <View key={ti} className="gap-3">
           {turn.human ? <HumanBubble message={turn.human} actions={actions} /> : null}
-          <StepTimeline steps={turn.steps} viewMode={viewMode} />
+          <StepTimeline key={viewMode} steps={turn.steps} viewMode={viewMode} />
           {turn.answer ? <AnswerBlock message={turn.answer} actions={actions} /> : null}
           {busy && ti === turns.length - 1 ? (
             <View className="flex-row items-center gap-2 px-1">
