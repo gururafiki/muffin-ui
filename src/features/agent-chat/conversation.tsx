@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/icons';
-import { Badge, Button, Card, Field, Text } from '@/components/ui';
+import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import {
   JsonBlock,
@@ -177,17 +177,94 @@ function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defau
   );
 }
 
+type ToolStepT = Extract<Step, { kind: 'tool' }>;
+type TimelineNode =
+  | { kind: 'leaf'; step: Step }
+  | { kind: 'sub'; name: string; calls: ToolStepT[] };
+
+/** Group a flat step list into an orchestrator tree: parent steps stay as
+ * leaves, while sub-agent (`task`) calls collapse under one node per agent. */
+function groupTimeline(steps: Step[]): { nodes: TimelineNode[]; subCount: number } {
+  const nodes: TimelineNode[] = [];
+  const subByName = new Map<string, Extract<TimelineNode, { kind: 'sub' }>>();
+  for (const step of steps) {
+    if (step.kind === 'tool') {
+      const meta = toolStepMeta(step.call.name ?? 'tool', step.call.args ?? {});
+      if (meta.isSubagent) {
+        let node = subByName.get(meta.label);
+        if (!node) {
+          node = { kind: 'sub', name: meta.label, calls: [] };
+          subByName.set(meta.label, node);
+          nodes.push(node);
+        }
+        node.calls.push(step);
+        continue;
+      }
+    }
+    nodes.push({ kind: 'leaf', step });
+  }
+  return { nodes, subCount: subByName.size };
+}
+
+const RAIL = { position: 'absolute' as const, top: 14, bottom: -10, width: 2 };
+
+function SubAgentGroup({ name, calls, last, defaultOpen }: { name: string; calls: ToolStepT[]; last: boolean; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const error = calls.some((c) => c.error);
+  const brief = (c: ToolStepT) => toolStepMeta(c.call.name ?? 'tool', c.call.args ?? {}).sublabel;
+
+  return (
+    <View className="flex-row gap-3">
+      <View className="w-6 items-center">
+        {!last ? <View style={RAIL} className="bg-frosting-100 dark:bg-night-border" /> : null}
+        <View className={cn('z-10 rounded-pill', error && 'border-2 border-bearish')}>
+          <Avatar name={name} size={24} />
+        </View>
+      </View>
+      <Pressable onPress={() => setOpen((o) => !o)} className="flex-1 pb-3 active:opacity-70">
+        <View className="flex-row items-center gap-2">
+          <Text variant="body" className="flex-1 text-sm font-heading">{name}</Text>
+          {calls.length > 1 ? <Text variant="muted" className="text-xs">×{calls.length}</Text> : null}
+          <Badge label="sub-agent" tone="info" />
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+        </View>
+        {!open && brief(calls[0]) ? (
+          <Text variant="muted" className="mt-0.5 text-xs" numberOfLines={1}>{brief(calls[0])}</Text>
+        ) : null}
+        {open ? (
+          <View className="mt-2 gap-3">
+            {calls.map((c, i) => (
+              <View key={c.id + i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
+                {calls.length > 1 ? <Text variant="label">Task {i + 1}</Text> : null}
+                {brief(c) ? <Text variant="muted" className="text-xs">{brief(c)}</Text> : null}
+                <ToolResult message={c.result} />
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </Pressable>
+    </View>
+  );
+}
+
 function StepTimeline({ steps, viewMode }: { steps: Step[]; viewMode: ViewMode }) {
   if (steps.length === 0) return null;
+  const { nodes, subCount } = groupTimeline(steps);
   return (
     <Card tone="muted" className="gap-0">
       <View className="mb-1 flex-row items-center gap-2">
         <Icon name="sparkle" size={14} color={palette.frosting[500]} />
-        <Text variant="label">{steps.length} steps</Text>
+        <Text variant="label">
+          {steps.length} steps{subCount > 0 ? ` · ${subCount} sub-agents` : ''}
+        </Text>
       </View>
-      {steps.map((s, i) => (
-        <StepRow key={s.id + i} step={s} last={i === steps.length - 1} defaultOpen={viewMode === 'verbose'} />
-      ))}
+      {nodes.map((n, i) =>
+        n.kind === 'sub' ? (
+          <SubAgentGroup key={'s' + i} name={n.name} calls={n.calls} last={i === nodes.length - 1} defaultOpen={viewMode === 'verbose'} />
+        ) : (
+          <StepRow key={'l' + i} step={n.step} last={i === nodes.length - 1} defaultOpen={viewMode === 'verbose'} />
+        ),
+      )}
     </Card>
   );
 }
