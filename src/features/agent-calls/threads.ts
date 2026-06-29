@@ -7,6 +7,7 @@
  */
 import type { Thread } from '@langchain/langgraph-sdk';
 
+import type { IconName } from '@/components/icons';
 import type { Signal } from '@/components/ui';
 import { makeClient } from '@/lib/agent/client';
 import { getAgent } from '@/lib/agent/registry';
@@ -40,6 +41,27 @@ export function threadInputs(thread: Thread): Record<string, string> | undefined
 export function agentTitleForThread(thread: Thread): string {
   const id = threadAgentId(thread);
   return (id && getAgent(id)?.title) || 'Agent run';
+}
+
+/** The registered agent's icon for this thread (falls back to the history glyph). */
+export function threadAgentIcon(thread: Thread): IconName {
+  const id = threadAgentId(thread);
+  return (id && getAgent(id)?.icon) || 'history';
+}
+
+/**
+ * A thread-specific one-liner built from the inputs we tagged at creation —
+ * e.g. "AAPL · Is the moat durable?" or the prompt — so each call is
+ * recognisable at a glance instead of just showing the agent's name.
+ */
+export function threadDescriptor(thread: Thread): string | undefined {
+  const inp = threadInputs(thread);
+  if (!inp) return undefined;
+  const ticker = inp.ticker?.trim().toUpperCase();
+  const detail = (inp.query || inp.prompt || inp.focus || inp.narrative || inp.question)?.trim();
+  const parts = [ticker, detail].filter(Boolean) as string[];
+  if (parts.length === 0) return undefined;
+  return parts.join(' · ');
 }
 
 /** Compact relative time, e.g. "just now", "5m ago", "3d ago", or a date. */
