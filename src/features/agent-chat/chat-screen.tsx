@@ -1,7 +1,4 @@
-import { useStream } from '@langchain/langgraph-sdk/react';
-import * as Clipboard from 'expo-clipboard';
-import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   type NativeScrollEvent,
@@ -14,24 +11,18 @@ import {
 
 import { Icon } from '@/components/icons';
 import { Badge, Card, Chip, Field, Screen, Text } from '@/components/ui';
-import type { AnyMessage, Todo } from '@/lib/agent/renderers';
-import { makeClient } from '@/lib/agent/client';
 import type { AgentDef } from '@/lib/agent/registry';
-import { queryClient } from '@/lib/query';
-import { buildConfigurable } from '@/lib/settings/configurable';
-import { getSettings } from '@/lib/settings/store';
+import type { Todo } from '@/lib/agent/renderers';
 import { palette } from '@/theme/colors';
 import { Conversation, type ViewMode } from './conversation';
 import { InterruptCard } from './interrupt';
-
-type ChatState = { messages: unknown[]; todos?: Todo[] };
+import { useAgentStream } from './use-agent-stream';
 
 /**
  * Multi-turn chat screen for conversational agents (`agent.chat`). Powered by
- * the LangGraph SDK `useStream` hook: passing a `threadId` resumes an existing
- * thread (loading its messages), and `submit` streams a follow-up onto the same
- * thread. The conversation (steps timeline + answer) is derived from the
- * messages, so it renders identically live and on resume.
+ * `useAgentStream`: passing a `threadId` resumes an existing thread (loading its
+ * messages), and each message streams onto the same thread. The conversation is
+ * derived from the messages, so it renders identically live and on resume.
  */
 export function ChatScreen({
   agent,
@@ -42,9 +33,7 @@ export function ChatScreen({
   threadId?: string;
   initialPrompt?: string;
 }) {
-  const router = useRouter();
-  const client = useMemo(() => makeClient(getSettings()), []);
-  const [threadId, setThreadId] = useState<string | undefined>(initialThreadId);
+  const { stream, submitRun, resume, actions } = useAgentStream(agent, { threadId: initialThreadId });
   // Seed the composer from a deep link only when starting a fresh conversation.
   const [draft, setDraft] = useState(initialThreadId ? '' : initialPrompt ?? '');
   const [inputH, setInputH] = useState(44);
@@ -52,69 +41,19 @@ export function ChatScreen({
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
 
-  const stream = useStream<ChatState>({
-    client,
-    assistantId: agent.id,
-    threadId: threadId ?? null,
-    messagesKey: 'messages',
-    reconnectOnMount: true,
-    fetchStateHistory: true,
-    onThreadId: (id) => {
-      setThreadId(id);
-      router.setParams({ threadId: id });
-      client.threads.update(id, { metadata: { agentId: agent.id } }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: ['threads'] });
-    },
-  });
-
   const messages = stream.messages;
   const busy = stream.isLoading;
-  const todos = (stream.values as ChatState | undefined)?.todos;
-
-  const runOpts = () => ({
-    config: { configurable: buildConfigurable(getSettings()) },
-    streamMode: ['values'] as ('values')[],
-  });
+  const todos = (stream.values as { todos?: Todo[] } | undefined)?.todos;
 
   const send = () => {
     const text = draft.trim();
     if (!text || busy) return;
     setDraft('');
     const human = { type: 'human', content: text };
-    stream.submit(
+    submitRun(
       { messages: [human] },
-      { ...runOpts(), optimisticValues: (prev) => ({ ...prev, messages: [...(prev.messages ?? []), human] }) },
+      { optimisticValues: (prev) => ({ ...prev, messages: [...(prev.messages ?? []), human] }) },
     );
-  };
-
-  const resume = (resumeValue: unknown) =>
-    stream.submit(undefined, { ...runOpts(), command: { resume: resumeValue } });
-
-  const editFork = (message: AnyMessage, text: string) => {
-    const meta = stream.getMessagesMetadata(message as never);
-    stream.submit({ messages: [{ type: 'human', content: text }] }, { ...runOpts(), checkpoint: meta?.firstSeenState?.parent_checkpoint });
-  };
-
-  const regenerate = (message: AnyMessage) => {
-    const meta = stream.getMessagesMetadata(message as never);
-    stream.submit(undefined, { ...runOpts(), checkpoint: meta?.firstSeenState?.parent_checkpoint });
-  };
-
-  const branchInfo = (message: AnyMessage) => {
-    const meta = stream.getMessagesMetadata(message as never);
-    const opts = meta?.branchOptions;
-    if (!opts || opts.length <= 1 || !meta?.branch) return undefined;
-    const index = opts.indexOf(meta.branch);
-    return { index, total: opts.length, prev: opts[index - 1], next: opts[index + 1] };
-  };
-
-  const actions = {
-    busy,
-    onCopy: (text: string) => Clipboard.setStringAsync(text).catch(() => {}),
-    onEdit: editFork,
-    onRegenerate: regenerate,
-    branchInfo,
-    onSetBranch: stream.setBranch,
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
