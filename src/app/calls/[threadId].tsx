@@ -8,13 +8,15 @@ import {
   threadStatusTone,
 } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
-import { Conversation, SubagentActivity, type SubagentRuns } from '@/features/agent-chat/conversation';
+import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
+import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
 import { isMessageArray, StructuredOutput } from '@/lib/agent/renderers';
 import type { Todo } from '@/lib/agent/renderers';
 
 export default function CallDetailRoute() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
   const { data: thread, isLoading, isError, error } = useCall(threadId);
+  const nativeRuns = useSubagentRuns(threadId).data;
 
   const title = thread ? agentTitleForThread(thread) : 'Call';
 
@@ -50,14 +52,21 @@ export default function CallDetailRoute() {
             const values = thread.values as
               | { messages?: unknown; todos?: Todo[]; subagent_runs?: SubagentRuns }
               | undefined;
+            const activity: SubagentRun[] = [
+              ...(values?.subagent_runs ? Object.values(values.subagent_runs) : []),
+              ...(nativeRuns ?? []),
+            ];
             if (values && isMessageArray(values.messages)) {
               return (
-                <Conversation
-                  messages={values.messages}
-                  todos={values.todos}
-                  viewMode="summary"
-                  subagentRuns={values.subagent_runs}
-                />
+                <>
+                  <Conversation
+                    messages={values.messages}
+                    todos={values.todos}
+                    viewMode="summary"
+                    subagentRuns={values.subagent_runs}
+                  />
+                  {nativeRuns?.length ? <SubagentActivity runs={nativeRuns} /> : null}
+                </>
               );
             }
             if (values && Object.keys(values).length > 0) {
@@ -67,7 +76,7 @@ export default function CallDetailRoute() {
                     <Text variant="label">Result</Text>
                     <StructuredOutput value={values} />
                   </Card>
-                  <SubagentActivity runs={values.subagent_runs} />
+                  <SubagentActivity runs={activity} />
                 </>
               );
             }

@@ -5,8 +5,9 @@ import { AdvancedOptions } from '@/components/advanced-options';
 import { Badge, Button, Card, Collapsible, Field, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { useCreatePreset } from '@/features/presets/use-presets';
-import { SubagentActivity, type SubagentRuns } from '@/features/agent-chat/conversation';
+import { SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
 import { useAgentStream } from '@/features/agent-chat/use-agent-stream';
+import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
 import type { AgentDef } from '@/lib/agent/registry';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import { CriteriaResult, ResearchResult, StructuredOutput, TradingResult } from '@/lib/agent/renderers';
@@ -73,7 +74,11 @@ export function AgentRunner({
     [agent.inputs, values],
   );
 
-  const subagentRuns = (stream.values as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
+  // Sub-agent internal timelines: captured deep-agent transcripts (parent state)
+  // + native subgraph sub-agents (trading analysts) fetched from history.
+  const captured = (stream.values as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
+  const native = useSubagentRuns(threadId).data;
+  const subagentRuns: SubagentRun[] = [...(captured ? Object.values(captured) : []), ...(native ?? [])];
 
   const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced), inputs: values });
 
