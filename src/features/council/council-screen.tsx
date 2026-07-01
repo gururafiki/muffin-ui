@@ -7,6 +7,8 @@ import { Icon } from '@/components/icons';
 import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
+import { Conversation, SubagentActivity } from '@/features/agent-chat/conversation';
+import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
 import { palette } from '@/theme/colors';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
@@ -49,6 +51,14 @@ export function CouncilScreen({ agent, threadId }: { agent: AgentDef; threadId?:
   const totalVotes = tally.bullish + tally.bearish + tally.neutral;
   const selSignal = selected ? signals[selected] : undefined;
   const selMeta = selected ? getPersonaMeta(selected) : undefined;
+
+  // Native sub-agent timelines (persisted subgraphs). Personas surface in the
+  // arena / persona detail; any non-persona run is an added specialist
+  // (valuation, news-sentiment, …) shown in its own panel.
+  const nativeRuns = useSubagentRuns(threadId).data;
+  const selRun = selected ? nativeRuns?.find((r) => normalizeSlug(r.name ?? '') === selected) : undefined;
+  const personaSlugs = useMemo(() => new Set(COUNCIL_PERSONAS.map((p) => p.slug)), []);
+  const specialistRuns = nativeRuns?.filter((r) => !personaSlugs.has(normalizeSlug(r.name ?? '')));
 
   return (
     <View className="gap-4">
@@ -148,6 +158,17 @@ export function CouncilScreen({ agent, threadId }: { agent: AgentDef; threadId?:
           </Pressable>
         </Animated.View>
       ) : null}
+
+      {selRun?.messages?.length ? (
+        <Animated.View entering={FadeIn.duration(200)}>
+          <Card tone="muted" className="gap-2">
+            <Text variant="label">How {selMeta?.name ?? 'they'} reasoned</Text>
+            <Conversation messages={selRun.messages} viewMode="verbose" />
+          </Card>
+        </Animated.View>
+      ) : null}
+
+      {specialistRuns?.length ? <SubagentActivity runs={specialistRuns} /> : null}
 
       {judging || synthesis ? (
         <Animated.View entering={FadeInDown.duration(300)}>
