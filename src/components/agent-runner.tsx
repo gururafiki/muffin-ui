@@ -5,6 +5,7 @@ import { AdvancedOptions } from '@/components/advanced-options';
 import { Badge, Button, Card, Collapsible, Field, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { useCreatePreset } from '@/features/presets/use-presets';
+import { SubagentActivity, type SubagentRuns } from '@/features/agent-chat/conversation';
 import { useAgentStream } from '@/features/agent-chat/use-agent-stream';
 import type { AgentDef } from '@/lib/agent/registry';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
@@ -71,6 +72,8 @@ export function AgentRunner({
     () => agent.inputs.every((f) => !f.required || (values[f.key]?.trim()?.length ?? 0) > 0),
     [agent.inputs, values],
   );
+
+  const subagentRuns = (stream.values as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
 
   const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced), inputs: values });
 
@@ -189,6 +192,9 @@ export function AgentRunner({
           </Card>
         )
       ) : null}
+
+      {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
+      <SubagentActivity runs={subagentRuns} />
     </View>
   );
 }

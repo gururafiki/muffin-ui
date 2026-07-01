@@ -34,6 +34,21 @@ type Step =
   | { kind: 'tool'; id: string; call: ToolCall; result?: AnyMessage; error?: boolean };
 type Turn = { human?: AnyMessage; steps: Step[]; answer?: AnyMessage };
 
+/** One captured sub-agent run (backend `subagent_runs` state channel). */
+export type SubagentRun = { name?: string; description?: string; messages?: AnyMessage[] };
+export type SubagentRuns = Record<string, SubagentRun>;
+
+/** Find the captured transcript for a `task` call, matched by its description. */
+function findRun(runs: SubagentRuns | undefined, description?: string): SubagentRun | undefined {
+  if (!runs || !description) return undefined;
+  const target = description.trim();
+  for (const r of Object.values(runs)) {
+    const d = r.description?.trim();
+    if (d && (d === target || target.startsWith(d) || d.startsWith(target))) return r;
+  }
+  return undefined;
+}
+
 /** Split a message list into turns, pairing tool calls with their results. */
 function buildTurns(messages: AnyMessage[]): Turn[] {
   const toolById = new Map<string, AnyMessage>();
@@ -208,7 +223,19 @@ function groupTimeline(steps: Step[]): { nodes: TimelineNode[]; subCount: number
 
 const RAIL = { position: 'absolute' as const, top: 14, bottom: -10, width: 2 };
 
-function SubAgentGroup({ name, calls, last, defaultOpen }: { name: string; calls: ToolStepT[]; last: boolean; defaultOpen: boolean }) {
+function SubAgentGroup({
+  name,
+  calls,
+  last,
+  defaultOpen,
+  subagentRuns,
+}: {
+  name: string;
+  calls: ToolStepT[];
+  last: boolean;
+  defaultOpen: boolean;
+  subagentRuns?: SubagentRuns;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   const error = calls.some((c) => c.error);
   const brief = (c: ToolStepT) => toolStepMeta(c.call.name ?? 'tool', c.call.args ?? {}).sublabel;
@@ -233,13 +260,22 @@ function SubAgentGroup({ name, calls, last, defaultOpen }: { name: string; calls
         ) : null}
         {open ? (
           <View className="mt-2 gap-3">
-            {calls.map((c, i) => (
-              <View key={c.id + i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
-                {calls.length > 1 ? <Text variant="label">Task {i + 1}</Text> : null}
-                {brief(c) ? <Text variant="muted" className="text-xs">{brief(c)}</Text> : null}
-                <ToolResult message={c.result} />
-              </View>
-            ))}
+            {calls.map((c, i) => {
+              const run = findRun(subagentRuns, brief(c));
+              return (
+                <View key={c.id + i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
+                  {calls.length > 1 ? <Text variant="label">Task {i + 1}</Text> : null}
+                  {brief(c) ? <Text variant="muted" className="text-xs">{brief(c)}</Text> : null}
+                  {/* Prefer the captured internal transcript (nested timeline); fall
+                      back to the tool result (final report) when not captured. */}
+                  {run?.messages?.length ? (
+                    <Conversation messages={run.messages} viewMode="verbose" subagentRuns={subagentRuns} />
+                  ) : (
+                    <ToolResult message={c.result} />
+                  )}
+                </View>
+              );
+            })}
           </View>
         ) : null}
       </Pressable>
@@ -255,7 +291,15 @@ function isSignificant(step: Step): boolean {
   return toolStepMeta(name, step.call.args ?? {}).isSubagent || /write_todos|todo/.test(name);
 }
 
-function StepTimeline({ steps, viewMode }: { steps: Step[]; viewMode: ViewMode }) {
+function StepTimeline({
+  steps,
+  viewMode,
+  subagentRuns,
+}: {
+  steps: Step[];
+  viewMode: ViewMode;
+  subagentRuns?: SubagentRuns;
+}) {
   const shown = viewMode === 'verbose' ? steps : steps.filter(isSignificant);
   if (shown.length === 0) return null;
   const { nodes, subCount } = groupTimeline(shown);
@@ -269,7 +313,14 @@ function StepTimeline({ steps, viewMode }: { steps: Step[]; viewMode: ViewMode }
       </View>
       {nodes.map((n, i) =>
         n.kind === 'sub' ? (
-          <SubAgentGroup key={'s' + i} name={n.name} calls={n.calls} last={i === nodes.length - 1} defaultOpen={viewMode === 'verbose'} />
+          <SubAgentGroup
+            key={'s' + i}
+            name={n.name}
+            calls={n.calls}
+            last={i === nodes.length - 1}
+            defaultOpen={viewMode === 'verbose'}
+            subagentRuns={subagentRuns}
+          />
         ) : (
           <StepRow key={'l' + i} step={n.step} last={i === nodes.length - 1} defaultOpen={viewMode === 'verbose'} />
         ),
@@ -361,12 +412,15 @@ export function Conversation({
   viewMode,
   busy,
   actions,
+  subagentRuns,
 }: {
   messages: AnyMessage[];
   todos?: Todo[];
   viewMode: ViewMode;
   busy?: boolean;
   actions?: MessageActions;
+  /** Captured sub-agent transcripts, keyed by run id (deep agents). */
+  subagentRuns?: SubagentRuns;
 }) {
   const turns = buildTurns(messages);
 
@@ -376,7 +430,7 @@ export function Conversation({
       {turns.map((turn, ti) => (
         <View key={ti} className="gap-3">
           {turn.human ? <HumanBubble message={turn.human} actions={actions} /> : null}
-          <StepTimeline key={viewMode} steps={turn.steps} viewMode={viewMode} />
+          <StepTimeline key={viewMode} steps={turn.steps} viewMode={viewMode} subagentRuns={subagentRuns} />
           {turn.answer ? <AnswerBlock message={turn.answer} actions={actions} /> : null}
           {busy && ti === turns.length - 1 ? (
             <View className="flex-row items-center gap-2 px-1">
@@ -386,6 +440,78 @@ export function Conversation({
           ) : null}
         </View>
       ))}
+    </View>
+  );
+}
+
+/**
+ * Standalone "sub-agent activity" for screens without a message timeline (the
+ * analytical run page). Renders each captured sub-agent run as a collapsible
+ * nested conversation grouped by sub-agent name.
+ */
+export function SubagentActivity({ runs, viewMode = 'summary' }: { runs?: SubagentRuns; viewMode?: ViewMode }) {
+  const entries = runs ? Object.values(runs) : [];
+  if (entries.length === 0) return null;
+
+  // Group runs by sub-agent name (a sub-agent may run several times).
+  const byName = new Map<string, SubagentRun[]>();
+  for (const r of entries) {
+    const key = r.name || 'sub-agent';
+    byName.set(key, [...(byName.get(key) ?? []), r]);
+  }
+
+  return (
+    <Card tone="muted" className="gap-0">
+      <View className="mb-1 flex-row items-center gap-2">
+        <Icon name="agents" size={14} color={palette.frosting[500]} />
+        <Text variant="label">Sub-agent activity · {byName.size}</Text>
+      </View>
+      {[...byName.entries()].map(([name, group], i, arr) => (
+        <SubAgentRunGroup key={name} name={name} runs={group} last={i === arr.length - 1} viewMode={viewMode} />
+      ))}
+    </Card>
+  );
+}
+
+function SubAgentRunGroup({
+  name,
+  runs,
+  last,
+  viewMode,
+}: {
+  name: string;
+  runs: SubagentRun[];
+  last: boolean;
+  viewMode: ViewMode;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = name.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    <View className="flex-row gap-3">
+      <View className="w-6 items-center">
+        {!last ? <View style={RAIL} className="bg-frosting-100 dark:bg-night-border" /> : null}
+        <View className="z-10 rounded-pill">
+          <Avatar name={label} size={24} />
+        </View>
+      </View>
+      <Pressable onPress={() => setOpen((o) => !o)} className="flex-1 pb-3 active:opacity-70">
+        <View className="flex-row items-center gap-2">
+          <Text variant="body" className="flex-1 text-sm font-heading">{label}</Text>
+          {runs.length > 1 ? <Text variant="muted" className="text-xs">×{runs.length}</Text> : null}
+          <Badge label="sub-agent" tone="info" />
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+        </View>
+        {open ? (
+          <View className="mt-2 gap-3">
+            {runs.map((r, i) => (
+              <View key={i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
+                {r.description ? <Text variant="muted" className="text-xs">{r.description}</Text> : null}
+                {r.messages?.length ? <Conversation messages={r.messages} viewMode={viewMode} /> : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </Pressable>
     </View>
   );
 }

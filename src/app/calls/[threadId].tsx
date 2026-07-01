@@ -8,7 +8,7 @@ import {
   threadStatusTone,
 } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
-import { Conversation } from '@/features/agent-chat/conversation';
+import { Conversation, SubagentActivity, type SubagentRuns } from '@/features/agent-chat/conversation';
 import { isMessageArray, StructuredOutput } from '@/lib/agent/renderers';
 import type { Todo } from '@/lib/agent/renderers';
 
@@ -47,16 +47,28 @@ export default function CallDetailRoute() {
           </Card>
 
           {(() => {
-            const values = thread.values as { messages?: unknown; todos?: Todo[] } | undefined;
+            const values = thread.values as
+              | { messages?: unknown; todos?: Todo[]; subagent_runs?: SubagentRuns }
+              | undefined;
             if (values && isMessageArray(values.messages)) {
-              return <Conversation messages={values.messages} todos={values.todos} viewMode="summary" />;
+              return (
+                <Conversation
+                  messages={values.messages}
+                  todos={values.todos}
+                  viewMode="summary"
+                  subagentRuns={values.subagent_runs}
+                />
+              );
             }
             if (values && Object.keys(values).length > 0) {
               return (
-                <Card tone="raised" className="gap-2">
-                  <Text variant="label">Result</Text>
-                  <StructuredOutput value={values} />
-                </Card>
+                <>
+                  <Card tone="raised" className="gap-2">
+                    <Text variant="label">Result</Text>
+                    <StructuredOutput value={values} />
+                  </Card>
+                  <SubagentActivity runs={values.subagent_runs} />
+                </>
               );
             }
             return (

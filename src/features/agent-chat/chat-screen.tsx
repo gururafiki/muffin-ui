@@ -14,7 +14,7 @@ import { Badge, Card, Chip, Field, Screen, Text } from '@/components/ui';
 import type { AgentDef } from '@/lib/agent/registry';
 import type { Todo } from '@/lib/agent/renderers';
 import { palette } from '@/theme/colors';
-import { Conversation, type ViewMode } from './conversation';
+import { Conversation, type SubagentRuns, type ViewMode } from './conversation';
 import { InterruptCard } from './interrupt';
 import { useAgentStream } from './use-agent-stream';
 
@@ -43,7 +43,9 @@ export function ChatScreen({
 
   const messages = stream.messages;
   const busy = stream.isLoading;
-  const todos = (stream.values as { todos?: Todo[] } | undefined)?.todos;
+  const values = stream.values as { todos?: Todo[]; subagent_runs?: SubagentRuns } | undefined;
+  const todos = values?.todos;
+  const subagentRuns = values?.subagent_runs;
 
   const send = () => {
     const text = draft.trim();
@@ -92,7 +94,14 @@ export function ChatScreen({
               <Text variant="muted">Send a message to start the conversation.</Text>
             </Card>
           ) : (
-            <Conversation messages={messages as never} todos={todos} viewMode={viewMode} busy={busy} actions={actions} />
+            <Conversation
+              messages={messages as never}
+              todos={todos}
+              viewMode={viewMode}
+              busy={busy}
+              actions={actions}
+              subagentRuns={subagentRuns}
+            />
           )}
 
           {stream.interrupt ? <InterruptCard value={stream.interrupt.value} busy={busy} onResume={resume} /> : null}
