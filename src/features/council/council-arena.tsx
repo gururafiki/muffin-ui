@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Card, Text } from '@/components/ui';
 import { COUNCIL_PERSONAS } from './personas';
 import { PersonaAvatar } from './persona-avatar';
-import type { PersonaSignal, PersonaStage } from './use-council-run';
+import type { PersonaSignal, PersonaStage } from './types';
 
 /** The arena: 13 investor avatars, live-animated as the debate unfolds. */
 export function CouncilArena({

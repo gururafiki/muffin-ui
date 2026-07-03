@@ -1,7 +1,13 @@
 import type { Thread } from '@langchain/langgraph-sdk';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
 import { Badge, Card, Chip, Screen, Text } from '@/components/ui';
@@ -16,6 +22,22 @@ import {
 import { useCalls } from '@/features/agent-calls/use-calls';
 import { AGENTS, getAgent } from '@/lib/agent/registry';
 import { palette } from '@/theme/colors';
+
+/** Status badge that gently pulses while the run is live. */
+function StatusBadge({ status }: { status: Thread['status'] }) {
+  const pulse = useSharedValue(1);
+  const busy = status === 'busy';
+  useEffect(() => {
+    pulse.value = busy ? withRepeat(withTiming(0.4, { duration: 750 }), -1, true) : withTiming(1);
+  }, [busy, pulse]);
+  const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  if (!busy) return <Badge label={status} tone={threadStatusTone(status)} />;
+  return (
+    <Animated.View style={style}>
+      <Badge label="running" tone="info" />
+    </Animated.View>
+  );
+}
 
 export default function CallsScreen() {
   const router = useRouter();
@@ -69,7 +91,8 @@ export default function CallsScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           className="mt-3 -mx-4 px-4"
-          contentContainerStyle={{ gap: 8 }}>
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ gap: 8, alignItems: 'center' }}>
           {filterChips.map((c) => (
             <Chip key={c.key} label={c.label} active={filter === c.key} onPress={() => setFilter(c.key)} />
           ))}
@@ -109,7 +132,7 @@ export default function CallsScreen() {
                   <View className="flex-1 gap-1">
                     <View className="flex-row items-center gap-2">
                       <Text variant="heading" className="flex-shrink">{agentTitleForThread(thread)}</Text>
-                      <Badge label={thread.status} tone={threadStatusTone(thread.status)} />
+                      <StatusBadge status={thread.status} />
                     </View>
                     {descriptor ? (
                       <Text variant="body" className="text-sm" numberOfLines={1}>

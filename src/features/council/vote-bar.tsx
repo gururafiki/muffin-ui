@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
-import type { VoteTally } from './use-council-run';
+import type { VoteTally } from './types';
 
 const SEGMENTS: { key: keyof VoteTally; color: string; label: string }[] = [
   { key: 'bullish', color: palette.bullish, label: 'Bullish' },

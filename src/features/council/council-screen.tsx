@@ -7,7 +7,10 @@ import { Icon } from '@/components/icons';
 import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
-import { Conversation, SubagentActivity } from '@/features/agent-chat/conversation';
+import { Conversation, SubagentActivity, SubagentStateDigest } from '@/features/agent-chat/conversation';
+import { RunProgress } from '@/features/agent-chat/run-progress';
+import type { RunMetadataStorage } from '@/features/agent-chat/use-active-run';
+import { useAgentStream, type LiveNode } from '@/features/agent-chat/use-agent-stream';
 import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
 import { palette } from '@/theme/colors';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
@@ -15,39 +18,80 @@ import type { AgentDef } from '@/lib/agent/registry';
 import { CouncilArena } from './council-arena';
 import { JudgePanel } from './judge-panel';
 import { COUNCIL_PERSONAS, getPersonaMeta, normalizeSlug } from './personas';
-import {
-  signalTone,
-  useCouncilRun,
-  type PersonaSignal,
-  type PersonaStage,
-  type VoteTally,
-} from './use-council-run';
+import { SUBNODE_STAGE, signalTone, type PersonaSignal, type PersonaStage, type VoteTally } from './types';
 import { VoteBar } from './vote-bar';
 
-export function CouncilScreen({ agent, threadId }: { agent: AgentDef; threadId?: string }) {
+/** Derive every persona's arena view (stage/signal/tally) from streamed state. */
+function deriveCouncil(
+  values: Record<string, unknown> | undefined,
+  liveNode: LiveNode | undefined,
+  busy: boolean,
+): {
+  signals: Record<string, PersonaSignal>;
+  stages: Record<string, PersonaStage>;
+  synthesis: Record<string, unknown> | null;
+  tally: VoteTally;
+} {
+  const list = (values?.persona_signals as PersonaSignal[] | undefined) ?? [];
+  const signals: Record<string, PersonaSignal> = {};
+  const tally: VoteTally = { bullish: 0, bearish: 0, neutral: 0 };
+  for (const sig of list) {
+    const slug = normalizeSlug(sig.agent_id);
+    if (!slug) continue;
+    signals[slug] = sig;
+    tally[signalTone(sig.signal)] += 1;
+  }
+
+  // The live node tells us which persona is on which internal step right now.
+  const liveSlug = liveNode ? normalizeSlug(liveNode.namespace[0]?.split(':')[0] ?? '') : '';
+  const liveStage: PersonaStage = (liveNode && SUBNODE_STAGE[liveNode.node]) || 'thinking';
+
+  const stages = Object.fromEntries(
+    COUNCIL_PERSONAS.map((p) => {
+      if (signals[p.slug]) return [p.slug, 'done' as PersonaStage];
+      if (!busy) return [p.slug, 'pending' as PersonaStage];
+      return [p.slug, p.slug === liveSlug ? liveStage : ('thinking' as PersonaStage)];
+    }),
+  );
+  const synthesis = (values?.council_synthesis as Record<string, unknown>) ?? null;
+  return { signals, stages, synthesis, tally };
+}
+
+/**
+ * The council chamber. Thread-scoped via `useAgentStream`: convening pushes the
+ * thread into the URL, refreshing or reopening a live session drops you back
+ * into the arena mid-deliberation, and history renders from the same state.
+ */
+export function CouncilScreen({
+  agent,
+  threadId,
+  attachStorage,
+}: {
+  agent: AgentDef;
+  threadId?: string;
+  attachStorage?: RunMetadataStorage;
+}) {
   const [tickerEdit, setTicker] = useState<string | null>(null);
   const [queryEdit, setQuery] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
-  const run = useCouncilRun();
-  const { data: savedThread } = useCall(threadId);
 
-  // Effective inputs: the reopened thread's stored inputs, overridden by edits.
+  const { stream, submitRun, liveNode } = useAgentStream(agent, { threadId, attachStorage });
+  const values = stream.values as Record<string, unknown> | undefined;
+  const busy = stream.isLoading;
+
+  // Prefill inputs from thread metadata (Calls reopen) or streamed state.
+  const { data: savedThread } = useCall(threadId);
   const savedInputs = savedThread ? threadInputs(savedThread) : undefined;
-  const ticker = tickerEdit ?? savedInputs?.ticker ?? '';
+  const ticker = tickerEdit ?? savedInputs?.ticker ?? (values?.ticker as string | undefined) ?? '';
   const query = queryEdit ?? savedInputs?.query ?? '';
 
-  // Until a fresh session starts, render the reopened thread's saved verdict.
-  const saved = useMemo(() => deriveSaved(savedThread?.values as Record<string, unknown> | undefined), [savedThread]);
-  const live = run.status !== 'idle';
+  const { signals, stages, synthesis, tally } = useMemo(
+    () => deriveCouncil(values, liveNode, busy),
+    [values, liveNode, busy],
+  );
+  const judging = busy && Object.keys(signals).length >= COUNCIL_PERSONAS.length && !synthesis;
 
-  const signals = live ? run.signals : saved.signals;
-  const stages = live ? run.stages : saved.stages;
-  const synthesis = live ? run.synthesis : saved.synthesis;
-  const tally = live ? run.tally : saved.tally;
-  const judging = live && run.judging;
-
-  const streaming = run.status === 'streaming';
   const totalVotes = tally.bullish + tally.bearish + tally.neutral;
   const selSignal = selected ? signals[selected] : undefined;
   const selMeta = selected ? getPersonaMeta(selected) : undefined;
@@ -59,6 +103,14 @@ export function CouncilScreen({ agent, threadId }: { agent: AgentDef; threadId?:
   const selRun = selected ? nativeRuns?.find((r) => normalizeSlug(r.name ?? '') === selected) : undefined;
   const personaSlugs = useMemo(() => new Set(COUNCIL_PERSONAS.map((p) => p.slug)), []);
   const specialistRuns = nativeRuns?.filter((r) => !personaSlugs.has(normalizeSlug(r.name ?? '')));
+
+  const convene = () => {
+    setSelected(null);
+    submitRun(agent.buildInput({ ticker, query }), {
+      overrides: buildOverrides(agent.advanced, advanced),
+      inputs: { ticker, ...(query ? { query } : {}) },
+    });
+  };
 
   return (
     <View className="gap-4">
@@ -94,43 +146,40 @@ export function CouncilScreen({ agent, threadId }: { agent: AgentDef; threadId?:
           />
         ) : null}
         <Button
-          title={streaming ? 'In session…' : 'Convene the council'}
-          loading={streaming}
-          disabled={!ticker.trim()}
-          onPress={() => {
-            setSelected(null);
-            run.start({ ticker, query }, buildOverrides(agent.advanced, advanced));
-          }}
+          title={busy ? 'In session…' : 'Convene the council'}
+          loading={busy}
+          disabled={!ticker.trim() || busy}
+          onPress={convene}
         />
-        {streaming ? <Button title="Cancel" variant="ghost" onPress={run.cancel} /> : null}
+        {busy ? <Button title="Stop" variant="ghost" onPress={() => stream.stop()} /> : null}
       </Card>
 
-      {run.status === 'error' ? (
+      {stream.error ? (
         <Card tone="outline" className="gap-1">
           <Badge label="error" tone="bearish" />
-          <Text variant="muted">{run.error}</Text>
+          <Text variant="muted">
+            {stream.error instanceof Error ? stream.error.message : String(stream.error)}
+          </Text>
         </Card>
       ) : null}
 
-      {run.polled ? (
-        <Card tone="muted">
-          <Text variant="muted">Live streaming was unavailable — showing the final result.</Text>
-        </Card>
+      {busy ? (
+        <RunProgress agent={agent} values={values} liveNode={liveNode} busy={busy} />
       ) : null}
 
-      {streaming || totalVotes > 0 ? (
+      {busy || totalVotes > 0 ? (
         <Card className="gap-2">
           <VoteBar tally={tally} />
         </Card>
       ) : null}
 
-      {streaming || totalVotes > 0 ? (
+      {busy || totalVotes > 0 ? (
         <CouncilArena
           stages={stages}
           signals={signals}
           selected={selected}
           onSelect={(slug) => setSelected((cur) => (cur === slug ? null : slug))}
-          active={streaming}
+          active={busy}
         />
       ) : null}
 
@@ -159,11 +208,12 @@ export function CouncilScreen({ agent, threadId }: { agent: AgentDef; threadId?:
         </Animated.View>
       ) : null}
 
-      {selRun?.messages?.length ? (
+      {selected && (selRun?.stateValues || selRun?.messages?.length) ? (
         <Animated.View entering={FadeIn.duration(200)}>
-          <Card tone="muted" className="gap-2">
-            <Text variant="label">How {selMeta?.name ?? 'they'} reasoned</Text>
-            <Conversation messages={selRun.messages} viewMode="verbose" />
+          <Card tone="muted" className="gap-3">
+            <Text variant="label">How {selMeta?.name ?? 'they'} worked</Text>
+            <SubagentStateDigest values={selRun.stateValues} />
+            {selRun.messages?.length ? <Conversation messages={selRun.messages} viewMode="verbose" /> : null}
           </Card>
         </Animated.View>
       ) : null}
@@ -177,27 +227,4 @@ export function CouncilScreen({ agent, threadId }: { agent: AgentDef; threadId?:
       ) : null}
     </View>
   );
-}
-
-/** Rebuild the council verdict (signals, stages, tally, synthesis) from saved thread state. */
-function deriveSaved(values: Record<string, unknown> | undefined): {
-  signals: Record<string, PersonaSignal>;
-  stages: Record<string, PersonaStage>;
-  synthesis: Record<string, unknown> | null;
-  tally: VoteTally;
-} {
-  const list = (values?.persona_signals as PersonaSignal[] | undefined) ?? [];
-  const signals: Record<string, PersonaSignal> = {};
-  const tally: VoteTally = { bullish: 0, bearish: 0, neutral: 0 };
-  for (const sig of list) {
-    const slug = normalizeSlug(sig.agent_id);
-    if (!slug) continue;
-    signals[slug] = sig;
-    tally[signalTone(sig.signal)] += 1;
-  }
-  const stages = Object.fromEntries(
-    COUNCIL_PERSONAS.map((p) => [p.slug, (signals[p.slug] ? 'done' : 'pending') as PersonaStage]),
-  );
-  const synthesis = (values?.council_synthesis as Record<string, unknown>) ?? null;
-  return { signals, stages, synthesis, tally };
 }

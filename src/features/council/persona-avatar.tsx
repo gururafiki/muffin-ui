@@ -15,7 +15,7 @@ import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import type { PersonaMeta } from './personas';
-import { signalTone, type PersonaSignal, type PersonaStage } from './use-council-run';
+import { signalTone, type PersonaSignal, type PersonaStage } from './types';
 
 const STAGE_LABEL: Record<PersonaStage, string> = {
   pending: 'Waiting',
