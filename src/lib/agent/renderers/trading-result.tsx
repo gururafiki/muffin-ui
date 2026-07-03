@@ -1,6 +1,13 @@
 import { View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
+import {
+  BULL_BEAR_DEBATERS,
+  DebateView,
+  RISK_DEBATERS,
+  bullBearTurns,
+  namedMessageTurns,
+} from '@/features/multi-agent/debate';
 import { JsonBlock } from './json-block';
 import { Markdown } from './markdown';
 import { ReportSection, Verdict } from './widgets';
@@ -9,16 +16,6 @@ type Dict = Record<string, unknown>;
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v : undefined;
-}
-
-/** Coerce a debate value (string | string[] | objects) to markdown text. */
-function asText(v: unknown): string | undefined {
-  if (typeof v === 'string') return v;
-  if (Array.isArray(v)) {
-    const parts = v.map((x) => (typeof x === 'string' ? x : str((x as Dict)?.content) ?? str((x as Dict)?.text) ?? '')).filter(Boolean);
-    return parts.length ? parts.join('\n\n---\n\n') : undefined;
-  }
-  return undefined;
 }
 
 /**
@@ -37,9 +34,8 @@ export function TradingResult({ value }: { value: unknown }) {
   const conviction = typeof judge.conviction === 'number' ? judge.conviction : undefined;
   const summary = str(pd.executive_summary) ?? str(judge.summary);
 
-  const bull = asText(v.investment_bull_responses);
-  const bear = asText(v.investment_bear_responses);
-  const risk = asText(v.risk_debate_messages);
+  const debateTurns = bullBearTurns(v.investment_bull_responses, v.investment_bear_responses);
+  const riskTurns = namedMessageTurns(v.risk_debate_messages);
 
   return (
     <View className="gap-3">
@@ -58,14 +54,13 @@ export function TradingResult({ value }: { value: unknown }) {
       <ReportSection title="News" icon="research" markdown={str(v.news_report)} />
       <ReportSection title="Sentiment" icon="sparkle" markdown={str(v.sentiment_report)} />
 
-      {/* Debate */}
-      {bull ? <ReportSection title="Bull case" icon="trend-up" markdown={bull} /> : null}
-      {bear ? <ReportSection title="Bear case" icon="trend-down" markdown={bear} /> : null}
+      {/* Debates — rendered as actual conversations. */}
+      <DebateView title="Bull vs Bear" icon="council" debaters={BULL_BEAR_DEBATERS} turns={debateTurns} />
       {str(judge.summary) && summary !== str(judge.summary) ? (
         <ReportSection title="Judge's verdict" icon="council" markdown={judge.summary as string} />
       ) : null}
       {str(trader.reasoning) ? <ReportSection title="Trader's plan" icon="evaluation" markdown={trader.reasoning as string} /> : null}
-      {risk ? <ReportSection title="Risk debate" icon="warning" markdown={risk} /> : null}
+      <DebateView title="Risk debate" icon="warning" debaters={RISK_DEBATERS} turns={riskTurns} />
     </View>
   );
 }

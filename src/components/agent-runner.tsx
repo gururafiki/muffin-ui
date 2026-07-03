@@ -4,19 +4,29 @@ import { ActivityIndicator, View } from 'react-native';
 import { AdvancedOptions } from '@/components/advanced-options';
 import { Badge, Button, Card, Collapsible, Field, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
+import { useCall } from '@/features/agent-calls/use-calls';
 import { useCreatePreset } from '@/features/presets/use-presets';
-import { SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
+import { CollectedData } from '@/features/agent-chat/collected-data';
+import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
+import { RunProgress } from '@/features/agent-chat/run-progress';
+import type { RunMetadataStorage } from '@/features/agent-chat/use-active-run';
 import { useAgentStream } from '@/features/agent-chat/use-agent-stream';
 import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
 import type { AgentDef } from '@/lib/agent/registry';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
-import { CriteriaResult, ResearchResult, StructuredOutput, TradingResult } from '@/lib/agent/renderers';
+import { CriteriaResult, ResearchResult, StructuredOutput, TradingResult, type Todo } from '@/lib/agent/renderers';
 import { buildPresetConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
 
-const RESULT_RENDERERS: Record<string, (value: unknown) => React.ReactNode> = {
+const renderRunTranscript = (run: SubagentRun) => (
+  <Conversation messages={run.messages ?? []} viewMode="verbose" />
+);
+
+const RESULT_RENDERERS: Record<string, (value: unknown, runs?: SubagentRun[]) => React.ReactNode> = {
   research: (value) => <ResearchResult value={value} />,
-  criteria: (value) => <CriteriaResult value={value} />,
+  criteria: (value, runs) => (
+    <CriteriaResult value={value} subagentRuns={runs} renderTranscript={renderRunTranscript} />
+  ),
   trading: (value) => <TradingResult value={value} />,
 };
 
@@ -40,6 +50,7 @@ export function AgentRunner({
   autoStart,
   threadId,
   assistantId,
+  attachStorage,
 }: {
   agent: AgentDef;
   initialValues?: Record<string, string>;
@@ -48,8 +59,10 @@ export function AgentRunner({
   threadId?: string;
   /** Run a saved preset assistant instead of the bare graph. */
   assistantId?: string;
+  /** Pre-seeded reconnect storage — attaches to a live run on this thread. */
+  attachStorage?: RunMetadataStorage;
 }) {
-  const { stream, submitRun } = useAgentStream(agent, { assistantId, threadId });
+  const { stream, submitRun, liveNode } = useAgentStream(agent, { assistantId, threadId, attachStorage });
   const [edits, setEdits] = useState<Record<string, string>>(initialValues ?? {});
   const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
   const [presetName, setPresetName] = useState('');
@@ -79,6 +92,9 @@ export function AgentRunner({
   const captured = (stream.values as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
   const native = useSubagentRuns(threadId).data;
   const subagentRuns: SubagentRun[] = [...(captured ? Object.values(captured) : []), ...(native ?? [])];
+
+  // Thread record → the run's time window for the data-gathered panel.
+  const { data: threadRec } = useCall(threadId);
 
   const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced), inputs: values });
 
@@ -179,17 +195,19 @@ export function AgentRunner({
         </Card>
       ) : null}
 
-      {busy && !hasResult ? (
-        <View className="flex-row items-center gap-2 px-1">
-          <ActivityIndicator size="small" color={palette.frosting[400]} />
-          <Text variant="muted" className="text-sm">Working…</Text>
-        </View>
-      ) : null}
+      {/* Done / doing / next — the run's heartbeat while it streams. */}
+      <RunProgress
+        agent={agent}
+        values={stream.values as Record<string, unknown> | undefined}
+        todos={(stream.values as { todos?: Todo[] } | undefined)?.todos}
+        liveNode={liveNode}
+        busy={busy}
+      />
 
       {/* Headline result — same widget live and from history. */}
       {hasResult ? (
         agent.resultRenderer && RESULT_RENDERERS[agent.resultRenderer] ? (
-          RESULT_RENDERERS[agent.resultRenderer](result)
+          RESULT_RENDERERS[agent.resultRenderer](result, subagentRuns)
         ) : (
           <Card className="gap-2">
             <Badge label={busy ? 'streaming result' : 'result'} tone="info" />
@@ -197,6 +215,15 @@ export function AgentRunner({
           </Card>
         )
       ) : null}
+
+      {/* What was fetched from data providers during this run. */}
+      <CollectedData
+        thread={threadId}
+        values={stream.values as Record<string, unknown> | undefined}
+        busy={busy}
+        windowStart={threadRec?.created_at}
+        windowEnd={busy ? undefined : threadRec?.updated_at}
+      />
 
       {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
       <SubagentActivity runs={subagentRuns} />

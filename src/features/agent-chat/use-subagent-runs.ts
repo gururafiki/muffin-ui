@@ -27,8 +27,10 @@ function firstHuman(messages: unknown): string | undefined {
 }
 
 /** Turn one native sub-agent subgraph state into a rich SubagentRun, preferring
- * its captured transcript (`subagent_runs`) over its trimmed final `messages`. */
-function toRun(name: string, values: Record<string, unknown>): SubagentRun | undefined {
+ * its captured transcript (`subagent_runs`) over its trimmed final `messages`.
+ * Always returns a run — `stateValues` powers stage-oriented detail (evidence /
+ * data series) even when only a single final message survived. */
+function toRun(name: string, values: Record<string, unknown>): SubagentRun {
   const captured = values.subagent_runs as SubagentRuns | undefined;
   if (captured && Object.keys(captured).length) {
     // Pick the richest captured record (the sub-agent's own transcript).
@@ -36,16 +38,21 @@ function toRun(name: string, values: Record<string, unknown>): SubagentRun | und
       (a, b) => (b.messages?.length ?? 0) - (a.messages?.length ?? 0),
     )[0];
     if (best?.messages && best.messages.length > 1) {
-      return { name, description: best.description ?? firstHuman(best.messages), messages: best.messages };
+      return {
+        name,
+        description: best.description ?? firstHuman(best.messages),
+        messages: best.messages,
+        stateValues: values,
+      };
     }
   }
-  // Fallback: only surface if there's real multi-step internal work — a lone
-  // final message just duplicates the report the result widget already shows.
   const messages = values.messages;
-  if (Array.isArray(messages) && messages.length > 1) {
-    return { name, description: firstHuman(messages), messages: messages as SubagentRun['messages'] };
-  }
-  return undefined;
+  return {
+    name,
+    description: firstHuman(messages),
+    messages: Array.isArray(messages) ? (messages as SubagentRun['messages']) : [],
+    stateValues: values,
+  };
 }
 
 /**
@@ -73,9 +80,9 @@ export async function fetchSubagentRuns(threadId: string): Promise<SubagentRun[]
       const ns = (t.state?.checkpoint?.checkpoint_ns || t.checkpoint?.checkpoint_ns || t.name || '').split(':')[0];
       const name = ns || t.name || 'sub-agent';
       const run = toRun(name, values);
-      if (run && (run.messages?.length ?? 0) > (byName.get(name)?.messages?.length ?? 0)) {
-        byName.set(name, run);
-      }
+      const prev = byName.get(name);
+      const richness = (r: SubagentRun) => (r.messages?.length ?? 0) * 100 + Object.keys(r.stateValues ?? {}).length;
+      if (!prev || richness(run) > richness(prev)) byName.set(name, run);
     }
   }
   return [...byName.values()];

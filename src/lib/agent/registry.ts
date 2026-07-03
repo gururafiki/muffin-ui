@@ -39,6 +39,32 @@ export interface AdvancedField {
   default?: boolean;
 }
 
+/** One row in a stage's expanded progress (e.g. a criterion, a persona vote). */
+export interface StageChild {
+  key: string;
+  label: string;
+  done: boolean;
+}
+
+/**
+ * One stage of a graph agent's execution recipe, powering the RunProgress
+ * "done / doing / next" checklist. `done` reads the streamed state; `active`
+ * matches streamed node names (from `updates` events) so the checklist can
+ * point at what is running *right now*.
+ */
+export interface StageDef {
+  key: string;
+  label: string;
+  icon?: IconName;
+  done: (values: Record<string, unknown>) => boolean;
+  /** Matches node names / subgraph namespaces that belong to this stage. */
+  active?: RegExp;
+  /** Dynamic sub-rows derived from state (criteria, persona votes, …). */
+  children?: (values: Record<string, unknown>) => StageChild[];
+  /** Expected number of children (shows "3/13" while they come in). */
+  expected?: number;
+}
+
 export interface AgentDef {
   /** assistant_id / graph name registered in langgraph.json */
   id: string;
@@ -61,7 +87,19 @@ export interface AgentDef {
    * runner. Requires the graph to operate on a `messages` state key.
    */
   chat?: boolean;
+  /** Example prompts offered on the chat hero screen. */
+  examples?: string[];
+  /** Execution recipe for graph agents (deep agents use `todos` instead). */
+  stages?: StageDef[];
 }
+
+const has = (values: Record<string, unknown>, key: string): boolean => {
+  const v = values[key];
+  if (v == null) return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'object') return Object.keys(v as object).length > 0;
+  return true;
+};
 
 const ticker: AgentInputField = {
   key: 'ticker',
@@ -87,6 +125,12 @@ export const AGENTS: AgentDef[] = [
       { key: 'research_default_mode', label: 'Research mode', type: 'select', options: ['speed', 'balanced', 'quality'] },
       { key: 'max_search_results', label: 'Max search results', type: 'number', placeholder: '8' },
     ],
+    stages: [
+      { key: 'classify', label: 'Understand the question', icon: 'thinking', done: (v) => has(v, 'classification'), active: /classif/i },
+      { key: 'search', label: 'Gather evidence', icon: 'research', done: (v) => has(v, 'evidence'), active: /search|retriev|collect|firecrawl/i },
+      { key: 'rerank', label: 'Rank the best sources', icon: 'criteria', done: (v) => has(v, 'reranked_evidence'), active: /rerank/i },
+      { key: 'write', label: 'Write the answer', icon: 'sparkle', done: (v) => has(v, 'output'), active: /writ|answer|synth/i },
+    ],
   },
   {
     id: 'council',
@@ -106,6 +150,23 @@ export const AGENTS: AgentDef[] = [
       },
     ],
     custom: 'council',
+    stages: [
+      {
+        key: 'deliberate',
+        label: 'The council deliberates',
+        icon: 'council',
+        done: (v) => (Array.isArray(v.council_synthesis) ? false : has(v, 'council_synthesis')),
+        active: /persona|buffett|graham|wood|munger|ackman|burry|pabrai|taleb|lynch|fisher|jhunjhunwala|druckenmiller|damodaran|specialist|analysis/i,
+        expected: 13,
+        children: (v) =>
+          ((v.persona_signals as { agent_id?: string }[] | undefined) ?? []).map((s, i) => ({
+            key: s.agent_id ?? String(i),
+            label: (s.agent_id ?? 'vote').replace(/_/g, ' '),
+            done: true,
+          })),
+      },
+      { key: 'judge', label: 'The judge synthesises', icon: 'sparkle', done: (v) => has(v, 'council_synthesis'), active: /judge|synth/i },
+    ],
   },
   {
     id: 'criteria_analysis',
@@ -122,6 +183,24 @@ export const AGENTS: AgentDef[] = [
       ...(v.market ? { market: v.market } : {}),
     }),
     resultRenderer: 'criteria',
+    stages: [
+      { key: 'classify', label: 'Classify the stock', icon: 'thinking', done: (v) => has(v, 'classification'), active: /classif/i },
+      { key: 'methodology', label: 'Pick a valuation methodology', icon: 'evaluation', done: (v) => has(v, 'valuation_methodology'), active: /valuation|methodolog/i },
+      { key: 'define', label: 'Define the criteria', icon: 'criteria', done: (v) => has(v, 'criteria_definition'), active: /criteria_definition|define/i },
+      {
+        key: 'evaluate',
+        label: 'Evaluate each criterion',
+        icon: 'agents',
+        done: (v) => has(v, 'merged_criteria'),
+        active: /criterion|evaluat/i,
+        children: (v) => {
+          const evals = (v.criterion_evaluations as { criterion_name?: string }[] | undefined) ?? [];
+          return evals.map((c, i) => ({ key: c.criterion_name ?? String(i), label: c.criterion_name ?? `Criterion ${i + 1}`, done: true }));
+        },
+      },
+      { key: 'merge', label: 'Merge the scorecard', icon: 'files', done: (v) => has(v, 'merged_criteria'), active: /merge/i },
+      { key: 'synthesis', label: 'Synthesise the verdict', icon: 'sparkle', done: (v) => has(v, 'synthesis'), active: /synth/i },
+    ],
   },
   {
     id: 'stock_evaluation',
@@ -134,6 +213,11 @@ export const AGENTS: AgentDef[] = [
     buildInput: (v) => ({ messages: [{ type: 'human', content: v.prompt }] }),
     resultKey: 'messages',
     chat: true,
+    examples: [
+      'Evaluate AAPL as a long-term holding. Cover the thesis, valuation and key risks.',
+      'Is NVDA overvalued at today’s price?',
+      'Compare MSFT and GOOGL on fundamentals and momentum.',
+    ],
   },
   {
     id: 'trading_decision',
@@ -153,6 +237,27 @@ export const AGENTS: AgentDef[] = [
     // No `resultKey`: the trading widget renders the whole state (reports,
     // debate, judge, portfolio decision), not just one field.
     resultRenderer: 'trading',
+    stages: [
+      { key: 'market', label: 'Market & technicals', icon: 'markets', done: (v) => has(v, 'market_report'), active: /market_analyst/i },
+      { key: 'fundamentals', label: 'Fundamentals', icon: 'criteria', done: (v) => has(v, 'fundamentals_report'), active: /fundamentals_analyst/i },
+      { key: 'news', label: 'News', icon: 'research', done: (v) => has(v, 'news_report'), active: /news_analyst/i },
+      { key: 'sentiment', label: 'Social sentiment', icon: 'sparkle', done: (v) => has(v, 'sentiment_report'), active: /social_analyst|sentiment/i },
+      {
+        key: 'debate',
+        label: 'Bull vs bear debate',
+        icon: 'council',
+        done: (v) => has(v, 'investment_judge'),
+        active: /bull|bear|invest.*debat|research_manager/i,
+        children: (v) => {
+          const rounds = (v.investment_bull_responses as unknown[] | undefined)?.length ?? 0;
+          return Array.from({ length: rounds }, (_, i) => ({ key: `r${i}`, label: `Round ${i + 1}`, done: true }));
+        },
+      },
+      { key: 'judge', label: 'The judge rules', icon: 'council', done: (v) => has(v, 'investment_judge'), active: /judge/i },
+      { key: 'trader', label: 'Trader drafts the plan', icon: 'trading', done: (v) => has(v, 'trader'), active: /trader/i },
+      { key: 'risk', label: 'Risk debate', icon: 'warning', done: (v) => has(v, 'portfolio_decision'), active: /risk|debator/i },
+      { key: 'portfolio', label: 'Portfolio call', icon: 'portfolio', done: (v) => has(v, 'portfolio_decision'), active: /portfolio/i },
+    ],
     advanced: [
       { key: 'max_investment_debate_rounds', label: 'Bull/bear debate rounds', type: 'number', placeholder: '2' },
       { key: 'max_risk_debate_rounds', label: 'Risk debate rounds', type: 'number', placeholder: '1' },

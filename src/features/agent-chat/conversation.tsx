@@ -9,6 +9,7 @@ import {
   Markdown,
   messageKind,
   messageText,
+  StructuredOutput,
   TodoList,
   isTodoList,
   type AnyMessage,
@@ -35,7 +36,13 @@ type Step =
 type Turn = { human?: AnyMessage; steps: Step[]; answer?: AnyMessage };
 
 /** One captured sub-agent run (backend `subagent_runs` state channel). */
-export type SubagentRun = { name?: string; description?: string; messages?: AnyMessage[] };
+export type SubagentRun = {
+  name?: string;
+  description?: string;
+  messages?: AnyMessage[];
+  /** Full subgraph state (native sub-agents) — powers stage-oriented detail. */
+  stateValues?: Record<string, unknown>;
+};
 export type SubagentRuns = Record<string, SubagentRun>;
 
 /** Find the captured transcript for a `task` call, matched by its description. */
@@ -465,7 +472,9 @@ function runPreview(run: SubagentRun): string | undefined {
  * own nested timeline. Nothing is expanded until you ask for it.
  */
 export function SubagentActivity({ runs }: { runs?: SubagentRun[] }) {
-  const list = (runs ?? []).filter((r) => (r.messages?.length ?? 0) > 0);
+  const list = (runs ?? []).filter(
+    (r) => (r.messages?.length ?? 0) > 0 || Object.keys(r.stateValues ?? {}).length > 0,
+  );
   if (list.length === 0) return null;
 
   return (
@@ -487,6 +496,44 @@ export function SubagentActivity({ runs }: { runs?: SubagentRun[] }) {
         ))}
       </View>
     </Card>
+  );
+}
+
+const DATA_KEY_RE = /(_series|_history|_latest|_1y)$|^(market_cap|insider_trades|company_news|metrics_history|prices_1y)$/;
+
+/**
+ * Stage-oriented digest of a native sub-agent's state: which data it collected
+ * (chips with point counts) and the evidence it computed. Gives persona /
+ * specialist detail real depth even when only the final message survived.
+ */
+export function SubagentStateDigest({ values }: { values?: Record<string, unknown> }) {
+  if (!values) return null;
+  const dataKeys = Object.entries(values).filter(([k, v]) => DATA_KEY_RE.test(k) && v != null);
+  const evidence = values.evidence;
+  const hasEvidence = evidence != null && (!Array.isArray(evidence) || evidence.length > 0);
+  if (dataKeys.length === 0 && !hasEvidence) return null;
+
+  return (
+    <View className="gap-2">
+      {dataKeys.length > 0 ? (
+        <View className="gap-1">
+          <Text variant="label">Data collected</Text>
+          <View className="flex-row flex-wrap gap-1.5">
+            {dataKeys.map(([k, v]) => {
+              const label = titleCase(k.replace(DATA_KEY_RE, '').replace(/_/g, ' ').trim() || k);
+              const count = Array.isArray(v) ? ` · ${v.length}` : '';
+              return <Badge key={k} label={`${label}${count}`} tone="info" />;
+            })}
+          </View>
+        </View>
+      ) : null}
+      {hasEvidence ? (
+        <View className="gap-1">
+          <Text variant="label">Evidence</Text>
+          <StructuredOutput value={evidence} />
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -514,9 +561,14 @@ function SubAgentRunRow({ run, last }: { run: SubagentRun; last: boolean }) {
           <Text variant="muted" className="mt-0.5 text-xs" numberOfLines={2}>{preview}</Text>
         ) : null}
         {open ? (
-          <View className="mt-2 rounded-crumb bg-white/50 p-2 dark:bg-night-bg/40">
-            {run.description ? <Text variant="label" className="mb-1">Brief</Text> : null}
-            {run.description ? <Text variant="muted" className="mb-2 text-xs">{run.description}</Text> : null}
+          <View className="mt-2 gap-3 rounded-crumb bg-white/50 p-2 dark:bg-night-bg/40">
+            {run.description ? (
+              <View className="gap-1">
+                <Text variant="label">Brief</Text>
+                <Text variant="muted" className="text-xs">{run.description}</Text>
+              </View>
+            ) : null}
+            <SubagentStateDigest values={run.stateValues} />
             {run.messages?.length ? <Conversation messages={run.messages} viewMode="verbose" /> : null}
           </View>
         ) : null}

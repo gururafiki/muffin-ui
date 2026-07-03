@@ -6,7 +6,7 @@ import { Icon } from '@/components/icons';
 import { Badge, Card, Text, type Signal } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { StructuredOutput } from '@/lib/agent/renderers';
-import { signalTone } from './use-council-run';
+import { signalTone } from './types';
 
 const KNOWN = new Set([
   'consensus_rating',

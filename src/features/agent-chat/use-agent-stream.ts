@@ -9,8 +9,12 @@ import type { AnyMessage } from '@/lib/agent/renderers';
 import { queryClient } from '@/lib/query';
 import { buildConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
+import type { RunMetadataStorage } from './use-active-run';
 
 export type AgentState = { messages?: unknown[] } & Record<string, unknown>;
+
+/** The graph node currently executing (from streamed `updates`). */
+export type LiveNode = { node: string; namespace: string[]; ts: number };
 
 /**
  * Shared engine for every agent run — chat and single-shot alike. Wraps the
@@ -26,18 +30,28 @@ export type AgentState = { messages?: unknown[] } & Record<string, unknown>;
  * New threads are tagged with `{ agentId, inputs }` metadata so the Calls list
  * can label + describe them.
  */
-export function useAgentStream(agent: AgentDef, opts: { assistantId?: string; threadId?: string }) {
+export function useAgentStream(
+  agent: AgentDef,
+  opts: {
+    assistantId?: string;
+    threadId?: string;
+    /** Pre-seeded storage from `useAttachStorage` — attaches to a live run. */
+    attachStorage?: RunMetadataStorage;
+  },
+) {
   const router = useRouter();
   const client = useMemo(() => makeClient(getSettings()), []);
   const [threadId, setThreadId] = useState<string | undefined>(opts.threadId);
   const inputsRef = useRef<Record<string, string> | undefined>(undefined);
+  const [liveNode, setLiveNode] = useState<LiveNode | undefined>(undefined);
+  const attachStorage = opts.attachStorage;
 
   const stream = useStream<AgentState>({
     client,
     assistantId: opts.assistantId || agent.id,
     threadId: threadId ?? null,
     messagesKey: 'messages',
-    reconnectOnMount: true,
+    reconnectOnMount: attachStorage ? () => attachStorage : true,
     fetchStateHistory: true,
     onThreadId: (id) => {
       setThreadId(id);
@@ -47,11 +61,17 @@ export function useAgentStream(agent: AgentDef, opts: { assistantId?: string; th
         .catch(() => {});
       queryClient.invalidateQueries({ queryKey: ['threads'] });
     },
+    onUpdateEvent: (data, options) => {
+      const nodes = Object.keys((data ?? {}) as Record<string, unknown>);
+      if (nodes.length === 0) return;
+      setLiveNode({ node: nodes[nodes.length - 1], namespace: options?.namespace ?? [], ts: Date.now() });
+    },
   });
 
   const runOpts = (overrides?: Record<string, unknown>) => ({
     config: { configurable: { ...buildConfigurable(getSettings()), ...(overrides ?? {}) } },
-    streamMode: ['values'] as 'values'[],
+    streamMode: ['values', 'updates'] as ('values' | 'updates')[],
+    streamSubgraphs: true as const,
   });
 
   /** Start (or continue) a run with a shaped graph `input`. */
@@ -106,5 +126,5 @@ export function useAgentStream(agent: AgentDef, opts: { assistantId?: string; th
     onSetBranch: stream.setBranch,
   };
 
-  return { stream, threadId, submitRun, resume, actions };
+  return { stream, threadId, submitRun, resume, actions, liveNode: stream.isLoading ? liveNode : undefined };
 }

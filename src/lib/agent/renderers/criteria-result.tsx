@@ -2,44 +2,158 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Text } from '@/components/ui';
+import { Badge, Card, Chip, Collapsible, Text } from '@/components/ui';
+// Type-only import — a runtime import of Conversation here would create a
+// require cycle (renderers barrel → this file → conversation → barrel), so the
+// nested-transcript rendering is injected by the caller via `renderTranscript`.
+import type { SubagentRun } from '@/features/agent-chat/conversation';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
 import { Markdown } from './markdown';
-import { ReportSection, TagRow, toneColor, Verdict, toneForSignal } from './widgets';
+import { ConfidenceBar, ReportSection, ScoreBar, TagRow, toneColor, Verdict, toneForSignal } from './widgets';
 
 type Dict = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
 
+type SubCriterion = { name?: string; criterion_name?: string; signal?: string; score?: number; reasoning?: string };
+
 type Criterion = {
   criterion_name?: string;
   signal?: string;
+  score?: number;
+  confidence?: number;
   weight?: number;
   reasoning?: string;
   counterargument?: string;
+  evidence_summary?: unknown[];
+  data_sources?: unknown[];
+  limitations?: unknown[];
+  sub_criteria?: SubCriterion[];
 };
 
-function CriterionRow({ c }: { c: Criterion }) {
+const asStrings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).filter(Boolean) : [];
+
+function DetailBlock({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View className="gap-1">
+      <Text variant="label">{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+/**
+ * One criterion, expandable to its full evaluation: evidence first, sources,
+ * sub-criteria, limitations, counterargument — the model's raw reasoning is
+ * deliberately last and folded (it's frequently boilerplate).
+ */
+function CriterionRow({
+  c,
+  transcript,
+  renderTranscript,
+}: {
+  c: Criterion;
+  transcript?: SubagentRun;
+  renderTranscript?: (run: SubagentRun) => React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const tone = toneForSignal(c.signal);
   const weightPct = typeof c.weight === 'number' ? Math.round(c.weight * 100) : undefined;
+  const evidence = asStrings(c.evidence_summary);
+  const sources = asStrings(c.data_sources);
+  const limitations = asStrings(c.limitations);
+  const validScore = typeof c.score === 'number' && c.score >= 0;
+
   return (
     <View className="gap-1 border-b border-frosting-100 py-2 dark:border-night-border">
-      <Pressable onPress={() => setOpen((o) => !o)} className="flex-row items-center gap-2 active:opacity-70">
-        <View className="h-2.5 w-2.5 rounded-pill" style={{ backgroundColor: toneColor[tone] }} />
-        <Text variant="body" className="flex-1 text-sm">{c.criterion_name ?? 'Criterion'}</Text>
-        {weightPct != null ? <Text variant="muted" className="text-xs">{weightPct}%</Text> : null}
-        {c.signal ? <Badge label={c.signal.replace(/_/g, ' ')} tone={tone} /> : null}
-        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+      <Pressable onPress={() => setOpen((o) => !o)} className="gap-1.5 active:opacity-70">
+        <View className="flex-row items-center gap-2">
+          <View className="h-2.5 w-2.5 rounded-pill" style={{ backgroundColor: toneColor[tone] }} />
+          <Text variant="body" className="flex-1 text-sm">{c.criterion_name ?? 'Criterion'}</Text>
+          {weightPct != null ? <Text variant="muted" className="text-xs">{weightPct}%</Text> : null}
+          {c.signal ? <Badge label={c.signal.replace(/_/g, ' ')} tone={tone} /> : null}
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+        </View>
+        {validScore ? (
+          <View className="pl-4 pr-8">
+            <ScoreBar value={c.score as number} max={10} signal={c.signal} />
+          </View>
+        ) : null}
       </Pressable>
+
       {open ? (
-        <View className="gap-2 pl-4 pt-1">
-          {c.reasoning ? <Markdown value={c.reasoning} /> : null}
-          {c.counterargument ? (
-            <View className="gap-1">
-              <Text variant="label">Counterargument</Text>
+        <View className="gap-3 pl-4 pt-2">
+          {typeof c.confidence === 'number' && c.confidence >= 0 ? (
+            <ConfidenceBar value={c.confidence} tone={tone} />
+          ) : null}
+
+          {evidence.length > 0 ? (
+            <DetailBlock label="Evidence">
+              <View className="gap-1">
+                {evidence.map((e, i) => (
+                  <View key={i} className="flex-row gap-2">
+                    <Icon name="check" size={13} color={palette.leaf[500]} weight="bold" />
+                    <Text variant="body" className="flex-1 text-sm">{e}</Text>
+                  </View>
+                ))}
+              </View>
+            </DetailBlock>
+          ) : null}
+
+          {c.sub_criteria?.length ? (
+            <DetailBlock label="Sub-criteria">
+              <View className="gap-1.5">
+                {c.sub_criteria.map((s, i) => {
+                  const st = toneForSignal(s.signal);
+                  return (
+                    <View key={i} className="flex-row items-center gap-2 border-l-2 border-frosting-100 pl-2 dark:border-night-border">
+                      <View className="h-2 w-2 rounded-pill" style={{ backgroundColor: toneColor[st] }} />
+                      <Text variant="body" className="flex-1 text-sm">{s.name ?? s.criterion_name ?? `Sub ${i + 1}`}</Text>
+                      {s.signal ? <Badge label={s.signal.replace(/_/g, ' ')} tone={st} /> : null}
+                    </View>
+                  );
+                })}
+              </View>
+            </DetailBlock>
+          ) : null}
+
+          {sources.length > 0 ? (
+            <DetailBlock label="Data sources">
+              <View className="flex-row flex-wrap gap-1.5">
+                {sources.map((s, i) => (
+                  <Chip key={i} label={s} />
+                ))}
+              </View>
+            </DetailBlock>
+          ) : null}
+
+          {limitations.length > 0 ? (
+            <DetailBlock label="Limitations">
+              <View className="gap-1">
+                {limitations.map((l, i) => (
+                  <Text key={i} variant="muted" className="text-sm">• {l}</Text>
+                ))}
+              </View>
+            </DetailBlock>
+          ) : null}
+
+          {str(c.counterargument) && !/^none\b/i.test(c.counterargument!.trim()) ? (
+            <DetailBlock label="Counterargument">
               <Text variant="muted" className="text-sm">{c.counterargument}</Text>
-            </View>
+            </DetailBlock>
+          ) : null}
+
+          {transcript?.messages?.length && renderTranscript ? (
+            <Collapsible title="How this was evaluated" icon="agents">
+              {renderTranscript(transcript)}
+            </Collapsible>
+          ) : null}
+
+          {str(c.reasoning) ? (
+            <Collapsible title="Raw reasoning" icon="thinking">
+              <Markdown value={c.reasoning!} />
+            </Collapsible>
           ) : null}
         </View>
       ) : null}
@@ -47,12 +161,35 @@ function CriterionRow({ c }: { c: Criterion }) {
   );
 }
 
+/** Match a criterion to its evaluation sub-agent run (by name/description). */
+function transcriptFor(name: string | undefined, runs: SubagentRun[] | undefined): SubagentRun | undefined {
+  if (!name || !runs?.length) return undefined;
+  const n = name.toLowerCase();
+  return runs.find(
+    (r) =>
+      r.name?.toLowerCase().includes('criterion') &&
+      (r.description?.toLowerCase().includes(n) ||
+        (r.messages ?? []).some(
+          (m) => typeof m.content === 'string' && (m.content as string).toLowerCase().includes(n),
+        )),
+  );
+}
+
 /**
- * Renderer for the `criteria_analysis` agent: a sector-aware scorecard. Shows
- * the stock's classification, an optional headline synthesis, the weighted
- * criteria (each expandable to its reasoning) and the valuation methodology.
+ * Renderer for the `criteria_analysis` agent: a sector-aware scorecard. The
+ * classification tags + verdict lead; every criterion opens into its full
+ * evaluation (evidence → sources → sub-criteria → limitations → counterargument,
+ * with the raw model reasoning folded at the bottom).
  */
-export function CriteriaResult({ value }: { value: unknown }) {
+export function CriteriaResult({
+  value,
+  subagentRuns,
+  renderTranscript,
+}: {
+  value: unknown;
+  subagentRuns?: SubagentRun[];
+  renderTranscript?: (run: SubagentRun) => React.ReactNode;
+}) {
   if (!value || typeof value !== 'object') return <JsonBlock value={value} />;
   const v = value as Dict;
   const cls = (v.classification ?? {}) as Dict;
@@ -76,7 +213,12 @@ export function CriteriaResult({ value }: { value: unknown }) {
         <Card className="gap-0">
           <Text variant="label" className="mb-1">Criteria ({criteria.length})</Text>
           {criteria.map((c, i) => (
-            <CriterionRow key={i} c={c} />
+            <CriterionRow
+              key={i}
+              c={c}
+              transcript={transcriptFor(c.criterion_name, subagentRuns)}
+              renderTranscript={renderTranscript}
+            />
           ))}
         </Card>
       ) : null}
