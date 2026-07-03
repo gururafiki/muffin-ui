@@ -95,49 +95,39 @@ Portfolio tab: net-worth card, animated allocation (by asset/account), account w
 Locally-editable seeded portfolio persisted on-device (zustand + storage).
 `src/features/wealth/`.
 
----
+## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
+Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
+Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
+SDK `useStream`: URL-carried `threadId` + `reconnectOnMount`, so refresh/reopen keeps
+streaming and live vs. from-history render identically). A run reads as a minimal
+expandable step timeline grouped into an orchestrator → sub-agent tree with nested
+transcripts (`use-subagent-runs.ts`; backend pair: `subagent_runs` capture,
+muffin-agent #86/#88), plus HITL interrupt cards, message branching/edit/regenerate,
+a Calls tab of past threads with per-agent descriptors + filters
+(`src/features/agent-calls/`), composer prefill, a "Data gathered" panel from the
+tool-result cache (`collected-data.tsx`), a result-widget library
+(`renderers/widgets.tsx`), a reusable debate transcript
+(`src/features/multi-agent/debate.tsx`) and full markdown rendering. Backend
+(muffin-agent #85–#88): sub-agent transcript capture, Langfuse tracing, auto-CD
+deploy dispatch on image push.
 
-## ⬜ Milestone 4 — Custom agent dashboards + rich renderers
-
-**Goal.** Move beyond the generic structured-output view: bespoke, emotional dashboards per
-agent and a richer renderer library, all hung off the existing renderer registry
-(`src/lib/agent/renderers/`, selected via `AgentDef.resultRenderer` /
-`AgentDef.custom`). All pure app work now — `trading_decision` is registered (M2), so the
-trading dashboard can wire to live data immediately.
-
-**[app] — renderers & dashboards**
-- [ ] **Criteria-analysis breakdown** renderer (`resultRenderer: 'criteria'`): weighted
-      per-criterion score bars (reuse the animated-bar pattern from
-      `src/features/wealth/allocation-bars.tsx`), a composite-score gauge, key
-      positives/negatives, and the thesis — from `CriteriaAnalysisSynthesis` +
-      `criterion_evaluations`.
-- [ ] **Hierarchical sub-graph execution view.** Generalise the council's
-      `streamSubgraphs` parsing (`src/features/council/use-council-run.ts`) into a reusable
-      `useGraphTree` hook + a collapsible node tree showing each node/sub-node's live status
-      — a universal "what the graph is doing" panel for any agent.
-- [ ] **Tool-call & data-collection surface.** Render `tool_call` / `tool_result` as cards
-      with success/failure badges, plus a "data collected vs. data missing" summary (parse
-      `ToolMessage` results; surface the agent's tool-knowledge lessons).
-- [ ] **Charts.** A lightweight `react-native-svg` line + bar chart component; a renderer
-      that detects time-series tool outputs (price history, `get_indicators`) and draws
-      them. (Optionally `victory-native` later.)
-- [ ] **Token-level streaming.** Add `stream_mode: "messages"` to
-      `src/lib/agent/use-agent-run.ts` and render incremental AI text (the M1/M3 follow-up).
-- [ ] **Trading-decision dashboard** (`custom` screen): bull/bear cases, conviction gauge,
-      the trader plan (action, entry/stop/take-profit, position sizing from `TraderOutput`),
-      and the risk-debate transcript (name-tagged `risk_debate_messages`). Build against a
-      sample payload first; wire live against the registered `trading_decision` graph.
-- [ ] **Stock-evaluation timeline** polish: render the deep-agent plan→collect→validate→
-      analyse→reflect stages as a readable narrative.
-- [ ] Verification: each renderer validated against a captured sample payload (committed as
-      a fixture) and live where the graph is registered; screenshots in the smoke test.
-
-**[backend-patch] — optional richer signals**
-- [ ] Emit structured progress via `stream_mode: "custom"` (e.g. a chart-building subagent,
-      explicit data-collection success/failure events) for higher-fidelity UI.
-
-**Dependencies:** none (`trading_decision` is registered). **Acceptance:** criteria, trading and
-sub-graph views render richly from real (or fixture) payloads; charts draw from tool data.
+## ✅ Milestone 4 — Custom agent dashboards + rich renderers
+Shipped on the M10 architecture rather than the generic-runner extension originally
+sketched. Criteria-analysis breakdown (`renderers/criteria-result.tsx`: weighted
+per-criterion score bars, composite score, positives/negatives, thesis) and
+trading-decision dashboard (`renderers/trading-result.tsx`: verdict + conviction,
+analyst reports, bull-vs-bear and risk-debate transcripts, trader plan) hang off
+`AgentDef.resultRenderer`. The sub-graph execution view became M10's
+orchestrator → sub-agent tree (no separate `useGraphTree`); tool calls render as
+expandable cards with failure badges plus the "Data gathered" summary;
+the stock-evaluation timeline reads as a narrative (`lib/agent/steps.ts` humanises
+deep-agent/middleware nodes). Completed last: **token-level streaming**
+(`messages-tuple` stream mode in `use-agent-stream.ts` — answers render
+token-by-token) and **charts** — a `react-native-svg` time-series line + volume-bar
+chart (`renderers/chart.tsx`) drawn whenever a tool output parses as a time series
+(`renderers/chart-data.ts`: OpenBB price-history/indicator shapes; fixture at
+`renderers/__fixtures__/price-history.json`), in both the step timeline and the
+Data-gathered panel.
 
 ---
 
@@ -188,9 +178,10 @@ across accounts; keys remain on-device only.
 performance, monetisation, and final brand assets.
 
 **[app/infra]**
-- [ ] **Extract `muffin-ui`** into its own `gururafiki/muffin-ui` repo and re-add it as an
+- [x] **Extract `muffin-ui`** into its own `gururafiki/muffin-ui` repo and re-add it as an
       umbrella submodule; activate the dormant arm64 GHCR image build
-      (`.github/workflows/build.yml`).
+      (`.github/workflows/build.yml`). *Done — and pushes to `main` now dispatch an
+      auto-deploy to `muffin-deployment` after the image push.*
 - [ ] **EAS:** `eas.json` (development/preview/production profiles), credentials/signing,
       `eas build` + `eas submit` (App Store / Play), and **EAS Update** OTA channels.
 - [ ] **Sentry** (`@sentry/react-native`): wrap the app, upload sourcemaps in EAS, capture
@@ -217,16 +208,21 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 ---
 
 ## Cross-cutting backlog (from completed milestones)
-- **M1:** real illustrated muffin mascot; token-level (`stream_mode: "messages"`) streaming
-  (now folded into M4); extract to own repo (now in M9).
+- **M1:** real illustrated muffin mascot (the rest of the M1 backlog — token streaming, repo
+  extraction — has shipped).
 - **M2 (deferred backend work):** declare `config_schema` on each graph so the app can render
   **dynamic config forms** via `client.assistants.getSchemas` (none declare one today — static
   knobs are the fallback); per-agent `ToolSelectionMiddleware` (or `configurable["{agent}_tools"]`)
   to narrow the hardcoded `_MCP_TOOLS` lists at runtime; extend `McpConfiguration` for per-agent
   user MCP servers; the custom deep-agent builder (JSON spec → factory graph + builder screen).
-- **M3:** persona-vs-persona debate transcript; circular arena layout with connection lines.
+- **M3:** persona-vs-persona debate transcript in the council screen (the reusable
+  `multi-agent/debate.tsx` exists and drives the trading dashboard — wire it up); circular
+  arena layout with connection lines.
+- **M4 ([backend-patch]):** emit structured progress via `stream_mode: "custom"` (e.g. explicit
+  data-collection success/failure events) for higher-fidelity UI; richer chart types
+  (candlesticks, multi-axis — `victory-native` if the SVG chart outgrows itself).
 - **M5:** live market data (needs a backend screening/discovery graph) for the movers panels;
-  full markdown styling for `research-result`; richer sub-sector pages.
+  richer sub-sector pages (markdown styling for `research-result` shipped with M10).
 - **M6:** futures/options/MMF instruments; addressable-market tags; real holdings/weights;
   filter the universe by style/country.
 - **M7:** multi-currency / FX; cash-flow budgeting; live prices / broker sync; create

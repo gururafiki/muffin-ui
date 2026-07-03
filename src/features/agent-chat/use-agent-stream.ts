@@ -70,7 +70,13 @@ export function useAgentStream(
 
   const runOpts = (overrides?: Record<string, unknown>) => ({
     config: { configurable: { ...buildConfigurable(getSettings()), ...(overrides ?? {}) } },
-    streamMode: ['values', 'updates'] as ('values' | 'updates')[],
+    // `messages-tuple` streams LLM token chunks; `useStream` accumulates them
+    // into partial messages so the answer renders token-by-token. Named
+    // explicitly rather than relying on the mode the `stream.messages` getter
+    // auto-registers, so streaming survives a consumer refactor. Sub-agent
+    // (namespaced) chunks are routed to the SDK's subagent manager, not the
+    // top-level conversation.
+    streamMode: ['values', 'updates', 'messages-tuple'] as ('values' | 'updates' | 'messages-tuple')[],
     streamSubgraphs: true as const,
   });
 

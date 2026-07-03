@@ -9,7 +9,9 @@ import {
   Markdown,
   messageKind,
   messageText,
+  parseTimeSeries,
   StructuredOutput,
+  TimeSeriesChart,
   TodoList,
   isTodoList,
   type AnyMessage,
@@ -114,16 +116,24 @@ function buildTurns(messages: AnyMessage[]): Turn[] {
   return turns;
 }
 
-/** Render a tool result: pretty JSON if it parses, otherwise markdown/text. */
+/** Render a tool result: a chart when it's a time series, then pretty JSON if
+ * it parses, otherwise markdown/text. */
 function ToolResult({ message }: { message?: AnyMessage }) {
   if (!message) return <Text variant="muted" className="text-xs">No output captured.</Text>;
   const raw = messageText(message.content);
   if (!raw.trim()) return <Text variant="muted" className="text-xs">Empty result.</Text>;
+  // Chart detection runs on the uncapped text — price-history payloads are
+  // usually far larger than the JSON-preview cap below.
+  const chart = parseTimeSeries(raw);
   const capped = raw.length > 8000 ? raw.slice(0, 8000) + '\n… (truncated)' : raw;
   const t = capped.trim();
   const json = tryParseJson(t);
-  if (json !== undefined) return <JsonBlock value={json} />;
-  return <Markdown value={capped} />;
+  return (
+    <View className="gap-2">
+      {chart ? <TimeSeriesChart data={chart} /> : null}
+      {json !== undefined ? <JsonBlock value={json} /> : <Markdown value={capped} />}
+    </View>
+  );
 }
 
 function tryParseJson(t: string): unknown {

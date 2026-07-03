@@ -7,7 +7,7 @@ import { Collapsible, Text } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { makeClient } from '@/lib/agent/client';
 import { relativeTime } from '@/features/agent-calls/threads';
-import { JsonBlock, Markdown } from '@/lib/agent/renderers';
+import { JsonBlock, Markdown, parseTimeSeries, TimeSeriesChart } from '@/lib/agent/renderers';
 import { getSettings } from '@/lib/settings/store';
 import { palette } from '@/theme/colors';
 
@@ -88,6 +88,8 @@ function DataRow({ item, last }: { item: CachedItem; last: boolean }) {
   const [open, setOpen] = useState(false);
   const body = item.text.trim();
   const json = body.startsWith('{') || body.startsWith('[') ? safeParse(body) : undefined;
+  // Only parse for a chart once expanded — payloads can run to hundreds of KB.
+  const chart = open ? parseTimeSeries(body) : undefined;
   return (
     <Pressable
       onPress={() => setOpen((o) => !o)}
@@ -116,6 +118,7 @@ function DataRow({ item, last }: { item: CachedItem; last: boolean }) {
       {open ? (
         <View className="mt-2 gap-2 pl-5">
           {Object.keys(item.args).length > 0 ? <JsonBlock value={item.args} /> : null}
+          {chart ? <TimeSeriesChart data={chart} /> : null}
           {json !== undefined ? (
             <JsonBlock value={json} />
           ) : (
