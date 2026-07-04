@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { resolveBaseUrl } from '@/lib/resolve-url';
+import { effectiveSupabase } from '@/lib/runtime-config';
 import { getSettings } from '@/lib/settings/store';
 import { storage } from '@/lib/storage';
 
@@ -18,9 +19,9 @@ import { storage } from '@/lib/storage';
 let cached: { key: string; client: SupabaseClient } | null = null;
 
 export function getSupabase(): SupabaseClient | null {
-  const settings = getSettings();
-  const url = resolveBaseUrl(settings.supabaseUrl);
-  const anonKey = settings.supabaseAnonKey.trim();
+  const eff = effectiveSupabase(getSettings());
+  const url = resolveBaseUrl(eff.supabaseUrl);
+  const anonKey = eff.supabaseAnonKey;
   if (!url || !/^https?:\/\//i.test(url) || !anonKey) return null;
 
   const cacheKey = `${url}|${anonKey}`;

@@ -18,5 +18,10 @@ RUN npx expo export -p web --output-dir dist
 FROM nginx:1.27-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
+# Writes /runtime-config.js from env at container start (public Supabase config,
+# so the image stays deployment-independent). The nginx image runs executable
+# scripts in /docker-entrypoint.d/ before starting.
+COPY deploy/40-runtime-config.sh /docker-entrypoint.d/40-runtime-config.sh
+RUN chmod +x /docker-entrypoint.d/40-runtime-config.sh
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

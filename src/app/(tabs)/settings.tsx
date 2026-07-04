@@ -75,7 +75,7 @@ export default function SettingsScreen() {
             update({ supabaseAnonKey: v });
             reinitAuth();
           }}
-          hint="Public client key — enables the Account features."
+          hint="Public client key. Leave blank to use this deployment's default."
         />
       </Card>
 
