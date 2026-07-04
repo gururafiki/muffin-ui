@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button, Card, Chip, Collapsible, Field, Screen, Text } from '@/components/ui';
+import { AccountCard } from '@/features/account/account-card';
+import { reinitAuth } from '@/lib/auth/store';
 import {
   DEFAULT_SETTINGS,
   useSettings,
@@ -28,6 +30,8 @@ export default function SettingsScreen() {
       </Text>
       <Text variant="muted">Bring your own keys. Stored on this device only.</Text>
 
+      <AccountCard />
+
       <Card className="mt-4 gap-3">
         <Text variant="heading">Connection</Text>
         <Field
@@ -50,7 +54,28 @@ export default function SettingsScreen() {
           autoCapitalize="none"
           value={settings.userId}
           onChangeText={(v) => update({ userId: v })}
-          hint="Used for per-user memory isolation."
+          hint="Used for per-user memory isolation. Signing in overrides this."
+        />
+        <Field
+          label="Supabase URL"
+          autoCapitalize="none"
+          value={settings.supabaseUrl}
+          onChangeText={(v) => {
+            update({ supabaseUrl: v });
+            reinitAuth();
+          }}
+          hint="Web uses the same-origin /supabase proxy by default; native needs the full URL."
+        />
+        <Field
+          label="Supabase anon key"
+          autoCapitalize="none"
+          secureTextEntry
+          value={settings.supabaseAnonKey}
+          onChangeText={(v) => {
+            update({ supabaseAnonKey: v });
+            reinitAuth();
+          }}
+          hint="Public client key — enables the Account features."
         />
       </Card>
 

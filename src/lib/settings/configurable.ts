@@ -1,3 +1,5 @@
+import { getAuthSession } from '@/lib/auth/store';
+
 import type { Settings } from './store';
 
 /**
@@ -30,7 +32,9 @@ export function buildConfigurable(settings: Settings): Record<string, unknown> {
     if (items.length) cfg[key] = items;
   };
 
-  put('user_id', settings.userId);
+  // Signed-in Supabase users get their verified UUID as the memory identity;
+  // the manually-configured userId remains the anonymous/local fallback.
+  put('user_id', getAuthSession()?.userId ?? settings.userId);
   put('model', settings.model);
   put('openai_api_key', settings.openaiApiKey);
   put('anthropic_api_key', settings.anthropicApiKey);
@@ -72,9 +76,12 @@ export function buildPresetConfigurable(settings: Settings): Record<string, unkn
   );
 }
 
-/** Auth header for the LangGraph API, if a token is configured. */
+/**
+ * Auth header for the LangGraph API. A live Supabase session wins (the agent's
+ * auth.py verifies it as a user token); the static token remains the fallback
+ * for bearer / Cloudflare-service-token setups.
+ */
 export function buildAuthHeaders(settings: Settings): Record<string, string> {
-  return settings.authToken.trim()
-    ? { Authorization: `Bearer ${settings.authToken.trim()}` }
-    : {};
+  const token = getAuthSession()?.accessToken ?? settings.authToken.trim();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }

@@ -16,12 +16,17 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { initAuth } from '@/lib/auth/store';
 import { queryClient } from '@/lib/query';
 import { theme } from '@/theme/colors';
 
 export const unstable_settings = { initialRouteName: '(tabs)' };
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Start mirroring the (optional) Supabase session into the auth store so run
+// headers / configurable pick up the live token from the first request on.
+initAuth();
 
 export default function RootLayout() {
   const scheme = useColorScheme();

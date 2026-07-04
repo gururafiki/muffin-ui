@@ -25,6 +25,10 @@ export interface Settings {
   authToken: string;
   /** Stable identity for per-user memory isolation (configurable.user_id). */
   userId: string;
+  /** Supabase URL. Web defaults to the same-origin `/supabase` proxy. */
+  supabaseUrl: string;
+  /** Supabase anon (public) key — enables the Account features when set. */
+  supabaseAnonKey: string;
   llmProvider: LlmProvider;
   model: string;
   openaiApiKey: string;
@@ -65,6 +69,8 @@ export const DEFAULT_SETTINGS: Settings = {
   apiUrl: process.env.EXPO_PUBLIC_API_URL ?? '/api',
   authToken: '',
   userId: '',
+  supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '/supabase',
+  supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
   llmProvider: 'openrouter',
   model: '',
   openaiApiKey: '',

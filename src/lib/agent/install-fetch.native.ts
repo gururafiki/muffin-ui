@@ -1,3 +1,7 @@
+// Hermes lacks a full WHATWG URL implementation; supabase-js (auth/postgrest)
+// builds URLs internally, so install the standard polyfill on native.
+import 'react-native-url-polyfill/auto';
+
 import { fetch as expoFetch } from 'expo/fetch';
 import { overrideFetchImplementation } from '@langchain/langgraph-sdk';
 
