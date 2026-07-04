@@ -13,6 +13,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
 import { Badge, Card, Chip, Screen, Text } from '@/components/ui';
+import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import type { AgentDef } from '@/lib/agent/registry';
 import type { Todo } from '@/lib/agent/renderers';
 import { palette } from '@/theme/colors';
@@ -111,6 +112,7 @@ export function ChatScreen({
   const todos = values?.todos;
   const subagentRuns = values?.subagent_runs;
   const chatStarted = !!initialThreadId || messages.length > 0 || busy;
+  const signInRequired = useSignInRequiredToRun();
 
   const sendText = (text: string) => {
     if (!text.trim() || busy) return;
@@ -240,7 +242,11 @@ export function ChatScreen({
         ) : null}
 
         <View className="pt-2">
-          <Composer draft={draft} setDraft={setDraft} busy={busy} onSend={send} onStop={() => stream.stop()} />
+          {signInRequired && !chatStarted ? (
+            <SignInToRunNotice />
+          ) : (
+            <Composer draft={draft} setDraft={setDraft} busy={busy} onSend={send} onStop={() => stream.stop()} />
+          )}
         </View>
       </KeyboardAvoidingView>
     </Screen>

@@ -6,6 +6,7 @@ import { Badge, Button, Card, Collapsible, Field, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { useCreatePreset } from '@/features/presets/use-presets';
+import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import { CollectedData } from '@/features/agent-chat/collected-data';
 import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
 import { RunProgress } from '@/features/agent-chat/run-progress';
@@ -82,6 +83,7 @@ export function AgentRunner({
   }, [stream.values, agent.inputs]);
   const values = useMemo(() => ({ ...savedInputs, ...edits }), [savedInputs, edits]);
 
+  const signInRequired = useSignInRequiredToRun();
   const canRun = useMemo(
     () => agent.inputs.every((f) => !f.required || (values[f.key]?.trim()?.length ?? 0) > 0),
     [agent.inputs, values],
@@ -98,15 +100,16 @@ export function AgentRunner({
 
   const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced), inputs: values });
 
-  // Deep-link autostart ("Analyse" from a stock) — only for a fresh thread.
+  // Deep-link autostart ("Analyse" from a stock) — only for a fresh thread and
+  // never when sign-in is required (the guard below prompts instead).
   const started = useRef(false);
   useEffect(() => {
-    if (autoStart && !threadId && !started.current && canRun) {
+    if (autoStart && !threadId && !started.current && canRun && !signInRequired) {
       started.current = true;
       run();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, canRun, threadId]);
+  }, [autoStart, canRun, threadId, signInRequired]);
 
   return (
     <View className="gap-4">
@@ -138,13 +141,19 @@ export function AgentRunner({
             />
           ) : null}
 
-          <Button
-            title={busy ? 'Running…' : hasResult ? 'Run again' : 'Run agent'}
-            loading={busy}
-            disabled={!canRun || busy}
-            onPress={run}
-          />
-          {busy ? <Button title="Stop" variant="ghost" onPress={() => stream.stop()} /> : null}
+          {signInRequired ? (
+            <SignInToRunNotice />
+          ) : (
+            <>
+              <Button
+                title={busy ? 'Running…' : hasResult ? 'Run again' : 'Run agent'}
+                loading={busy}
+                disabled={!canRun || busy}
+                onPress={run}
+              />
+              {busy ? <Button title="Stop" variant="ghost" onPress={() => stream.stop()} /> : null}
+            </>
+          )}
         </View>
       </Collapsible>
 

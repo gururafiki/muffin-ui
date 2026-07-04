@@ -5,6 +5,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { AdvancedOptions } from '@/components/advanced-options';
 import { Icon } from '@/components/icons';
 import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
+import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { Conversation, SubagentActivity, SubagentStateDigest } from '@/features/agent-chat/conversation';
@@ -79,6 +80,7 @@ export function CouncilScreen({
   const { stream, submitRun, liveNode } = useAgentStream(agent, { threadId, attachStorage });
   const values = stream.values as Record<string, unknown> | undefined;
   const busy = stream.isLoading;
+  const signInRequired = useSignInRequiredToRun();
 
   // Prefill inputs from thread metadata (Calls reopen) or streamed state.
   const { data: savedThread } = useCall(threadId);
@@ -145,13 +147,19 @@ export function CouncilScreen({
             onChange={(k, v) => setAdvanced((s) => ({ ...s, [k]: v }))}
           />
         ) : null}
-        <Button
-          title={busy ? 'In session…' : 'Convene the council'}
-          loading={busy}
-          disabled={!ticker.trim() || busy}
-          onPress={convene}
-        />
-        {busy ? <Button title="Stop" variant="ghost" onPress={() => stream.stop()} /> : null}
+        {signInRequired ? (
+          <SignInToRunNotice />
+        ) : (
+          <>
+            <Button
+              title={busy ? 'In session…' : 'Convene the council'}
+              loading={busy}
+              disabled={!ticker.trim() || busy}
+              onPress={convene}
+            />
+            {busy ? <Button title="Stop" variant="ghost" onPress={() => stream.stop()} /> : null}
+          </>
+        )}
       </Card>
 
       {stream.error ? (
