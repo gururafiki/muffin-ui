@@ -155,30 +155,34 @@ export function ChatScreen({
             </Animated.View>
 
             <Animated.View entering={FadeInDown.duration(350).delay(80)}>
-              <View className="gap-3">
-                <Composer
-                  draft={draft}
-                  setDraft={setDraft}
-                  busy={busy}
-                  onSend={send}
-                  onStop={() => stream.stop()}
-                  placeholder="What should we dig into?"
-                />
-                {agent.examples?.length ? (
-                  <View className="gap-2 pt-1">
-                    {agent.examples.map((ex) => (
-                      <Pressable
-                        key={ex}
-                        onPress={() => sendText(ex)}
-                        className="self-center rounded-pill border border-frosting-200 bg-white/70 px-4 py-2 active:opacity-70 dark:border-night-border dark:bg-night-surface">
-                        <Text variant="muted" className="text-center text-xs">
-                          {ex}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
-              </View>
+              {signInRequired ? (
+                <SignInToRunNotice />
+              ) : (
+                <View className="gap-3">
+                  <Composer
+                    draft={draft}
+                    setDraft={setDraft}
+                    busy={busy}
+                    onSend={send}
+                    onStop={() => stream.stop()}
+                    placeholder="What should we dig into?"
+                  />
+                  {agent.examples?.length ? (
+                    <View className="gap-2 pt-1">
+                      {agent.examples.map((ex) => (
+                        <Pressable
+                          key={ex}
+                          onPress={() => sendText(ex)}
+                          className="self-center rounded-pill border border-frosting-200 bg-white/70 px-4 py-2 active:opacity-70 dark:border-night-border dark:bg-night-surface">
+                          <Text variant="muted" className="text-center text-xs">
+                            {ex}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              )}
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -242,7 +246,9 @@ export function ChatScreen({
         ) : null}
 
         <View className="pt-2">
-          {signInRequired && !chatStarted ? (
+          {/* Signed-out users can open a shared thread (read) but can't post a
+              follow-up run — show the gate instead of a composer that would 403. */}
+          {signInRequired ? (
             <SignInToRunNotice />
           ) : (
             <Composer draft={draft} setDraft={setDraft} busy={busy} onSend={send} onStop={() => stream.stop()} />
