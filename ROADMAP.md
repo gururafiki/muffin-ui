@@ -217,14 +217,31 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 - **M4 ([backend-patch]):** emit structured progress via `stream_mode: "custom"` (e.g. explicit
   data-collection success/failure events) for higher-fidelity UI; richer chart types
   (candlesticks, multi-axis — `victory-native` if the SVG chart outgrows itself).
-- **M8:** **shared research library** (browse/share/re-open public research; the
+- **M8 [app]:** **shared research library** (browse/share/re-open public research; the
   `research_shares` table + RLS are already deployed — this is app-side work: a share
   action on completed research runs + a library screen rendering via `research-result`);
-  OAuth providers (Google/GitHub via GoTrue); opt-in auto-sync for the cloud backup;
-  backend post-run research persistence; derive memory `user_id` server-side from the
-  verified JWT identity (auth.py currently trusts `configurable.user_id`); SMTP for
-  signup-confirmation/password-reset e-mails (env is wired; needs provider creds —
-  Cloudflare Email Service SMTP documented in muffin-deployment README).
+  opt-in auto-sync for the cloud backup (today it's manual Back up / Restore); backend
+  post-run research persistence (a middleware/hook that writes outputs to `research_shares`).
+- **M8 [Supabase stack — muffin-deployment]:** the self-hosted stack ships auth / REST /
+  Realtime / Storage(+imgproxy) / Edge Functions / Studio, but several pieces are omitted
+  or unwired:
+  - **`supabase-db` backups** — automated `pg_dump` cron (the volume now holds auth + app
+    data *and* all LangGraph checkpoints; single copy = data-loss risk). *Highest priority.*
+  - **Storage** — deployed (local-file backend) but no buckets or `storage.objects` RLS
+    policies; needed for avatars / research-PDF exports.
+  - **Realtime** — deployed but no tables in the `supabase_realtime` publication and the
+    app subscribes to nothing; needed for a live-updating shared library / cross-device sync.
+  - **Edge Functions** — only the upstream `main` router; no actual functions (largely
+    redundant with `langgraph-api`).
+  - **Supavisor** (connection pooler) and **Analytics/Logflare + Vector** (Studio Logs tab)
+    — omitted from the compose; fine at single-node scale, revisit if connection counts grow.
+  - **Auth methods** — email+password only; OAuth (Google/GitHub), phone/SMS, MFA, SAML SSO
+    are GoTrue env flags to enable.
+  - **Keys** — legacy HS256 `anon`/`service_role`; migrate to the new opaque `sb_` keys only
+    if independent key rotation is needed (requires asymmetric keypair + Kong translation).
+  Done in M8: Supabase JWT auth + optional sign-in, per-user threads (read-shared,
+  create-authenticated), verified `user_id` derived server-side, DB cutover to Supabase,
+  cloud backup, Resend SMTP (real confirmation e-mails).
 - **M5:** live market data (needs a backend screening/discovery graph) for the movers panels;
   richer sub-sector pages (markdown styling for `research-result` shipped with M10).
 - **M6:** futures/options/MMF instruments; addressable-market tags; real holdings/weights;
