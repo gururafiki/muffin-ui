@@ -236,7 +236,9 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
   - **Supavisor** (connection pooler) and **Analytics/Logflare + Vector** (Studio Logs tab)
     — omitted from the compose; fine at single-node scale, revisit if connection counts grow.
   - **Auth methods** — email/password + **GitHub + Google OAuth** shipped (dedicated `/auth`
-    page). Remaining GoTrue providers (each = a few `GOTRUE_EXTERNAL_*` env lines + an
+    page with a full stepped flow: 6-digit e-mail-code confirmation, a `/verify` route that
+    handles the GoTrue confirmation/recovery **link** client-side via `verifyOtp`, "resend
+    code", and forgot-password → set-new-password). Remaining GoTrue providers (each = a few `GOTRUE_EXTERNAL_*` env lines + an
     `oauth.ts` metadata entry; the app auto-shows any that GoTrue reports enabled). **Cost**
     is the provider's, not Supabase's — GoTrue itself is free for all of these:
     - **Free** (just register an OAuth app): GitLab, Bitbucket, Discord, Slack, Spotify,
