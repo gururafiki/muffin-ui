@@ -35,9 +35,10 @@ export function getSupabase(): SupabaseClient | null {
       },
       autoRefreshToken: true,
       persistSession: true,
-      // The email flows we use (password + autoconfirm) don't need URL
-      // detection; keeping it off avoids web history rewrites on load.
-      detectSessionInUrl: false,
+      // PKCE + URL detection so the OAuth redirect back to the app (?code=…) is
+      // exchanged for a session on load; harmless for the email/password flows.
+      flowType: 'pkce',
+      detectSessionInUrl: true,
     },
   });
   cached = { key: cacheKey, client };

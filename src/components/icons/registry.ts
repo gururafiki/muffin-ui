@@ -15,6 +15,8 @@ import {
   ArrowRightIcon,
   ArrowsClockwiseIcon,
   BankIcon,
+  GithubLogoIcon,
+  GoogleLogoIcon,
   BasketIcon,
   BirdIcon,
   BrainIcon,
@@ -181,6 +183,8 @@ export const iconRegistry = {
   warning: WarningIcon,
   'trend-up': TrendUpIcon,
   'trend-down': TrendDownIcon,
+  github: GithubLogoIcon,
+  google: GoogleLogoIcon,
 } satisfies Record<string, PhosphorIcon>;
 
 export type IconName = keyof typeof iconRegistry;

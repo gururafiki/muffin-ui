@@ -32,7 +32,7 @@ export function SignInToRunNotice() {
         Browsing shared runs is open to everyone, but starting a new one needs an account. Your API
         keys stay on this device.
       </Text>
-      <Button title="Go to Account" variant="secondary" onPress={() => router.push('/settings')} />
+      <Button title="Sign in / Create account" onPress={() => router.push('/auth')} />
     </Card>
   );
 }
