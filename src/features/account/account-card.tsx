@@ -5,6 +5,8 @@ import { Badge, Button, Card, Field, Text } from '@/components/ui';
 import { getSupabase } from '@/lib/auth/client';
 import { useAuth } from '@/lib/auth/store';
 
+import { backupToCloud, restoreFromCloud } from './backup';
+
 /**
  * Sign in / sign up with the deployment's Supabase (Settings → Account).
  * Fully optional: without an anon key configured the card explains how to
@@ -70,9 +72,46 @@ export function AccountCard() {
         <>
           <Text variant="body">{session.email ?? session.userId}</Text>
           <Text variant="muted" className="text-xs">
-            Runs and memories are tied to this account. Your API keys stay on this device.
+            Runs and memories are tied to this account. Your API keys stay on this device — cloud
+            backup only stores your portfolio and non-secret settings.
           </Text>
-          <Button title="Sign out" variant="secondary" disabled={busy} onPress={signOut} />
+          <View className="flex-row flex-wrap gap-2">
+            <Button
+              title="Back up now"
+              variant="secondary"
+              disabled={busy}
+              onPress={async () => {
+                setBusy(true);
+                setNotice(null);
+                try {
+                  await backupToCloud();
+                  setNotice({ tone: 'ok', text: 'Backed up ✓' });
+                } catch (e) {
+                  setNotice({ tone: 'error', text: e instanceof Error ? e.message : String(e) });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+            <Button
+              title="Restore"
+              variant="secondary"
+              disabled={busy}
+              onPress={async () => {
+                setBusy(true);
+                setNotice(null);
+                try {
+                  const at = await restoreFromCloud();
+                  setNotice({ tone: 'ok', text: `Restored backup from ${new Date(at).toLocaleString()}` });
+                } catch (e) {
+                  setNotice({ tone: 'error', text: e instanceof Error ? e.message : String(e) });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+            <Button title="Sign out" variant="ghost" disabled={busy} onPress={signOut} />
+          </View>
         </>
       ) : (
         <>

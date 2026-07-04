@@ -131,44 +131,40 @@ Data-gathered panel.
 
 ---
 
-## ⬜ Milestone 8 — Supabase auth + shared-research backend
+## ✅ Milestone 8 — Supabase auth (self-hosted) + cloud backup
 
-**Goal.** Add real user accounts and deliver the brand's social half — *collected data &
-research outputs are reused by everyone, while keys stay private*. App-side auth is in
-scope; agent persistence/auth changes are backend patches. Evaluate **aegra** (a
-Supabase/Postgres-friendly LangGraph-protocol server) vs. the current managed
-`langgraph-api` as part of this milestone.
+**As built.** Real user accounts on a **self-hosted Supabase** running inside the Swarm
+stack (the Oracle node had 17 GiB headroom — measured before deciding): Postgres 17,
+GoTrue, PostgREST, Realtime, Storage(+imgproxy), Edge Functions, Kong (public gateway at
+`supabase.<domain>`), Studio (admin, behind Cloudflare Access). The LangGraph
+checkpointer/store migrated to a dedicated `langgraph` database inside Supabase's
+Postgres (`use_supabase_db` flag + runbook in muffin-deployment; `langgraph-postgres`
+retired after cutover). **aegra was evaluated and deferred** — staying on managed
+`langgraph-api`; Cloudflare Access stays in front of the app (opening up is an
+M9/launch decision).
 
-**[app] — auth & cloud sync**
-- [ ] Add `supabase-js`; an **Auth screen** (email + OAuth) and a session store; gate the
-      app or keep anonymous use with optional login.
-- [ ] Send the Supabase access token as the API `Authorization: Bearer` (already supported
-      via `settings.authToken` → client `defaultHeaders`) and set `configurable.user_id`
-      from the Supabase user for per-user memory isolation.
-- [ ] **Cloud backup (opt-in):** sync the local portfolio/goals/settings
-      (`src/features/wealth/store.ts`, `src/lib/settings/store.ts`) to per-user Supabase
-      tables with RLS — local-first, never storing API keys server-side.
-- [ ] **Shared research library:** browse research outputs others have produced (Supabase
-      table) and re-open them — the "reuse research" promise; surface on the Agents/Research
-      area.
-- [ ] Verification: login works on web + native; a run carries the Supabase `user_id`;
-      (stretch) a shared research item from one account is visible to another.
+- **App** (`src/lib/auth/`, `src/features/account/`): supabase-js client built from
+  on-device settings (web defaults to the same-origin `/supabase` nginx proxy, same
+  trick as `/api`; anon key in Settings), zustand session store fed by
+  `onAuthStateChange`, Account card in Settings (email+password sign-in/up — GoTrue
+  auto-confirms until SMTP secrets are set). `buildAuthHeaders` prefers the live
+  session token; `buildConfigurable` sets `user_id` from the verified Supabase UUID.
+  Anonymous use still fully works.
+- **Cloud backup (opt-in)**: Back up / Restore buttons sync the portfolio + a
+  **non-secret** settings subset to `user_backups` (RLS owner-only) — API keys,
+  tokens and endpoints never leave the device (`src/features/account/backup.ts`).
+- **Backend** (muffin-agent #89): `auth.py` mode 4 verifies GoTrue HS256 user tokens
+  (`aud=authenticated`; anon/service keys rejected) and `@auth.on.threads` stamps +
+  filters `metadata.owner`, so the Calls tab is per-user.
+- **Deployment** (muffin-deployment): the full Supabase compose block, key
+  generation (`stack/supabase/generate-keys.sh`), idempotent app migrations
+  (`user_backups`, `research_shares` — the latter ready for the deferred library),
+  Traefik/Cloudflare routing, optional SMTP env (Cloudflare Email Service documented).
 
-**[backend-patch] — `muffin-agent` + `muffin-deployment`**
-- [ ] `auth.py`: add a **Supabase JWT verification** mode (verify via Supabase JWKS / JWT
-      secret; map `sub`/`email` → `user_id`), keeping the bearer/Cloudflare modes.
-- [ ] **DB migration:** point `DATABASE_URI` at Supabase Postgres and run the LangGraph
-      migrations; verify the checkpointer + Store work (it is Postgres, so likely a
-      connection-string swap). **OR** adopt **aegra** and document the trade-off.
-- [ ] **Persist collected data / research** to Supabase shared tables via a post-run hook /
-      middleware with RLS, so outputs are reusable; ensure no API keys are ever written.
-- [ ] `muffin-deployment`: add Supabase env/secrets; decide hosted vs self-hosted Supabase;
-      update `stack/docker-compose.yaml` + Terraform; (optional) drop `langgraph-postgres`
-      if fully on Supabase.
-
-**Dependencies:** none hard, but pairs with M9 productionisation. **Acceptance:** Supabase
-login drives `user_id` end-to-end; per-user memory works; shared research is readable
-across accounts; keys remain on-device only.
+**Deferred to backlog:** the **shared research library** UI (browse/share/re-open
+public research — the `research_shares` table + RLS already exist server-side);
+OAuth providers; auto-sync backup; backend post-run research persistence; deriving
+memory `user_id` server-side from the verified identity.
 
 ---
 
@@ -221,6 +217,14 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 - **M4 ([backend-patch]):** emit structured progress via `stream_mode: "custom"` (e.g. explicit
   data-collection success/failure events) for higher-fidelity UI; richer chart types
   (candlesticks, multi-axis — `victory-native` if the SVG chart outgrows itself).
+- **M8:** **shared research library** (browse/share/re-open public research; the
+  `research_shares` table + RLS are already deployed — this is app-side work: a share
+  action on completed research runs + a library screen rendering via `research-result`);
+  OAuth providers (Google/GitHub via GoTrue); opt-in auto-sync for the cloud backup;
+  backend post-run research persistence; derive memory `user_id` server-side from the
+  verified JWT identity (auth.py currently trusts `configurable.user_id`); SMTP for
+  signup-confirmation/password-reset e-mails (env is wired; needs provider creds —
+  Cloudflare Email Service SMTP documented in muffin-deployment README).
 - **M5:** live market data (needs a backend screening/discovery graph) for the movers panels;
   richer sub-sector pages (markdown styling for `research-result` shipped with M10).
 - **M6:** futures/options/MMF instruments; addressable-market tags; real holdings/weights;

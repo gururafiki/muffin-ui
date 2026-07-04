@@ -29,7 +29,17 @@ interface WealthState extends WealthData {
   updateGoal: (id: string, patch: Partial<Goal>) => void;
   removeGoal: (id: string) => void;
   resetToDemo: () => void;
+  /** Bulk replace (cloud-backup restore). */
+  replaceAll: (data: WealthData) => void;
 }
+
+/** Snapshot of the persisted slice (cloud backup upload). */
+export const getWealthData = (): WealthData => {
+  const { baseCurrency, accounts, goals } = useWealth.getState();
+  return { baseCurrency, accounts, goals };
+};
+
+export type { WealthData };
 
 export const useWealth = create<WealthState>((set, get) => {
   const persist = () => {
@@ -78,6 +88,11 @@ export const useWealth = create<WealthState>((set, get) => {
     resetToDemo: () => {
       set({ ...DEFAULT });
       storage.delete(STORAGE_KEY);
+    },
+
+    replaceAll: (data) => {
+      set({ ...data });
+      persist();
     },
   };
 });
