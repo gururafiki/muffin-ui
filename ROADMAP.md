@@ -163,8 +163,8 @@ M9/launch decision).
 
 **Deferred to backlog:** the **shared research library** UI (browse/share/re-open
 public research — the `research_shares` table + RLS already exist server-side);
-OAuth providers; auto-sync backup; backend post-run research persistence; deriving
-memory `user_id` server-side from the verified identity.
+auto-sync backup; backend post-run research persistence; more OAuth providers
+(GitHub + Google shipped — see the M8 backlog for the rest + their costs).
 
 ---
 
@@ -235,8 +235,20 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
     redundant with `langgraph-api`).
   - **Supavisor** (connection pooler) and **Analytics/Logflare + Vector** (Studio Logs tab)
     — omitted from the compose; fine at single-node scale, revisit if connection counts grow.
-  - **Auth methods** — email+password only; OAuth (Google/GitHub), phone/SMS, MFA, SAML SSO
-    are GoTrue env flags to enable.
+  - **Auth methods** — email/password + **GitHub + Google OAuth** shipped (dedicated `/auth`
+    page). Remaining GoTrue providers (each = a few `GOTRUE_EXTERNAL_*` env lines + an
+    `oauth.ts` metadata entry; the app auto-shows any that GoTrue reports enabled). **Cost**
+    is the provider's, not Supabase's — GoTrue itself is free for all of these:
+    - **Free** (just register an OAuth app): GitLab, Bitbucket, Discord, Slack, Spotify,
+      Twitch, LinkedIn, Notion, Figma, Kakao, Zoom, Microsoft/Azure (basic Entra).
+    - **Free but extra setup**: **Facebook** (Meta app + business/app review before it works
+      for non-test users); **SAML SSO** (free in GoTrue, but you need an IdP).
+    - **Paid / account cost**: **Apple** (Apple Developer Program, $99/yr — and required by
+      the App Store if iOS ships other social logins); **Twitter/X** (paid X API tier, ~$100/mo
+      Basic); **WorkOS** (enterprise-SSO SaaS, free tier then paid).
+    - **Usage-metered**: **phone/SMS OTP** — pay-per-message via Twilio / MessageBird / Vonage
+      (not free); also needs `GOTRUE_SMS_*` config.
+    - **MFA/TOTP** — free GoTrue env flags (`GOTRUE_MFA_*`), app UI work to enrol/verify.
   - **Keys** — legacy HS256 `anon`/`service_role`; migrate to the new opaque `sb_` keys only
     if independent key rotation is needed (requires asymmetric keypair + Kong translation).
   Done in M8: Supabase JWT auth + optional sign-in, per-user threads (read-shared,
