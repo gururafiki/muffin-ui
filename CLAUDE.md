@@ -69,6 +69,20 @@ The whole app is organised around **"one graph → one screen"**:
 - **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
   json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
 
+### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
+Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —
+anonymous use always works. `lib/auth/client.ts` builds the supabase-js client from Settings
+(`supabaseUrl` defaults to the same-origin `/supabase` nginx proxy — resolved absolute via
+`lib/resolve-url.ts`, the same trick as `/api`; `supabaseAnonKey` enables the feature; storage
+adapter = the shared `KeyValueStore`). `lib/auth/store.ts` mirrors the session into zustand via
+`onAuthStateChange` (initialised from the root layout) so non-React call sites read it
+synchronously: `buildAuthHeaders` prefers the live access token (the backend's `auth.py` verifies
+it as a Supabase user JWT) and `buildConfigurable` sets `user_id` from the verified UUID.
+`features/account/` has the Settings Account card (email+password sign-in/up) and the opt-in
+cloud backup (`backup.ts`: portfolio + NON-SECRET settings subset → RLS'd `user_backups`;
+API keys / tokens / endpoints are stripped on upload AND restore). Native pulls
+`react-native-url-polyfill` (in `install-fetch.native.ts`) for supabase-js.
+
 ### Settings → `config.configurable` — `src/lib/settings/`
 On-device keys are injected into each run's `config.configurable`, never persisted server-side.
 **`configurable.ts` field names mirror `muffin-agent`'s `BaseConfiguration` subclasses
