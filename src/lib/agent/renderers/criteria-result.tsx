@@ -10,6 +10,7 @@ import type { SubagentRun } from '@/features/agent-chat/conversation';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
 import { Markdown } from './markdown';
+import { ToolRunList, type ToolRun } from './tool-runs';
 import { ConfidenceBar, ReportSection, ScoreBar, TagRow, toneColor, Verdict, toneForSignal } from './widgets';
 
 type Dict = Record<string, unknown>;
@@ -29,6 +30,7 @@ type Criterion = {
   data_sources?: unknown[];
   limitations?: unknown[];
   sub_criteria?: SubCriterion[];
+  tool_runs?: ToolRun[];
 };
 
 const asStrings = (v: unknown): string[] =>
@@ -142,6 +144,16 @@ function CriterionRow({
             <DetailBlock label="Counterargument">
               <Text variant="muted" className="text-sm">{c.counterargument}</Text>
             </DetailBlock>
+          ) : null}
+
+          {c.tool_runs?.length ? (
+            <Collapsible
+              title="Data collection"
+              icon="tools"
+              meta={`${c.tool_runs.length} tool call${c.tool_runs.length === 1 ? '' : 's'}`}
+            >
+              <ToolRunList runs={c.tool_runs} />
+            </Collapsible>
           ) : null}
 
           {transcript?.messages?.length && renderTranscript ? (

@@ -185,6 +185,13 @@ export const AGENTS: AgentDef[] = [
     resultRenderer: 'criteria',
     advanced: [
       {
+        key: 'tool_telemetry_enabled',
+        label: 'Tool execution telemetry',
+        type: 'boolean',
+        default: true,
+        hint: 'Record per-tool inputs/outputs/errors for the run and each criterion.',
+      },
+      {
         key: 'tool_lessons_mode',
         label: 'Tool lessons',
         type: 'select',
