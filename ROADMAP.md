@@ -95,6 +95,23 @@ Portfolio tab: net-worth card, animated allocation (by asset/account), account w
 Locally-editable seeded portfolio persisted on-device (zustand + storage).
 `src/features/wealth/`.
 
+## ✅ Milestone 11 — Criteria analysis live-render + tool telemetry (2026-07)
+Fixes + features off deployed feedback on the Criteria Analysis page:
+- **Live-render fix** — a fresh run no longer flashes "Checking for a live run…" and blanks until
+  refresh. `agents/[assistantId].tsx` pins the attach gate's `threadId` at mount (a `useState`
+  initializer) so the mid-run `router.setParams({ threadId })` from `onThreadId` doesn't re-gate and
+  unmount the streaming runner; per-thread hooks (`useSubagentRuns` / `useCall` / `CollectedData`)
+  follow the live id from `useAgentStream`. Same fix in `council-screen.tsx`. (See CLAUDE.md
+  "Live-render gotcha".)
+- **`tool_lessons_mode` knob** — Settings advanced + per-run `advanced` on the criteria_analysis
+  registry entry (`read_and_record` / `read_only` / `off`), forwarded as `configurable.tool_lessons_mode`
+  (backend `ToolKnowledgeConfiguration`).
+- 🟡 **[Stage 2] Tool telemetry UI** — a per-criterion "Data collection" timeline (collapsed by
+  default) + a run-level tool-execution summary (per-tool ok/failed/cached counts, click for
+  inputs/outputs/errors, charts where sensible via `parseTimeSeries` + `TimeSeriesChart`), reading
+  `state.values.tool_runs` (backend `ToolTelemetryMiddleware`). Deferred: live per-tool row streaming
+  (records currently land when each node finishes; mid-node liveness stays with `messages-tuple`).
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

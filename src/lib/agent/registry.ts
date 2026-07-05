@@ -183,6 +183,15 @@ export const AGENTS: AgentDef[] = [
       ...(v.market ? { market: v.market } : {}),
     }),
     resultRenderer: 'criteria',
+    advanced: [
+      {
+        key: 'tool_lessons_mode',
+        label: 'Tool lessons',
+        type: 'select',
+        options: ['read_and_record', 'read_only', 'off'],
+        hint: 'How agents use lessons learned from prior tool failures.',
+      },
+    ],
     stages: [
       { key: 'classify', label: 'Classify the stock', icon: 'thinking', done: (v) => has(v, 'classification'), active: /classif/i },
       { key: 'methodology', label: 'Pick a valuation methodology', icon: 'evaluation', done: (v) => has(v, 'valuation_methodology'), active: /valuation|methodolog/i },

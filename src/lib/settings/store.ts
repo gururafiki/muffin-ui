@@ -8,6 +8,12 @@ export type LlmProvider = 'openai' | 'anthropic' | 'openrouter';
 export type ResearchMode = '' | 'speed' | 'balanced' | 'quality';
 
 /**
+ * Tool-lessons policy (ToolKnowledgeConfiguration.tool_lessons_mode). Empty
+ * string = leave the server default (`read_and_record`) unchanged.
+ */
+export type ToolLessonsMode = '' | 'read_and_record' | 'read_only' | 'off';
+
+/**
  * User-owned configuration. Per the "bring your own keys" model, these live
  * on-device only and are injected into each run's `configurable` — never
  * persisted server-side by the client.
@@ -48,6 +54,8 @@ export interface Settings {
   reasonerModels: string;
   /** Cheap/fast model used to summarise tool failures into one-line lessons. */
   summariserModel: string;
+  /** How agents use lessons learned from prior tool failures (blank = server default). */
+  toolLessonsMode: ToolLessonsMode;
 
   // ── Advanced: MCP servers (McpConfiguration) ─────────────────────────
   openbbMcpUrl: string;
@@ -82,6 +90,7 @@ export const DEFAULT_SETTINGS: Settings = {
   collectorModels: '',
   reasonerModels: '',
   summariserModel: '',
+  toolLessonsMode: '',
   openbbMcpUrl: '',
   firecrawlMcpUrl: '',
   researchDefaultMode: '',

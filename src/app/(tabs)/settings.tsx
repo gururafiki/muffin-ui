@@ -9,10 +9,12 @@ import {
   useSettings,
   type LlmProvider,
   type ResearchMode,
+  type ToolLessonsMode,
 } from '@/lib/settings/store';
 
 const PROVIDERS: LlmProvider[] = ['openrouter', 'openai', 'anthropic'];
 const RESEARCH_MODES: Exclude<ResearchMode, ''>[] = ['speed', 'balanced', 'quality'];
+const TOOL_LESSONS_MODES: Exclude<ToolLessonsMode, ''>[] = ['read_and_record', 'read_only', 'off'];
 
 export default function SettingsScreen() {
   const settings = useSettings();
@@ -172,6 +174,19 @@ export default function SettingsScreen() {
             value={settings.temperature}
             onChangeText={(v) => update({ temperature: v })}
           />
+          <Text variant="label">Tool lessons</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {TOOL_LESSONS_MODES.map((m) => (
+              <Chip
+                key={m}
+                label={m.replace(/_/g, ' ')}
+                active={settings.toolLessonsMode === m}
+                onPress={() =>
+                  update({ toolLessonsMode: settings.toolLessonsMode === m ? '' : m })
+                }
+              />
+            ))}
+          </View>
         </Card>
 
         <Card tone="muted" className="mt-3 gap-3">
