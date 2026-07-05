@@ -15,7 +15,7 @@ import { useAgentStream } from '@/features/agent-chat/use-agent-stream';
 import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
 import type { AgentDef } from '@/lib/agent/registry';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
-import { CriteriaResult, ResearchResult, StructuredOutput, TradingResult, type Todo } from '@/lib/agent/renderers';
+import { collectToolRuns, CriteriaResult, ResearchResult, StructuredOutput, ToolRunsSummary, TradingResult, type Todo } from '@/lib/agent/renderers';
 import { buildPresetConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
 
@@ -242,6 +242,10 @@ export function AgentRunner({
         windowStart={threadRec?.created_at}
         windowEnd={busy ? undefined : threadRec?.updated_at}
       />
+
+      {/* Run-level tool-execution summary (opt-in telemetry): per-tool
+          success/fail/cached counts, drill down to inputs/outputs/errors. */}
+      <ToolRunsSummary runs={collectToolRuns(stream.values)} />
 
       {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
       <SubagentActivity runs={subagentRuns} />

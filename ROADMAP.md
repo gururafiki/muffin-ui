@@ -106,11 +106,15 @@ Fixes + features off deployed feedback on the Criteria Analysis page:
 - **`tool_lessons_mode` knob** — Settings advanced + per-run `advanced` on the criteria_analysis
   registry entry (`read_and_record` / `read_only` / `off`), forwarded as `configurable.tool_lessons_mode`
   (backend `ToolKnowledgeConfiguration`).
-- 🟡 **[Stage 2] Tool telemetry UI** — a per-criterion "Data collection" timeline (collapsed by
-  default) + a run-level tool-execution summary (per-tool ok/failed/cached counts, click for
-  inputs/outputs/errors, charts where sensible via `parseTimeSeries` + `TimeSeriesChart`), reading
-  `state.values.tool_runs` (backend `ToolTelemetryMiddleware`). Deferred: live per-tool row streaming
-  (records currently land when each node finishes; mid-node liveness stays with `messages-tuple`).
+- **Tool telemetry UI** — `renderers/tool-runs.tsx`: a per-criterion "Data collection" timeline
+  (collapsed) in `criteria-result.tsx` + a run-level `ToolRunsSummary` in the runner (per-tool
+  ok/failed/cached counts; tap a tool → its runs with inputs as `JsonBlock`, outputs via
+  `parseTimeSeries` → `TimeSeriesChart` when chartable else markdown, errors; a Failures roll-up).
+  Reads `state.values.tool_runs` (top-level stage records) + each `criterion_evaluations[i].tool_runs`
+  (backend `ToolTelemetryMiddleware`). Enabled by default for criteria_analysis via a `boolean`
+  advanced field (`tool_telemetry_enabled`, toggleable). Deferred: live per-tool row streaming
+  (records land when each node finishes; mid-node liveness stays with `messages-tuple`); per-tool
+  duration.
 
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
