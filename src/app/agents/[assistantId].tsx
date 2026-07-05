@@ -1,4 +1,5 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AgentRunner } from '@/components/agent-runner';
@@ -15,7 +16,17 @@ export default function AgentRunnerRoute() {
   const params = useLocalSearchParams<Record<string, string>>();
   const assistantId = params.assistantId;
   const agent = getAgent(assistantId);
-  const threadId = params.threadId || undefined;
+  // Pin the thread id this screen was OPENED with. When a fresh run starts,
+  // useAgentStream pushes the new thread id into the URL (onThreadId →
+  // router.setParams), which re-renders THIS mounted screen with params.threadId
+  // set. Re-gating useAttachStorage on that live param would flip the gate to
+  // `undefined` while its runs.list query loads → the streaming runner unmounts
+  // mid-run ("Checking for a live run…") and the user sees nothing until refresh.
+  // The mount-time value keeps the gate stable: a fresh page pins `undefined`
+  // (EMPTY_STORAGE, resolves instantly), while opening WITH a threadId (Calls tab
+  // / hard refresh) attaches to the live run exactly as before. Calls-tab
+  // navigation pushes a NEW screen instance, so the pin is always correct there.
+  const [threadId] = useState(() => params.threadId || undefined);
   // A saved preset run targets its own assistant_id (the route param stays the graph id).
   const presetId = params.preset || undefined;
 

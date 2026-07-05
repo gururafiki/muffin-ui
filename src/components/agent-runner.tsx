@@ -63,7 +63,16 @@ export function AgentRunner({
   /** Pre-seeded reconnect storage — attaches to a live run on this thread. */
   attachStorage?: RunMetadataStorage;
 }) {
-  const { stream, submitRun, liveNode } = useAgentStream(agent, { assistantId, threadId, attachStorage });
+  // `threadId` (the prop) is pinned at screen mount — undefined for a fresh run.
+  // `liveThreadId` follows the run: useAgentStream updates it via onThreadId when
+  // a new thread is created, so per-thread data hooks below attach to the live run
+  // without re-gating (and unmounting) the screen.
+  const {
+    stream,
+    submitRun,
+    liveNode,
+    threadId: liveThreadId,
+  } = useAgentStream(agent, { assistantId, threadId, attachStorage });
   const [edits, setEdits] = useState<Record<string, string>>(initialValues ?? {});
   const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
   const [presetName, setPresetName] = useState('');
@@ -92,11 +101,11 @@ export function AgentRunner({
   // Sub-agent internal timelines: captured deep-agent transcripts (parent state)
   // + native subgraph sub-agents (trading analysts) fetched from history.
   const captured = (stream.values as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
-  const native = useSubagentRuns(threadId).data;
+  const native = useSubagentRuns(liveThreadId).data;
   const subagentRuns: SubagentRun[] = [...(captured ? Object.values(captured) : []), ...(native ?? [])];
 
   // Thread record → the run's time window for the data-gathered panel.
-  const { data: threadRec } = useCall(threadId);
+  const { data: threadRec } = useCall(liveThreadId);
 
   const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced), inputs: values });
 
@@ -227,7 +236,7 @@ export function AgentRunner({
 
       {/* What was fetched from data providers during this run. */}
       <CollectedData
-        thread={threadId}
+        thread={liveThreadId}
         values={stream.values as Record<string, unknown> | undefined}
         busy={busy}
         windowStart={threadRec?.created_at}

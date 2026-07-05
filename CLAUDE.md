@@ -68,6 +68,15 @@ The whole app is organised around **"one graph → one screen"**:
   back to a blocking `client.runs.wait`.
 - **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
   json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
+- **Live-render gotcha (`agents/[assistantId].tsx` + `use-active-run.ts`):** the runner is gated on
+  `useAttachStorage(threadId)` (a `runs.list` lookup that reconnects to an in-flight run). **Pin the
+  gate's `threadId` at mount with a `useState` initializer — never read it live from
+  `useLocalSearchParams`.** When a fresh run starts, `useAgentStream.onThreadId` does
+  `router.setParams({ threadId })`, which re-renders the SAME mounted screen with the new param; if
+  the gate re-ran on that live param it would flip to `undefined` while its query loads and UNMOUNT
+  the streaming runner ("Checking for a live run…"), so nothing renders until a manual refresh.
+  Per-thread data hooks (`useSubagentRuns` / `useCall` / `CollectedData`) instead follow the LIVE id
+  returned by `useAgentStream` (`threadId: liveThreadId`). Same fix applied in `council-screen.tsx`.
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —
@@ -86,10 +95,11 @@ API keys / tokens / endpoints are stripped on upload AND restore). Native pulls
 ### Settings → `config.configurable` — `src/lib/settings/`
 On-device keys are injected into each run's `config.configurable`, never persisted server-side.
 **`configurable.ts` field names mirror `muffin-agent`'s `BaseConfiguration` subclasses
-(`ModelConfiguration` / `McpConfiguration` / `ResearchConfiguration` / `StoreConfiguration`:
-`llm_provider`, `model`, `openai_api_key`, `user_id`, `orchestrator_models`, `temperature`,
-`openbb_mcp_url`, `research_default_mode`, `store_allowed_namespaces`, …) — keep them in sync with
-the backend.** `buildConfigurable` only emits non-empty values (with `putNum` / `putList` for
+(`ModelConfiguration` / `McpConfiguration` / `ResearchConfiguration` / `StoreConfiguration` /
+`ToolKnowledgeConfiguration`: `llm_provider`, `model`, `openai_api_key`, `user_id`,
+`orchestrator_models`, `temperature`, `openbb_mcp_url`, `research_default_mode`,
+`tool_lessons_mode` (`read_and_record` / `read_only` / `off`), `store_allowed_namespaces`, …) —
+keep them in sync with the backend.** `buildConfigurable` only emits non-empty values (with `putNum` / `putList` for
 numeric / comma-list knobs); the "Advanced configuration" Settings section feeds these. The agents
 read every key at runtime via `from_runnable_config`, so a knob takes effect as soon as the UI
 sends it — no backend change needed. `buildPresetConfigurable` is the no-secrets subset (strips
@@ -144,3 +154,19 @@ localStorage (persistence).
   to `main` (ignoring `**/*.md`). The Dockerfile does `npx expo export` → nginx serving `dist/` with
   `/api/` proxied to `langgraph-api:8000` (`deploy/nginx.conf`: SSE buffering off, passes the
   `Cf-Access-Jwt-Assertion` header through to the agent auth hook).
+
+## Collaboration Preferences
+
+These rules govern how Claude approaches planning, implementation, and communication in this project.
+
+1. **Deep planning first** — Always do deep planning and trade-off evaluation before writing any code. Explore the solution space thoroughly before committing to an approach.
+
+2. **Prefer out-of-the-box solutions** — Before implementing custom logic, research available library features by reading internet documentation and/or library source code. Consider alternative options even if they are not an exact match to the ask. Surface interesting options proactively.
+
+3. **Propose options, don't decide** — When facing a design decision or when multiple approaches exist, present the options and ask for a decision rather than picking one unilaterally. Ask questions before writing substantial code if no existing library/utility has been found — the user may be able to provide documentation pointers.
+
+4. **Explicit approval before implementation** — Always ask for explicit approval before starting implementation. Never exit plan mode unless the user explicitly says to exit or switch mode.
+
+5. **Keep documentation up to date** — After every implementation, update README.md, docs/, roadmap.md, and any other relevant docs as applicable. Add VSCode launch configurations where reasonable. Always include documentation updates as the last step of implementation plans. When trade-offs or tech debt are accepted, document the limitations and add action items to roadmap.
+
+6. **Memorize lessons in CLAUDE.md** — If the user shares information that will be useful in future sessions (e.g. future roadmap tasks, corrections, disagreements, repeating feedback patterns, new constraints), record it in CLAUDE.md. When in plan mode, include the CLAUDE.md memory update as an explicit plan step.

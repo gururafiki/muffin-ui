@@ -51,6 +51,7 @@ export function buildConfigurable(settings: Settings): Record<string, unknown> {
   putList('collector_models', settings.collectorModels);
   putList('reasoner_models', settings.reasonerModels);
   put('summariser_model', settings.summariserModel);
+  put('tool_lessons_mode', settings.toolLessonsMode);
   put('openbb_mcp_url', settings.openbbMcpUrl);
   put('firecrawl_mcp_url', settings.firecrawlMcpUrl);
   put('research_default_mode', settings.researchDefaultMode);

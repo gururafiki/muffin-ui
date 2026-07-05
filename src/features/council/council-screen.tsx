@@ -77,13 +77,15 @@ export function CouncilScreen({
   const [selected, setSelected] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
 
-  const { stream, submitRun, liveNode } = useAgentStream(agent, { threadId, attachStorage });
+  // `threadId` (prop) is pinned at mount; `liveThreadId` follows a fresh run so
+  // per-thread hooks attach live without re-gating (see agent-runner + the route).
+  const { stream, submitRun, liveNode, threadId: liveThreadId } = useAgentStream(agent, { threadId, attachStorage });
   const values = stream.values as Record<string, unknown> | undefined;
   const busy = stream.isLoading;
   const signInRequired = useSignInRequiredToRun();
 
   // Prefill inputs from thread metadata (Calls reopen) or streamed state.
-  const { data: savedThread } = useCall(threadId);
+  const { data: savedThread } = useCall(liveThreadId);
   const savedInputs = savedThread ? threadInputs(savedThread) : undefined;
   const ticker = tickerEdit ?? savedInputs?.ticker ?? (values?.ticker as string | undefined) ?? '';
   const query = queryEdit ?? savedInputs?.query ?? '';
@@ -101,7 +103,7 @@ export function CouncilScreen({
   // Native sub-agent timelines (persisted subgraphs). Personas surface in the
   // arena / persona detail; any non-persona run is an added specialist
   // (valuation, news-sentiment, …) shown in its own panel.
-  const nativeRuns = useSubagentRuns(threadId).data;
+  const nativeRuns = useSubagentRuns(liveThreadId).data;
   const selRun = selected ? nativeRuns?.find((r) => normalizeSlug(r.name ?? '') === selected) : undefined;
   const personaSlugs = useMemo(() => new Set(COUNCIL_PERSONAS.map((p) => p.slug)), []);
   const specialistRuns = nativeRuns?.filter((r) => !personaSlugs.has(normalizeSlug(r.name ?? '')));
