@@ -77,7 +77,16 @@ export function useAgentStream(
     // (namespaced) chunks are routed to the SDK's subagent manager, not the
     // top-level conversation.
     streamMode: ['values', 'updates', 'messages-tuple'] as ('values' | 'updates' | 'messages-tuple')[],
-    streamSubgraphs: true as const,
+    // Subgraph streaming is safe ONLY for deepagents `task`-tool subagents
+    // (namespaces like `tools:<call_id>` — routed to the SDK's subagent
+    // manager). For graphs whose nodes are compiled agents (criteria stages,
+    // Send workers), the namespaces are `<node>:<id>`: the SDK does NOT
+    // recognise those as subagents and applies each subgraph's internal
+    // `values` event (just `{messages}`) onto the MAIN `stream.values`,
+    // clobbering the accumulating result mid-run (criteria appeared to
+    // "replace" each other and the scorecard blanked until the final root
+    // event). Such agents opt out via `registry.subgraphs: false`.
+    streamSubgraphs: (agent.subgraphs !== false) as true,
   });
 
   /** Start (or continue) a run with a shaped graph `input`. */
