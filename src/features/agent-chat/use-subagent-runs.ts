@@ -56,16 +56,29 @@ function toRun(name: string, values: Record<string, unknown>): SubagentRun {
 }
 
 /**
+ * Human label for one subgraph run. Send-fanned workers (e.g. the criteria
+ * `criterion_evaluation` workers) all share a node name — distinguish them by
+ * what they worked on (the criterion) instead of showing N identical rows.
+ */
+function labelFor(nodeName: string, values: Record<string, unknown>): string {
+  const criterion = values.criterion as { name?: string } | undefined;
+  if (criterion?.name) return `Criterion — ${criterion.name}`;
+  return nodeName.replace(/_/g, ' ');
+}
+
+/**
  * Retrieve the internal timelines of an agent's native sub-agents (graph nodes
- * that persist under checkpoint namespaces — trading analysts, council personas).
- * Walks the parent checkpoint history and pulls each sub-agent's subgraph state
- * via `getState(subgraphs)`, deduped by sub-agent, keeping the richest.
+ * that persist under checkpoint namespaces — trading analysts, council personas,
+ * criteria stages/workers). Walks the parent checkpoint history and pulls each
+ * sub-agent's subgraph state via `getState(subgraphs)`. Runs are keyed by the
+ * FULL first namespace segment (`<node>:<task-id>`), so N parallel Send workers
+ * stay distinct instead of collapsing into one entry.
  */
 export async function fetchSubagentRuns(threadId: string): Promise<SubagentRun[]> {
   const client = makeClient(getSettings());
   const history = (await client.threads.getHistory(threadId, { limit: 200 })) as unknown as LooseState[];
 
-  const byName = new Map<string, SubagentRun>();
+  const byTask = new Map<string, SubagentRun>();
   let calls = 0;
   for (const snap of history) {
     const hasNs = (snap.tasks ?? []).some((t) => t.checkpoint?.checkpoint_ns);
@@ -77,15 +90,16 @@ export async function fetchSubagentRuns(threadId: string): Promise<SubagentRun[]
     for (const t of full.tasks ?? []) {
       const values = t.state?.values;
       if (!values) continue;
-      const ns = (t.state?.checkpoint?.checkpoint_ns || t.checkpoint?.checkpoint_ns || t.name || '').split(':')[0];
-      const name = ns || t.name || 'sub-agent';
-      const run = toRun(name, values);
-      const prev = byName.get(name);
+      // First namespace segment is `<node>:<task-id>` — unique per Send worker.
+      const seg = (t.state?.checkpoint?.checkpoint_ns || t.checkpoint?.checkpoint_ns || t.name || '').split('|')[0];
+      const nodeName = seg.split(':')[0] || t.name || 'sub-agent';
+      const run = toRun(labelFor(nodeName, values), values);
+      const prev = byTask.get(seg);
       const richness = (r: SubagentRun) => (r.messages?.length ?? 0) * 100 + Object.keys(r.stateValues ?? {}).length;
-      if (!prev || richness(run) > richness(prev)) byName.set(name, run);
+      if (!prev || richness(run) > richness(prev)) byTask.set(seg, run);
     }
   }
-  return [...byName.values()];
+  return [...byTask.values()];
 }
 
 /** React-query hook for an agent's native sub-agent internal timelines. */

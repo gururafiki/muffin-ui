@@ -36,6 +36,31 @@ type Criterion = {
 const asStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).filter(Boolean) : [];
 
+/**
+ * Format backend `DataSource` entries (`{subagent, data_retrieved, period}`)
+ * as readable lines instead of raw-JSON chips. Plain strings pass through;
+ * unknown dict shapes fall back to their JSON.
+ */
+const asSourceLines = (v: unknown): string[] => {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => {
+      if (typeof x === 'string') return x;
+      if (x && typeof x === 'object') {
+        const d = x as Record<string, unknown>;
+        const subagent = typeof d.subagent === 'string' ? d.subagent : undefined;
+        const retrieved = typeof d.data_retrieved === 'string' ? d.data_retrieved : undefined;
+        const period = typeof d.period === 'string' && d.period.trim() ? ` (${d.period})` : '';
+        if (subagent || retrieved) {
+          return [subagent, retrieved].filter(Boolean).join(' — ') + period;
+        }
+        return JSON.stringify(x);
+      }
+      return '';
+    })
+    .filter(Boolean);
+};
+
 function DetailBlock({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <View className="gap-1">
@@ -63,7 +88,7 @@ function CriterionRow({
   const tone = toneForSignal(c.signal);
   const weightPct = typeof c.weight === 'number' ? Math.round(c.weight * 100) : undefined;
   const evidence = asStrings(c.evidence_summary);
-  const sources = asStrings(c.data_sources);
+  const sources = asSourceLines(c.data_sources);
   const limitations = asStrings(c.limitations);
   const validScore = typeof c.score === 'number' && c.score >= 0;
 
@@ -122,11 +147,24 @@ function CriterionRow({
 
           {sources.length > 0 ? (
             <DetailBlock label="Data sources">
-              <View className="flex-row flex-wrap gap-1.5">
-                {sources.map((s, i) => (
-                  <Chip key={i} label={s} />
-                ))}
-              </View>
+              {/* Short tags read best as chips; formatted `subagent — data
+                  (period)` lines read best as a list. */}
+              {sources.every((s) => s.length <= 28) ? (
+                <View className="flex-row flex-wrap gap-1.5">
+                  {sources.map((s, i) => (
+                    <Chip key={i} label={s} />
+                  ))}
+                </View>
+              ) : (
+                <View className="gap-1">
+                  {sources.map((s, i) => (
+                    <View key={i} className="flex-row gap-2">
+                      <Icon name="tools" size={13} color={palette.frosting[400]} />
+                      <Text variant="muted" className="flex-1 text-sm">{s}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </DetailBlock>
           ) : null}
 
@@ -176,11 +214,12 @@ function CriterionRow({
 /** Match a criterion to its evaluation sub-agent run (by name/description). */
 function transcriptFor(name: string | undefined, runs: SubagentRun[] | undefined): SubagentRun | undefined {
   if (!name || !runs?.length) return undefined;
-  const n = name.toLowerCase();
+  const n = name.trim().toLowerCase();
   return runs.find(
     (r) =>
       r.name?.toLowerCase().includes('criterion') &&
-      (r.description?.toLowerCase().includes(n) ||
+      (r.name?.toLowerCase().includes(n) ||
+        r.description?.toLowerCase().includes(n) ||
         (r.messages ?? []).some(
           (m) => typeof m.content === 'string' && (m.content as string).toLowerCase().includes(n),
         )),

@@ -68,11 +68,17 @@ The whole app is organised around **"one graph → one screen"**:
   back to a blocking `client.runs.wait`.
 - **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
   json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
-  `tool-runs.tsx` renders backend `ToolTelemetryMiddleware` output: `collectToolRuns(values)` gathers
+  `tool-runs.tsx` renders backend `AgentCaptureMiddleware` output: `collectToolRuns(values)` gathers
   top-level `tool_runs` + each `criterion_evaluations[i].tool_runs`; `ToolRunList` (collapsed rows →
   args/output/error) and `ToolRunsSummary` (per-tool ok/failed/cached counts) read `state.values`, so
-  live and post-refresh render identically. Enabled per-run via the `tool_telemetry_enabled` boolean
-  advanced field (default on for criteria_analysis).
+  live and post-refresh render identically. Capture is unconditional backend-side — a graph opts in
+  by declaring the `tool_runs` state channel; there is no per-run toggle.
+- **Subgraph-streaming gotcha (`registry.subgraphs` + `use-agent-stream.ts`):** the SDK only treats
+  deepagents `tools:<call_id>` namespaces as subagents. For graphs whose nodes are compiled agents
+  (`<node>:<id>` namespaces — criteria stages, Send workers), a streamed subgraph `values` event
+  (just `{messages}`) gets applied onto the MAIN `stream.values`, clobbering the accumulating result
+  mid-run (criteria appeared to replace each other until the final root event). Such agents set
+  `subgraphs: false` in the registry, which drops `streamSubgraphs` from the run options.
 - **Live-render gotcha (`agents/[assistantId].tsx` + `use-active-run.ts`):** the runner is gated on
   `useAttachStorage(threadId)` (a `runs.list` lookup that reconnects to an in-flight run). **Pin the
   gate's `threadId` at mount with a `useState` initializer — never read it live from
@@ -103,8 +109,7 @@ On-device keys are injected into each run's `config.configurable`, never persist
 (`ModelConfiguration` / `McpConfiguration` / `ResearchConfiguration` / `StoreConfiguration` /
 `ToolKnowledgeConfiguration`: `llm_provider`, `model`, `openai_api_key`, `user_id`,
 `orchestrator_models`, `temperature`, `openbb_mcp_url`, `research_default_mode`,
-`tool_lessons_mode` (`read_and_record` / `read_only` / `off`), `tool_telemetry_enabled` (per-run
-`boolean` advanced field, default-on for criteria_analysis), `store_allowed_namespaces`, …) —
+`tool_lessons_mode` (`read_and_record` / `read_only` / `off`), `store_allowed_namespaces`, …) —
 keep them in sync with the backend.** `buildConfigurable` only emits non-empty values (with `putNum` / `putList` for
 numeric / comma-list knobs); the "Advanced configuration" Settings section feeds these. The agents
 read every key at runtime via `from_runnable_config`, so a knob takes effect as soon as the UI
