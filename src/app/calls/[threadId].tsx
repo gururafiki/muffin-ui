@@ -9,14 +9,32 @@ import {
 } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
-import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
-import { isMessageArray, StructuredOutput } from '@/lib/agent/renderers';
-import type { Todo } from '@/lib/agent/renderers';
+import { CriterionDetails, isMessageArray, StructuredOutput, type Criterion, type Todo } from '@/lib/agent/renderers';
+
+/**
+ * Historical sub-agent rows straight from the thread's persisted values —
+ * captured deep-agent transcripts plus one row per criterion evaluation.
+ * Completed runs have no replayable event stream, so checkpointed state is
+ * the only (and cheap: one `threads.get`) source here.
+ */
+function historicalRuns(values: Record<string, unknown> | undefined): SubagentRun[] {
+  const captured = values?.subagent_runs as SubagentRuns | undefined;
+  const evals = Array.isArray(values?.criterion_evaluations)
+    ? (values.criterion_evaluations as Criterion[])
+    : [];
+  return [
+    ...(captured ? Object.values(captured) : []),
+    ...evals.map((c) => ({
+      name: c.criterion_name ? `Criterion — ${c.criterion_name}` : 'Criterion',
+      status: 'complete' as const,
+      renderDetail: () => <CriterionDetails c={c} />,
+    })),
+  ];
+}
 
 export default function CallDetailRoute() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
   const { data: thread, isLoading, isError, error } = useCall(threadId);
-  const nativeRuns = useSubagentRuns(threadId).data;
 
   const title = thread ? agentTitleForThread(thread) : 'Call';
 
@@ -50,23 +68,17 @@ export default function CallDetailRoute() {
 
           {(() => {
             const values = thread.values as
-              | { messages?: unknown; todos?: Todo[]; subagent_runs?: SubagentRuns }
+              | ({ messages?: unknown; todos?: Todo[]; subagent_runs?: SubagentRuns } & Record<string, unknown>)
               | undefined;
-            const activity: SubagentRun[] = [
-              ...(values?.subagent_runs ? Object.values(values.subagent_runs) : []),
-              ...(nativeRuns ?? []),
-            ];
+            const activity = historicalRuns(values);
             if (values && isMessageArray(values.messages)) {
               return (
-                <>
-                  <Conversation
-                    messages={values.messages}
-                    todos={values.todos}
-                    viewMode="summary"
-                    subagentRuns={values.subagent_runs}
-                  />
-                  {nativeRuns?.length ? <SubagentActivity runs={nativeRuns} /> : null}
-                </>
+                <Conversation
+                  messages={values.messages}
+                  todos={values.todos}
+                  viewMode="summary"
+                  subagentRuns={values.subagent_runs}
+                />
               );
             }
             if (values && Object.keys(values).length > 0) {

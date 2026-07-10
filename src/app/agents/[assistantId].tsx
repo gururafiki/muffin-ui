@@ -17,23 +17,19 @@ export default function AgentRunnerRoute() {
   const assistantId = params.assistantId;
   const agent = getAgent(assistantId);
   // Pin the thread id this screen was OPENED with. When a fresh run starts,
-  // useAgentStream pushes the new thread id into the URL (onThreadId →
+  // the stream hook pushes the new thread id into the URL (onThreadId →
   // router.setParams), which re-renders THIS mounted screen with params.threadId
-  // set. Re-gating useAttachStorage on that live param would flip the gate to
-  // `undefined` while its runs.list query loads → the streaming runner unmounts
-  // mid-run ("Checking for a live run…") and the user sees nothing until refresh.
-  // The mount-time value keeps the gate stable: a fresh page pins `undefined`
-  // (EMPTY_STORAGE, resolves instantly), while opening WITH a threadId (Calls tab
-  // / hard refresh) attaches to the live run exactly as before. Calls-tab
+  // set; the mount-time pin keeps the mounted stream stable. Calls-tab
   // navigation pushes a NEW screen instance, so the pin is always correct there.
   const [threadId] = useState(() => params.threadId || undefined);
   // A saved preset run targets its own assistant_id (the route param stays the graph id).
   const presetId = params.preset || undefined;
 
-  // Attach-to-running: resolve the thread's active run (if any) BEFORE mounting
-  // the stream, so reopening a busy thread keeps streaming instead of showing a
-  // stale snapshot. Resolves instantly when there's no threadId.
-  const attachStorage = useAttachStorage(threadId);
+  // Attach-to-running is a LEGACY-hook concern (chat only): resolve the
+  // thread's active run before mounting the stream so reopening a busy thread
+  // keeps streaming. The protocol-v2 screens (runner/council) rejoin the
+  // thread's event stream natively — no gate, no runs.list lookup.
+  const attachStorage = useAttachStorage(agent?.chat ? threadId : undefined);
 
   // Seed the runner from any field-shaped params (e.g. an "Analyse" deep link).
   const initialValues: Record<string, string> = {};
@@ -51,20 +47,19 @@ export default function AgentRunnerRoute() {
     );
   }
 
-  if (!attachStorage) {
-    return (
-      <Screen>
-        <Stack.Screen options={{ title: agent.title }} />
-        <View className="flex-1 items-center justify-center gap-3">
-          <ActivityIndicator size="large" color={palette.frosting[400]} />
-          <Text variant="muted">Checking for a live run…</Text>
-        </View>
-      </Screen>
-    );
-  }
-
   // Conversational agents own their layout (chat transcript + composer).
   if (agent.chat) {
+    if (!attachStorage) {
+      return (
+        <Screen>
+          <Stack.Screen options={{ title: agent.title }} />
+          <View className="flex-1 items-center justify-center gap-3">
+            <ActivityIndicator size="large" color={palette.frosting[400]} />
+            <Text variant="muted">Checking for a live run…</Text>
+          </View>
+        </Screen>
+      );
+    }
     // Pre-fill the composer when arriving from a stock/deep link.
     const initialPrompt =
       params.prompt ||
@@ -83,7 +78,7 @@ export default function AgentRunnerRoute() {
     <Screen>
       <Stack.Screen options={{ title: agent.title }} />
       {agent.custom === 'council' ? (
-        <CouncilScreen agent={agent} threadId={threadId} attachStorage={attachStorage} />
+        <CouncilScreen agent={agent} threadId={threadId} />
       ) : (
         <AgentRunner
           agent={agent}
@@ -91,7 +86,6 @@ export default function AgentRunnerRoute() {
           assistantId={presetId}
           initialValues={Object.keys(initialValues).length ? initialValues : undefined}
           autoStart={autoStart}
-          attachStorage={attachStorage}
         />
       )}
     </Screen>

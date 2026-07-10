@@ -10,9 +10,9 @@ import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/ru
 import { CollectedData } from '@/features/agent-chat/collected-data';
 import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
 import { RunProgress } from '@/features/agent-chat/run-progress';
-import type { RunMetadataStorage } from '@/features/agent-chat/use-active-run';
-import { useAgentStream } from '@/features/agent-chat/use-agent-stream';
-import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
+import { mergeLiveEvaluations, useCriterionEvents, useSubgraphRows } from '@/features/agent-chat/run-projections';
+import { SubgraphDetail } from '@/features/agent-chat/subgraph-detail';
+import { useRunStream } from '@/features/agent-chat/use-run-stream';
 import type { AgentDef } from '@/lib/agent/registry';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import { collectToolRuns, CriteriaResult, ResearchResult, StructuredOutput, ToolRunsSummary, TradingResult, type Todo } from '@/lib/agent/renderers';
@@ -40,10 +40,10 @@ function isNonEmpty(v: unknown): boolean {
 
 /**
  * Single-shot agent run screen (research / criteria / trading). Thread-scoped
- * via `useAgentStream`: hitting Run creates a thread and streams its `values`
- * into the URL, so a refresh resumes and reopening from Calls reuses this exact
- * screen. The result widget renders from `stream.values`, identically whether it
- * is streaming live or hydrated from history.
+ * via `useRunStream` (protocol v2): hitting Run creates a thread and pushes its
+ * id into the URL, a refresh rejoins the thread's event stream, and reopening
+ * from Calls hydrates the SAME projections from state — the result widget
+ * renders identically live and from history.
  */
 export function AgentRunner({
   agent,
@@ -51,7 +51,6 @@ export function AgentRunner({
   autoStart,
   threadId,
   assistantId,
-  attachStorage,
 }: {
   agent: AgentDef;
   initialValues?: Record<string, string>;
@@ -60,36 +59,34 @@ export function AgentRunner({
   threadId?: string;
   /** Run a saved preset assistant instead of the bare graph. */
   assistantId?: string;
-  /** Pre-seeded reconnect storage — attaches to a live run on this thread. */
-  attachStorage?: RunMetadataStorage;
 }) {
   // `threadId` (the prop) is pinned at screen mount — undefined for a fresh run.
-  // `liveThreadId` follows the run: useAgentStream updates it via onThreadId when
-  // a new thread is created, so per-thread data hooks below attach to the live run
-  // without re-gating (and unmounting) the screen.
-  const {
-    stream,
-    submitRun,
-    liveNode,
-    threadId: liveThreadId,
-  } = useAgentStream(agent, { assistantId, threadId, attachStorage });
+  // `liveThreadId` follows the run: useRunStream updates it via onThreadId when
+  // a new thread is created, so per-thread data hooks below follow the live run.
+  const { stream, submitRun, threadId: liveThreadId } = useRunStream(agent, { assistantId, threadId });
   const [edits, setEdits] = useState<Record<string, string>>(initialValues ?? {});
   const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
   const [presetName, setPresetName] = useState('');
   const createPreset = useCreatePreset();
 
   const busy = stream.isLoading;
-  const result = agent.resultKey ? (stream.values as Record<string, unknown> | undefined)?.[agent.resultKey] : stream.values;
+  // The values view: root state unioned with live `criterion_evaluated` custom
+  // events, so criteria rows/counters stream in ahead of the superstep barrier.
+  const { byName } = useCriterionEvents(stream);
+  const view = useMemo(
+    () => mergeLiveEvaluations(stream.values as Record<string, unknown>, byName),
+    [stream.values, byName],
+  );
+  const result = agent.resultKey ? view?.[agent.resultKey] : view;
   const hasResult = isNonEmpty(result);
 
   // Effective form values: the reopened run's inputs (from streamed state),
   // overridden by anything the user types.
   const savedInputs = useMemo(() => {
-    const v = stream.values as Record<string, unknown> | undefined;
     const out: Record<string, string> = {};
-    if (v) for (const f of agent.inputs) if (typeof v[f.key] === 'string') out[f.key] = v[f.key] as string;
+    for (const f of agent.inputs) if (typeof view?.[f.key] === 'string') out[f.key] = view[f.key] as string;
     return out;
-  }, [stream.values, agent.inputs]);
+  }, [view, agent.inputs]);
   const values = useMemo(() => ({ ...savedInputs, ...edits }), [savedInputs, edits]);
 
   const signInRequired = useSignInRequiredToRun();
@@ -98,11 +95,19 @@ export function AgentRunner({
     [agent.inputs, values],
   );
 
-  // Sub-agent internal timelines: captured deep-agent transcripts (parent state)
-  // + native subgraph sub-agents (trading analysts) fetched from history.
-  const captured = (stream.values as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
-  const native = useSubagentRuns(liveThreadId).data;
-  const subagentRuns: SubagentRun[] = [...(captured ? Object.values(captured) : []), ...(native ?? [])];
+  // Sub-agent rows: captured deep-agent transcripts (persisted state channel)
+  // + protocol-v2 discovered subgraph invocations (criteria stages/workers,
+  // trading analysts) with live statuses and scoped transcript detail.
+  const captured = (view as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
+  const discovered = useSubgraphRows(agent, stream as never);
+  const subagentRuns: SubagentRun[] = [
+    ...(captured ? Object.values(captured) : []),
+    ...discovered.map((row) => ({
+      name: row.label,
+      status: row.status,
+      renderDetail: () => <SubgraphDetail stream={stream} row={row} />,
+    })),
+  ];
 
   // Thread record → the run's time window for the data-gathered panel.
   const { data: threadRec } = useCall(liveThreadId);
@@ -213,13 +218,13 @@ export function AgentRunner({
         </Card>
       ) : null}
 
-      {/* Done / doing / next — the run's heartbeat while it streams. */}
+      {/* Done / doing / next — driven by subgraph discovery while it streams. */}
       <RunProgress
         agent={agent}
-        values={stream.values as Record<string, unknown> | undefined}
-        todos={(stream.values as { todos?: Todo[] } | undefined)?.todos}
-        liveNode={liveNode}
+        values={view}
+        todos={(view as { todos?: Todo[] } | undefined)?.todos}
         busy={busy}
+        byNode={stream.subgraphsByNode}
       />
 
       {/* Headline result — same widget live and from history. */}
@@ -237,15 +242,16 @@ export function AgentRunner({
       {/* What was fetched from data providers during this run. */}
       <CollectedData
         thread={liveThreadId}
-        values={stream.values as Record<string, unknown> | undefined}
+        values={view}
         busy={busy}
         windowStart={threadRec?.created_at}
         windowEnd={busy ? undefined : threadRec?.updated_at}
       />
 
-      {/* Run-level tool-execution summary (opt-in telemetry): per-tool
-          success/fail/cached counts, drill down to inputs/outputs/errors. */}
-      <ToolRunsSummary runs={collectToolRuns(stream.values)} />
+      {/* Run-level tool-execution summary: per-tool success/fail/cached counts,
+          drill down to inputs/outputs/errors. Grows live for criteria — the
+          merged view's evaluations carry each worker's tool_runs. */}
+      <ToolRunsSummary runs={collectToolRuns(view)} />
 
       {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
       <SubagentActivity runs={subagentRuns} />

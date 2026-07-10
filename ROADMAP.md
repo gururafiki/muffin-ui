@@ -125,6 +125,30 @@ Fixes + features off deployed feedback on the Criteria Analysis page:
   Send workers into one mislabelled row — `fetchSubagentRuns` now keys by `<node>:<task-id>` and
   labels criterion workers by their criterion.
 
+## ✅ Milestone 12 — Idiomatic LangGraph frontend: protocol-v2 run views (2026-07)
+Round-2 feedback on the criteria page (slow+empty sub-agents panel; no live criteria; wrong run
+plan; empty telemetry) root-caused to: the 15× `getState(subgraphs)` history walk (~28s/call on
+criteria threads — server-side, see umbrella todos), ALL parallel Send workers committing in ONE
+superstep (root `values` can never stream criteria incrementally), a stage recipe whose `done`
+predicate fired on `merged_criteria` (written BEFORE the fan-out), and prod evaluators making
+**zero tool calls** on a free OpenRouter route while fabricating `data_sources` (Langfuse: 0 TOOL
+spans; the telemetry UI was correctly showing nothing).
+
+Instead of layering more custom plumbing, the run-view screens moved to the **new
+`@langchain/react` `useStream` (Agent Streaming Protocol v2)** — `use-run-stream.ts` +
+`run-projections.ts` + `subgraph-detail.tsx`, consuming `subgraphsByNode` discovery (live node
+statuses; no regexes, no checkpoint walks — `use-subagent-runs.ts` deleted), the `custom` channel
+(backend `criterion_evaluated` events → criteria rows + a monotone `k/N` counter ahead of the
+barrier), scoped selectors for expanded live transcripts, and state hydration for history
+("events for live, state for history" — completed runs have no replayable stream, verified).
+Council arena reworked on discovery + depth-1 persona values folds (`council-live.ts`) — the
+`1/13` counter resets (subgraph-values clobber) are gone. Registry stage recipes fixed (real graph
+order, `node` hints, `expected` fn) and evaluations flagged by backend truthing render a
+**"no live data"** badge. Backend pair: muffin-agent #103 (`_reconcile_data_sources`
+anti-hallucination pass, `criterion_evaluated` writer event, prompt data-collection contracts).
+ChatScreen stays on the legacy hook (branching parity gap). Verified: tsc + web/iOS exports +
+headless smoke on a prod thread (plan order, 11 rows, badges, ZERO `/state/checkpoint` calls).
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
@@ -244,9 +268,26 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 - **M3:** persona-vs-persona debate transcript in the council screen (the reusable
   `multi-agent/debate.tsx` exists and drives the trading dashboard — wire it up); circular
   arena layout with connection lines.
-- **M4 ([backend-patch]):** emit structured progress via `stream_mode: "custom"` (e.g. explicit
-  data-collection success/failure events) for higher-fidelity UI; richer chart types
-  (candlesticks, multi-axis — `victory-native` if the SVG chart outgrows itself).
+- **M4 ([backend-patch]):** richer chart types (candlesticks, multi-axis — `victory-native` if the
+  SVG chart outgrows itself). ~~Custom-event structured progress~~ — per-criterion events shipped
+  (M12/muffin-agent #103); subgraph discovery covers stage structure.
+- **M12 follow-ups:**
+  - **Migrate ChatScreen to `@langchain/react`** once message branching / edit-fork / regenerate
+    lands upstream (the only reason the legacy `use-agent-stream.ts` + `use-active-run.ts` gate
+    survive) — then delete both and the `registry.subgraphs` flag.
+  - **Persona sub-stage fidelity:** the root pump is depth-1, so persona INNER-node lifecycle
+    (collect→compute→verdict) is inferred from persona values events (`council-live.ts`). A
+    backend stage-level custom event (muffin-agent roadmap) would make it exact; alternatively a
+    depth-2 lifecycle projection if the SDK exposes depth control.
+  - **Live per-run tool feed:** scoped `useToolCalls` renders per-worker tool calls in expanded
+    rows; a run-level LIVE union (across namespaces) needs either a depth-aware tools projection
+    or backend events — today the run-level summary grows as evaluations land (their `tool_runs`).
+  - **Pre-existing hydration warning:** React #418 (HTML hydration mismatch) fires on prod today on
+    call-detail routes (expo-router static export served as SPA fallback) — harmless but noisy;
+    investigate per-route HTML serving in `deploy/nginx.conf` vs `web.output: single`.
+  - **Sandbox/file browser** (deepagents frontend docs pattern): muffin runs OpenSandbox — a
+    thread-scoped file tree + diff viewer for `execute_python` / offloaded tool outputs would give
+    the run pages an IDE-like data pane. Needs a small backend file-listing endpoint.
 - **M8 [app]:** **shared research library** (browse/share/re-open public research; the
   `research_shares` table + RLS are already deployed — this is app-side work: a share
   action on completed research runs + a library screen rendering via `research-result`);

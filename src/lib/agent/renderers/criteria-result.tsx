@@ -18,7 +18,7 @@ const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
 
 type SubCriterion = { name?: string; criterion_name?: string; signal?: string; score?: number; reasoning?: string };
 
-type Criterion = {
+export type Criterion = {
   criterion_name?: string;
   signal?: string;
   score?: number;
@@ -31,7 +31,18 @@ type Criterion = {
   limitations?: unknown[];
   sub_criteria?: SubCriterion[];
   tool_runs?: ToolRun[];
+  /** Backend truthing flag: false = the worker made zero tool calls. */
+  data_collected?: boolean;
 };
+
+/**
+ * The evaluation collected no live data — either the backend truthing pass
+ * says so (`data_collected: false`, criteria runs after 2026-07), or, for
+ * older threads, there is no evidence of collection at all.
+ */
+const noLiveData = (c: Criterion): boolean =>
+  c.data_collected === false ||
+  (c.data_collected === undefined && !(c.data_sources?.length || c.tool_runs?.length));
 
 const asStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).filter(Boolean) : [];
@@ -71,11 +82,12 @@ function DetailBlock({ label, children }: { label: string; children: React.React
 }
 
 /**
- * One criterion, expandable to its full evaluation: evidence first, sources,
+ * The full evaluation body of one criterion: evidence first, sources,
  * sub-criteria, limitations, counterargument — the model's raw reasoning is
- * deliberately last and folded (it's frequently boilerplate).
+ * deliberately last and folded (it's frequently boilerplate). Shared between
+ * the scorecard rows and the sub-agents panel's worker detail.
  */
-function CriterionRow({
+export function CriterionDetails({
   c,
   transcript,
   renderTranscript,
@@ -84,33 +96,23 @@ function CriterionRow({
   transcript?: SubagentRun;
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
   const tone = toneForSignal(c.signal);
-  const weightPct = typeof c.weight === 'number' ? Math.round(c.weight * 100) : undefined;
   const evidence = asStrings(c.evidence_summary);
   const sources = asSourceLines(c.data_sources);
   const limitations = asStrings(c.limitations);
-  const validScore = typeof c.score === 'number' && c.score >= 0;
 
   return (
-    <View className="gap-1 border-b border-frosting-100 py-2 dark:border-night-border">
-      <Pressable onPress={() => setOpen((o) => !o)} className="gap-1.5 active:opacity-70">
-        <View className="flex-row items-center gap-2">
-          <View className="h-2.5 w-2.5 rounded-pill" style={{ backgroundColor: toneColor[tone] }} />
-          <Text variant="body" className="flex-1 text-sm">{c.criterion_name ?? 'Criterion'}</Text>
-          {weightPct != null ? <Text variant="muted" className="text-xs">{weightPct}%</Text> : null}
-          {c.signal ? <Badge label={c.signal.replace(/_/g, ' ')} tone={tone} /> : null}
-          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
-        </View>
-        {validScore ? (
-          <View className="pl-4 pr-8">
-            <ScoreBar value={c.score as number} max={10} signal={c.signal} />
-          </View>
-        ) : null}
-      </Pressable>
-
-      {open ? (
         <View className="gap-3 pl-4 pt-2">
+          {noLiveData(c) ? (
+            <View className="flex-row items-center gap-2">
+              <Icon name="thinking" size={14} color={palette.butter[600]} />
+              <Text variant="muted" className="flex-1 text-xs">
+                No live data was collected for this criterion — the score reflects model prior
+                knowledge only. Treat the cited figures with caution.
+              </Text>
+            </View>
+          ) : null}
+
           {typeof c.confidence === 'number' && c.confidence >= 0 ? (
             <ConfidenceBar value={c.confidence} tone={tone} />
           ) : null}
@@ -206,7 +208,43 @@ function CriterionRow({
             </Collapsible>
           ) : null}
         </View>
-      ) : null}
+  );
+}
+
+/** One criterion, expandable to its full evaluation (`CriterionDetails`). */
+function CriterionRow({
+  c,
+  transcript,
+  renderTranscript,
+}: {
+  c: Criterion;
+  transcript?: SubagentRun;
+  renderTranscript?: (run: SubagentRun) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const tone = toneForSignal(c.signal);
+  const weightPct = typeof c.weight === 'number' ? Math.round(c.weight * 100) : undefined;
+  const validScore = typeof c.score === 'number' && c.score >= 0;
+
+  return (
+    <View className="gap-1 border-b border-frosting-100 py-2 dark:border-night-border">
+      <Pressable onPress={() => setOpen((o) => !o)} className="gap-1.5 active:opacity-70">
+        <View className="flex-row items-center gap-2">
+          <View className="h-2.5 w-2.5 rounded-pill" style={{ backgroundColor: toneColor[tone] }} />
+          <Text variant="body" className="flex-1 text-sm">{c.criterion_name ?? 'Criterion'}</Text>
+          {noLiveData(c) ? <Badge label="no live data" tone="neutral" /> : null}
+          {weightPct != null ? <Text variant="muted" className="text-xs">{weightPct}%</Text> : null}
+          {c.signal ? <Badge label={c.signal.replace(/_/g, ' ')} tone={tone} /> : null}
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+        </View>
+        {validScore ? (
+          <View className="pl-4 pr-8">
+            <ScoreBar value={c.score as number} max={10} signal={c.signal} />
+          </View>
+        ) : null}
+      </Pressable>
+
+      {open ? <CriterionDetails c={c} transcript={transcript} renderTranscript={renderTranscript} /> : null}
     </View>
   );
 }

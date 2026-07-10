@@ -2,30 +2,39 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
+import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
+
 import { AdvancedOptions } from '@/components/advanced-options';
 import { Icon } from '@/components/icons';
 import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
-import { Conversation, SubagentActivity, SubagentStateDigest } from '@/features/agent-chat/conversation';
+import { SubagentActivity, SubagentStateDigest } from '@/features/agent-chat/conversation';
 import { RunProgress } from '@/features/agent-chat/run-progress';
-import type { RunMetadataStorage } from '@/features/agent-chat/use-active-run';
-import { useAgentStream, type LiveNode } from '@/features/agent-chat/use-agent-stream';
-import { useSubagentRuns } from '@/features/agent-chat/use-subagent-runs';
+import { useSubgraphRows } from '@/features/agent-chat/run-projections';
+import { SubgraphDetail } from '@/features/agent-chat/subgraph-detail';
+import { useRunStream } from '@/features/agent-chat/use-run-stream';
 import { palette } from '@/theme/colors';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { CouncilArena } from './council-arena';
+import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
 import { COUNCIL_PERSONAS, getPersonaMeta, normalizeSlug } from './personas';
-import { SUBNODE_STAGE, signalTone, type PersonaSignal, type PersonaStage, type VoteTally } from './types';
+import { signalTone, type PersonaSignal, type PersonaStage, type VoteTally } from './types';
 import { VoteBar } from './vote-bar';
 
-/** Derive every persona's arena view (stage/signal/tally) from streamed state. */
+/**
+ * Derive every persona's arena view (stage/signal/tally). Root
+ * `values.persona_signals` is authoritative (barrier / history); mid-run the
+ * per-persona live fold (namespaced values events) and subgraph-discovery
+ * statuses fill the gap — both are monotone, so seats never regress.
+ */
 function deriveCouncil(
   values: Record<string, unknown> | undefined,
-  liveNode: LiveNode | undefined,
+  live: Map<string, PersonaLive>,
+  byNode: ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]> | undefined,
   busy: boolean,
 ): {
   signals: Record<string, PersonaSignal>;
@@ -33,25 +42,32 @@ function deriveCouncil(
   synthesis: Record<string, unknown> | null;
   tally: VoteTally;
 } {
-  const list = (values?.persona_signals as PersonaSignal[] | undefined) ?? [];
   const signals: Record<string, PersonaSignal> = {};
-  const tally: VoteTally = { bullish: 0, bearish: 0, neutral: 0 };
-  for (const sig of list) {
+  for (const [slug, entry] of live) if (entry.signal) signals[slug] = entry.signal;
+  for (const sig of (values?.persona_signals as PersonaSignal[] | undefined) ?? []) {
     const slug = normalizeSlug(sig.agent_id);
-    if (!slug) continue;
-    signals[slug] = sig;
-    tally[signalTone(sig.signal)] += 1;
+    if (slug) signals[slug] = sig;
   }
+  const tally: VoteTally = { bullish: 0, bearish: 0, neutral: 0 };
+  for (const sig of Object.values(signals)) tally[signalTone(sig.signal)] += 1;
 
-  // The live node tells us which persona is on which internal step right now.
-  const liveSlug = liveNode ? normalizeSlug(liveNode.namespace[0]?.split(':')[0] ?? '') : '';
-  const liveStage: PersonaStage = (liveNode && SUBNODE_STAGE[liveNode.node]) || 'thinking';
+  const discovered = new Map<string, SubgraphDiscoverySnapshot>();
+  if (byNode) {
+    for (const [node, snaps] of byNode) {
+      const slug = normalizeSlug(node);
+      if (slug && snaps.length) discovered.set(slug, snaps[snaps.length - 1]);
+    }
+  }
 
   const stages = Object.fromEntries(
     COUNCIL_PERSONAS.map((p) => {
       if (signals[p.slug]) return [p.slug, 'done' as PersonaStage];
-      if (!busy) return [p.slug, 'pending' as PersonaStage];
-      return [p.slug, p.slug === liveSlug ? liveStage : ('thinking' as PersonaStage)];
+      const liveStage = live.get(p.slug)?.stage;
+      if (busy && liveStage) return [p.slug, liveStage];
+      const snap = discovered.get(p.slug);
+      if (snap?.status === 'running' && busy) return [p.slug, 'collecting' as PersonaStage];
+      if (snap && snap.status !== 'running') return [p.slug, 'done' as PersonaStage];
+      return [p.slug, busy ? ('thinking' as PersonaStage) : ('pending' as PersonaStage)];
     }),
   );
   const synthesis = (values?.council_synthesis as Record<string, unknown>) ?? null;
@@ -59,18 +75,16 @@ function deriveCouncil(
 }
 
 /**
- * The council chamber. Thread-scoped via `useAgentStream`: convening pushes the
+ * The council chamber. Thread-scoped via `useRunStream`: convening pushes the
  * thread into the URL, refreshing or reopening a live session drops you back
  * into the arena mid-deliberation, and history renders from the same state.
  */
 export function CouncilScreen({
   agent,
   threadId,
-  attachStorage,
 }: {
   agent: AgentDef;
   threadId?: string;
-  attachStorage?: RunMetadataStorage;
 }) {
   const [tickerEdit, setTicker] = useState<string | null>(null);
   const [queryEdit, setQuery] = useState<string | null>(null);
@@ -79,7 +93,7 @@ export function CouncilScreen({
 
   // `threadId` (prop) is pinned at mount; `liveThreadId` follows a fresh run so
   // per-thread hooks attach live without re-gating (see agent-runner + the route).
-  const { stream, submitRun, liveNode, threadId: liveThreadId } = useAgentStream(agent, { threadId, attachStorage });
+  const { stream, submitRun, threadId: liveThreadId } = useRunStream(agent, { threadId });
   const values = stream.values as Record<string, unknown> | undefined;
   const busy = stream.isLoading;
   const signInRequired = useSignInRequiredToRun();
@@ -90,9 +104,10 @@ export function CouncilScreen({
   const ticker = tickerEdit ?? savedInputs?.ticker ?? (values?.ticker as string | undefined) ?? '';
   const query = queryEdit ?? savedInputs?.query ?? '';
 
+  const live = useCouncilLive(stream);
   const { signals, stages, synthesis, tally } = useMemo(
-    () => deriveCouncil(values, liveNode, busy),
-    [values, liveNode, busy],
+    () => deriveCouncil(values, live, stream.subgraphsByNode, busy),
+    [values, live, stream.subgraphsByNode, busy],
   );
   const judging = busy && Object.keys(signals).length >= COUNCIL_PERSONAS.length && !synthesis;
 
@@ -100,13 +115,20 @@ export function CouncilScreen({
   const selSignal = selected ? signals[selected] : undefined;
   const selMeta = selected ? getPersonaMeta(selected) : undefined;
 
-  // Native sub-agent timelines (persisted subgraphs). Personas surface in the
-  // arena / persona detail; any non-persona run is an added specialist
-  // (valuation, news-sentiment, …) shown in its own panel.
-  const nativeRuns = useSubagentRuns(liveThreadId).data;
-  const selRun = selected ? nativeRuns?.find((r) => normalizeSlug(r.name ?? '') === selected) : undefined;
+  // Discovered subgraph rows. Personas surface in the arena / persona detail;
+  // any non-persona row is an added specialist (valuation, news-sentiment, …)
+  // shown in its own panel with a live scoped transcript.
+  const discovered = useSubgraphRows(agent, stream as never);
   const personaSlugs = useMemo(() => new Set(COUNCIL_PERSONAS.map((p) => p.slug)), []);
-  const specialistRuns = nativeRuns?.filter((r) => !personaSlugs.has(normalizeSlug(r.name ?? '')));
+  const selRow = selected ? discovered.find((r) => normalizeSlug(r.nodeName) === selected) : undefined;
+  const selLive = selected ? live.get(selected) : undefined;
+  const specialistRuns = discovered
+    .filter((r) => !personaSlugs.has(normalizeSlug(r.nodeName)) && r.nodeName !== 'council_judge')
+    .map((row) => ({
+      name: row.label,
+      status: row.status,
+      renderDetail: () => <SubgraphDetail stream={stream} row={row} />,
+    }));
 
   const convene = () => {
     setSelected(null);
@@ -174,7 +196,7 @@ export function CouncilScreen({
       ) : null}
 
       {busy ? (
-        <RunProgress agent={agent} values={values} liveNode={liveNode} busy={busy} />
+        <RunProgress agent={agent} values={values} busy={busy} byNode={stream.subgraphsByNode} />
       ) : null}
 
       {busy || totalVotes > 0 ? (
@@ -218,12 +240,12 @@ export function CouncilScreen({
         </Animated.View>
       ) : null}
 
-      {selected && (selRun?.stateValues || selRun?.messages?.length) ? (
+      {selected && (selRow || selLive?.values) ? (
         <Animated.View entering={FadeIn.duration(200)}>
           <Card tone="muted" className="gap-3">
             <Text variant="label">How {selMeta?.name ?? 'they'} worked</Text>
-            <SubagentStateDigest values={selRun.stateValues} />
-            {selRun.messages?.length ? <Conversation messages={selRun.messages} viewMode="verbose" /> : null}
+            <SubagentStateDigest values={selLive?.values} />
+            {selRow ? <SubgraphDetail stream={stream} row={selRow} /> : null}
           </Card>
         </Animated.View>
       ) : null}

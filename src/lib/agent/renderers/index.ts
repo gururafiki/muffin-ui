@@ -1,7 +1,7 @@
 export { TimeSeriesChart } from './chart';
 export { parseTimeSeries, type SeriesPoint, type TimeSeries } from './chart-data';
 export { CodeBlock } from './code-block';
-export { CriteriaResult } from './criteria-result';
+export { CriteriaResult, CriterionDetails, type Criterion } from './criteria-result';
 export { JsonBlock } from './json-block';
 export { Markdown } from './markdown';
 export {

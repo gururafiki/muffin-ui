@@ -63,31 +63,50 @@ The whole app is organised around **"one graph → one screen"**:
 - **`client.ts`** builds the `@langchain/langgraph-sdk` `Client`. `resolveApiUrl` resolves a
   relative `/api` to an absolute URL on web (the SDK builds every request with `new URL()`, which
   rejects relative bases).
-- **`use-agent-run.ts`** drives a run: streams `updates` (node-by-node timeline) + `values` (final
-  state); if streaming yields no events (platform without streaming fetch) it transparently falls
-  back to a blocking `client.runs.wait`.
+- **Two stream stacks (M12).** The RUN-VIEW screens (generic runner + council + calls detail) run on
+  **`@langchain/react` `useStream` (protocol v2)** via `features/agent-chat/use-run-stream.ts`;
+  **ChatScreen stays on the legacy `@langchain/langgraph-sdk/react` hook**
+  (`use-agent-stream.ts`) because message branching / edit-fork / regenerate has no protocol-v2
+  equivalent yet (revisit on `@langchain/react` releases). Don't mix them on one screen.
+- **Protocol v2 stack (`use-run-stream.ts` + `run-projections.ts` + `subgraph-detail.tsx`):**
+  - Server endpoints (`POST /threads/{id}/stream/events` + `/commands`) are served by langgraph-api
+    ≥0.10; channels: `values/updates/messages/tools/lifecycle/input/tasks` + `custom`.
+  - Root `values` is root-namespace only — **the old subgraph-values clobbering cannot happen**.
+    `stream.subgraphsByNode` auto-discovers compiled-agent node invocations (criteria stages, Send
+    workers, council personas, trading analysts) with live `running/complete/error` statuses — this
+    drives `RunProgress` (registry `StageDef.node`) and the sub-agents panel (`useSubgraphRows`).
+    Plain-function nodes (merge_criteria) are never discovered — their stages rely on `done(values)`.
+  - The root pump is ONE subscription (channels values/checkpoints/lifecycle/input/messages/tools,
+    namespace prefix `[]`, **depth 1**). `useChannel(stream, ['custom'])` opens one extra ref-counted
+    subscription (replay on) — that's where the backend's `criterion_evaluated` writer events arrive;
+    `run-projections.ts` folds them into the values view so criteria stream in ahead of the superstep
+    barrier. Depth-2 events (a persona's inner nodes) do NOT reach the root pump — council infers
+    persona sub-stages from its depth-1 values events instead (`council-live.ts`, `replay:false`
+    taps the root bus without a new connection). Scoped selectors (`useMessages(stream, target)`)
+    open one subscription per namespace — mount them lazily (expanded rows only), never one-per-seat.
+  - **Live vs history doctrine: events for live, state for history.** Completed runs have NO
+    replayable event stream (transient Redis buffer — verified); the hook hydrates from
+    `threads.getState` + history-seeded discovery. Backend capture channels (`subagent_runs`,
+    `tool_runs`) remain the durable record for historical detail — live rendering uses the native
+    channels instead. Mid-run refresh replays buffered events (seq/`since`).
 - **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
   json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
   `tool-runs.tsx` renders backend `AgentCaptureMiddleware` output: `collectToolRuns(values)` gathers
   top-level `tool_runs` + each `criterion_evaluations[i].tool_runs`; `ToolRunList` (collapsed rows →
-  args/output/error) and `ToolRunsSummary` (per-tool ok/failed/cached counts) read `state.values`, so
-  live and post-refresh render identically. Capture is unconditional backend-side — a graph opts in
-  by declaring the `tool_runs` state channel; there is no per-run toggle.
-- **Subgraph-streaming gotcha (`registry.subgraphs` + `use-agent-stream.ts`):** the SDK only treats
-  deepagents `tools:<call_id>` namespaces as subagents. For graphs whose nodes are compiled agents
-  (`<node>:<id>` namespaces — criteria stages, Send workers), a streamed subgraph `values` event
-  (just `{messages}`) gets applied onto the MAIN `stream.values`, clobbering the accumulating result
-  mid-run (criteria appeared to replace each other until the final root event). Such agents set
-  `subgraphs: false` in the registry, which drops `streamSubgraphs` from the run options.
-- **Live-render gotcha (`agents/[assistantId].tsx` + `use-active-run.ts`):** the runner is gated on
-  `useAttachStorage(threadId)` (a `runs.list` lookup that reconnects to an in-flight run). **Pin the
-  gate's `threadId` at mount with a `useState` initializer — never read it live from
-  `useLocalSearchParams`.** When a fresh run starts, `useAgentStream.onThreadId` does
-  `router.setParams({ threadId })`, which re-renders the SAME mounted screen with the new param; if
-  the gate re-ran on that live param it would flip to `undefined` while its query loads and UNMOUNT
-  the streaming runner ("Checking for a live run…"), so nothing renders until a manual refresh.
-  Per-thread data hooks (`useSubagentRuns` / `useCall` / `CollectedData`) instead follow the LIVE id
-  returned by `useAgentStream` (`threadId: liveThreadId`). Same fix applied in `council-screen.tsx`.
+  args/output/error) and `ToolRunsSummary` (per-tool ok/failed/cached counts) read the values view,
+  so live and post-refresh render identically. Capture is unconditional backend-side — a graph opts
+  in by declaring the `tool_runs` state channel. `criteria-result.tsx` badges evaluations whose
+  backend truthing flag says no tools ran (`data_collected: false` → "no live data").
+- **Legacy-hook gotchas (ChatScreen only):**
+  - *Subgraph-streaming clobber (`registry.subgraphs`):* the legacy SDK applies compiled-agent
+    subgraph `values` events (`<node>:<id>` namespaces) onto the MAIN `stream.values`; only
+    deepagents `tools:<call_id>` namespaces are exempt. Mid-run `stream.values` is therefore
+    unreliable for subgraphs-enabled graphs on the legacy hook.
+  - *Live-render gate (`agents/[assistantId].tsx` + `use-active-run.ts`):* the chat branch is gated
+    on `useAttachStorage(threadId)` (a `runs.list` lookup that reconnects to an in-flight run).
+    **Pin the gate's `threadId` at mount with a `useState` initializer** — a fresh run's
+    `router.setParams({ threadId })` re-renders the same mounted screen and a live-param gate would
+    unmount it mid-run. The protocol-v2 screens need no gate (thread stream rejoins natively).
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —

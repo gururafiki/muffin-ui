@@ -7,6 +7,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
+
 import { Icon } from '@/components/icons';
 import { Card, Collapsible, Text } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -17,23 +19,57 @@ import { palette } from '@/theme/colors';
 import type { LiveNode } from './use-agent-stream';
 
 type StageStatus = 'done' | 'active' | 'pending';
+type ByNode = ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
 
 interface StageRow {
   stage: StageDef;
   status: StageStatus;
   childrenRows: { key: string; label: string; done: boolean }[];
+  /** Resolved expected-children total (registry `expected`, else discovery). */
+  expected?: number;
 }
 
-/** Resolve each stage's done/active/pending from state + the live node. */
-function resolveStages(stages: StageDef[], values: Record<string, unknown>, liveNode: LiveNode | undefined, busy: boolean): StageRow[] {
+/** Discovery snapshots belonging to a stage: exact `node`, else `active` regex. */
+function stageSnaps(stage: StageDef, byNode: ByNode | undefined): readonly SubgraphDiscoverySnapshot[] {
+  if (!byNode) return [];
+  if (stage.node) return byNode.get(stage.node) ?? [];
+  if (!stage.active) return [];
+  const out: SubgraphDiscoverySnapshot[] = [];
+  for (const [node, snaps] of byNode) if (stage.active.test(node)) out.push(...snaps);
+  return out;
+}
+
+/**
+ * Resolve each stage's done/active/pending. Primary source on the protocol-v2
+ * stack is subgraph discovery (`byNode`: live per-node statuses); `done(values)`
+ * stays authoritative for plain-function nodes that are never discovered, and
+ * the legacy `liveNode` probe keeps the chat screen working on the old hook.
+ */
+function resolveStages(
+  stages: StageDef[],
+  values: Record<string, unknown>,
+  liveNode: LiveNode | undefined,
+  busy: boolean,
+  byNode?: ByNode,
+): StageRow[] {
   const probe = liveNode ? [liveNode.node, ...liveNode.namespace].join(' ') : '';
-  const rows: StageRow[] = stages.map((stage) => ({
-    stage,
-    status: stage.done(values) ? 'done' : 'pending',
-    childrenRows: stage.children?.(values) ?? [],
-  }));
-  if (busy) {
-    // Prefer the stage whose pattern matches what's streaming right now…
+  const rows: StageRow[] = stages.map((stage) => {
+    const snaps = stageSnaps(stage, byNode);
+    const running = busy && snaps.some((s) => s.status === 'running');
+    const doneByState = stage.done(values);
+    // All discovered invocations finished → outputs land at the superstep
+    // barrier momentarily; show the stage as done rather than regressing.
+    const doneBySnaps = snaps.length > 0 && snaps.every((s) => s.status !== 'running');
+    const expectedRaw = typeof stage.expected === 'function' ? stage.expected(values) : stage.expected;
+    return {
+      stage,
+      status: running ? 'active' : doneByState || doneBySnaps ? 'done' : 'pending',
+      childrenRows: stage.children?.(values) ?? [],
+      expected: expectedRaw ?? (snaps.length > 0 ? snaps.length : undefined),
+    };
+  });
+  if (busy && !rows.some((r) => r.status === 'active')) {
+    // No discovery signal (legacy hook / warm-up) — probe the live node…
     let activeIdx = rows.findIndex((r) => r.status !== 'done' && r.stage.active?.test(probe));
     // …otherwise light up the first stage that isn't finished.
     if (activeIdx < 0) activeIdx = rows.findIndex((r) => r.status !== 'done');
@@ -76,11 +112,15 @@ function StageChecklist({ rows }: { rows: StageRow[] }) {
               )}>
               {r.stage.label}
             </Text>
-            {r.stage.expected || r.childrenRows.length > 0 ? (
+            {/* Bare total until children arrive (a `0/N` would mislead while
+                parallel workers sit behind the superstep barrier), then k/N. */}
+            {r.childrenRows.length > 0 ? (
               <Text variant="muted" className="text-xs">
                 {r.childrenRows.filter((c) => c.done).length}
-                {r.stage.expected ? `/${r.stage.expected}` : ''}
+                {r.expected ? `/${r.expected}` : ''}
               </Text>
+            ) : r.expected ? (
+              <Text variant="muted" className="text-xs">{r.expected}</Text>
             ) : null}
           </View>
           {/* Children shown only while their stage is live — calm once finished. */}
@@ -116,15 +156,19 @@ export function RunProgress({
   todos,
   liveNode,
   busy,
+  byNode,
 }: {
   agent: AgentDef;
   values: Record<string, unknown> | undefined;
   todos?: Todo[];
+  /** Legacy-hook live node probe (chat screen). */
   liveNode?: LiveNode;
   busy: boolean;
+  /** Protocol-v2 subgraph discovery (`stream.subgraphsByNode`). */
+  byNode?: ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
 }) {
   const v = values ?? {};
-  const stageRows = agent.stages ? resolveStages(agent.stages, v, liveNode, busy) : [];
+  const stageRows = agent.stages ? resolveStages(agent.stages, v, liveNode, busy, byNode) : [];
   const hasTodos = isTodoList(todos);
   const doneCount = stageRows.filter((r) => r.status === 'done').length;
 

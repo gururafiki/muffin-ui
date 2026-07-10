@@ -57,12 +57,28 @@ export interface StageDef {
   label: string;
   icon?: IconName;
   done: (values: Record<string, unknown>) => boolean;
-  /** Matches node names / subgraph namespaces that belong to this stage. */
+  /**
+   * Matches node names that belong to this stage. Used (a) by the legacy
+   * hook's liveNode probe (chat screen) and (b) as the discovery fallback
+   * when `node` is unset — protocol-v2 subgraph snapshots whose node name
+   * matches count towards this stage's status.
+   */
   active?: RegExp;
+  /**
+   * Graph node whose subgraph-discovery snapshots drive this stage's
+   * status/progress on the protocol-v2 stack (exact `addNode` name).
+   * Plain-function nodes (e.g. merge_criteria) are never discovered —
+   * leave unset and rely on `done(values)`.
+   */
+  node?: string;
   /** Dynamic sub-rows derived from state (criteria, persona votes, …). */
   children?: (values: Record<string, unknown>) => StageChild[];
-  /** Expected number of children (shows "3/13" while they come in). */
-  expected?: number;
+  /**
+   * Expected number of children. A function reads streamed state (e.g.
+   * `merged_criteria.length`). Shown as a bare total until children start
+   * arriving, then as a `k/N` fraction.
+   */
+  expected?: number | ((values: Record<string, unknown>) => number | undefined);
 }
 
 export interface AgentDef {
@@ -191,8 +207,9 @@ export const AGENTS: AgentDef[] = [
       ...(v.market ? { market: v.market } : {}),
     }),
     resultRenderer: 'criteria',
-    // Stage nodes are compiled agents (`<node>:<id>` namespaces) — subgraph
-    // streaming would clobber `stream.values` mid-run (see AgentDef.subgraphs).
+    // Legacy-hook flag only (see AgentDef.subgraphs). The runner now streams
+    // this graph via protocol v2 (`useRunStream`), where root `values` is
+    // never clobbered and workers surface through subgraph discovery.
     subgraphs: false,
     advanced: [
       // NB: tool-execution capture is unconditional backend-side (the graph
@@ -205,23 +222,35 @@ export const AGENTS: AgentDef[] = [
         hint: 'How agents use lessons learned from prior tool failures.',
       },
     ],
+    // Stage order mirrors the real graph: classify → (define ∥ methodology) →
+    // merge → evaluate (Send fan-out) → synthesis. `merged_criteria` is written
+    // BEFORE the fan-out, so it marks the merge stage — never the evaluate one
+    // (the old predicate skipped straight to "Synthesise the verdict" while
+    // workers were still running).
     stages: [
-      { key: 'classify', label: 'Classify the stock', icon: 'thinking', done: (v) => has(v, 'classification'), active: /classif/i },
-      { key: 'methodology', label: 'Pick a valuation methodology', icon: 'evaluation', done: (v) => has(v, 'valuation_methodology'), active: /valuation|methodolog/i },
-      { key: 'define', label: 'Define the criteria', icon: 'criteria', done: (v) => has(v, 'criteria_definition'), active: /criteria_definition|define/i },
+      { key: 'classify', label: 'Classify the stock', icon: 'thinking', node: 'ticker_classification', done: (v) => has(v, 'classification'), active: /classif/i },
+      { key: 'define', label: 'Define the criteria', icon: 'criteria', node: 'criteria_definition', done: (v) => has(v, 'criteria_definition'), active: /criteria_definition|define/i },
+      { key: 'methodology', label: 'Pick a valuation methodology', icon: 'evaluation', node: 'valuation_methodology', done: (v) => has(v, 'valuation_methodology'), active: /valuation|methodolog/i },
+      { key: 'merge', label: 'Merge the scorecard', icon: 'files', done: (v) => has(v, 'merged_criteria'), active: /merge/i },
       {
         key: 'evaluate',
         label: 'Evaluate each criterion',
         icon: 'agents',
-        done: (v) => has(v, 'merged_criteria'),
+        node: 'criterion_evaluation',
+        done: (v) => {
+          if (has(v, 'synthesis')) return true;
+          const merged = v.merged_criteria as unknown[] | undefined;
+          const evals = v.criterion_evaluations as unknown[] | undefined;
+          return !!merged?.length && (evals?.length ?? 0) >= merged.length;
+        },
         active: /criterion|evaluat/i,
+        expected: (v) => (v.merged_criteria as unknown[] | undefined)?.length,
         children: (v) => {
           const evals = (v.criterion_evaluations as { criterion_name?: string }[] | undefined) ?? [];
           return evals.map((c, i) => ({ key: c.criterion_name ?? String(i), label: c.criterion_name ?? `Criterion ${i + 1}`, done: true }));
         },
       },
-      { key: 'merge', label: 'Merge the scorecard', icon: 'files', done: (v) => has(v, 'merged_criteria'), active: /merge/i },
-      { key: 'synthesis', label: 'Synthesise the verdict', icon: 'sparkle', done: (v) => has(v, 'synthesis'), active: /synth/i },
+      { key: 'synthesis', label: 'Synthesise the verdict', icon: 'sparkle', node: 'synthesis', done: (v) => has(v, 'synthesis'), active: /synth/i },
     ],
   },
   {

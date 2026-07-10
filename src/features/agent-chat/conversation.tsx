@@ -37,13 +37,18 @@ type Step =
   | { kind: 'tool'; id: string; call: ToolCall; result?: AnyMessage; error?: boolean };
 type Turn = { human?: AnyMessage; steps: Step[]; answer?: AnyMessage };
 
-/** One captured sub-agent run (backend `subagent_runs` state channel). */
+/** One sub-agent run row: a captured transcript (backend `subagent_runs`
+ * state channel) and/or a protocol-v2 discovered subgraph invocation. */
 export type SubagentRun = {
   name?: string;
   description?: string;
   messages?: AnyMessage[];
   /** Full subgraph state (native sub-agents) — powers stage-oriented detail. */
   stateValues?: Record<string, unknown>;
+  /** Live discovery status (protocol-v2 subgraph snapshots). */
+  status?: 'running' | 'complete' | 'error';
+  /** Caller-provided expanded content (scoped live transcript / evaluation). */
+  renderDetail?: () => React.ReactNode;
 };
 export type SubagentRuns = Record<string, SubagentRun>;
 
@@ -483,7 +488,11 @@ function runPreview(run: SubagentRun): string | undefined {
  */
 export function SubagentActivity({ runs }: { runs?: SubagentRun[] }) {
   const list = (runs ?? []).filter(
-    (r) => (r.messages?.length ?? 0) > 0 || Object.keys(r.stateValues ?? {}).length > 0,
+    (r) =>
+      (r.messages?.length ?? 0) > 0 ||
+      Object.keys(r.stateValues ?? {}).length > 0 ||
+      r.renderDetail != null ||
+      r.status != null,
   );
   if (list.length === 0) return null;
 
@@ -552,6 +561,9 @@ function SubAgentRunRow({ run, last }: { run: SubagentRun; last: boolean }) {
   const label = titleCase(run.name || 'sub-agent');
   const preview = runPreview(run);
   const steps = run.messages?.length ?? 0;
+  // Never open into an empty container: without detail the row is inert.
+  const expandable =
+    run.renderDetail != null || (run.messages?.length ?? 0) > 0 || Object.keys(run.stateValues ?? {}).length > 0 || !!run.description;
 
   return (
     <View className="flex-row gap-3">
@@ -561,11 +573,17 @@ function SubAgentRunRow({ run, last }: { run: SubagentRun; last: boolean }) {
           <Avatar name={label} size={32} />
         </View>
       </View>
-      <Pressable onPress={() => setOpen((o) => !o)} className="flex-1 border-b border-frosting-100 py-2 active:opacity-70 dark:border-night-border">
+      <Pressable
+        onPress={expandable ? () => setOpen((o) => !o) : undefined}
+        className="flex-1 border-b border-frosting-100 py-2 active:opacity-70 dark:border-night-border">
         <View className="flex-row items-center gap-2">
           <Text variant="body" className="flex-1 text-sm font-heading">{label}</Text>
+          {run.status === 'running' ? <ActivityIndicator size="small" color={palette.butter[500]} /> : null}
+          {run.status === 'error' ? <Badge label="error" tone="bearish" /> : null}
           {steps > 1 ? <Text variant="muted" className="text-xs">{steps} steps</Text> : null}
-          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+          {expandable ? (
+            <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
+          ) : null}
         </View>
         {!open && preview ? (
           <Text variant="muted" className="mt-0.5 text-xs" numberOfLines={2}>{preview}</Text>
@@ -578,6 +596,7 @@ function SubAgentRunRow({ run, last }: { run: SubagentRun; last: boolean }) {
                 <Text variant="muted" className="text-xs">{run.description}</Text>
               </View>
             ) : null}
+            {run.renderDetail?.()}
             <SubagentStateDigest values={run.stateValues} />
             {run.messages?.length ? <Conversation messages={run.messages} viewMode="verbose" /> : null}
           </View>
