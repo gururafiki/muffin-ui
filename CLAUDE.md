@@ -112,6 +112,18 @@ The whole app is organised around **"one graph → one screen"**:
   so live and post-refresh render identically. Capture is unconditional backend-side — a graph opts
   in by declaring the `tool_runs` state channel. `criteria-result.tsx` badges evaluations whose
   backend truthing flag says no tools ran (`data_collected: false` → "no live data").
+  **Cache join (folds in the former "Data gathered" panel):** `tool-runs.tsx` rows expand to the FULL
+  gathered payload — `lib/agent/tool-cache.tsx`'s `ToolCacheProvider` (mounted in `agent-runner.tsx`)
+  fetches the run's provider-call cache (`store.searchItems(['cache'])`, polls 10s while busy) and
+  exposes `useToolCache()`, an exact `(tool, args_hash) → CachedItem` lookup (the store KEY *is*
+  `get_args_hash(args)`, so it equals the backend `tool_runs.args_hash` — no client rehashing, no
+  cross-run bleed). A matched row shows size + `cachedAt` in its header and runs the full content
+  through the chart / JSON / markdown renderers (the capped `output_preview` never parsed as a chart);
+  unmatched rows (errors, non-cacheable tools, `task` delegations, or runs predating `args_hash`) fall
+  back to previews. Rows outside the provider (subgraph-detail live view) get no join → preview-only.
+  The old `collected-data.tsx` / `CollectedData` panel and its ±60s time-window heuristic were removed.
+  Limitation: the `searchItems(['cache'], { limit: 100 })` cap can miss a payload in a very large
+  global cache → that row degrades to preview (ROADMAP: switch to targeted `store.getItem` per key).
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —
