@@ -149,6 +149,22 @@ anti-hallucination pass, `criterion_evaluated` writer event, prompt data-collect
 ChatScreen stays on the legacy hook (branching parity gap). Verified: tsc + web/iOS exports +
 headless smoke on a prod thread (plan order, 11 rows, badges, ZERO `/state/checkpoint` calls).
 
+## ✅ Milestone 13 — Merge "Data gathered" into "Tool execution" (2026-07)
+Collapsed the two redundant run-view panels into one. "Tool execution" (`tool-runs.tsx`,
+run-exact + history-safe) is kept; the former "Data gathered" (`collected-data.tsx`, full payloads
+but a fuzzy ±60s cache-window heuristic) is deleted, its provenance features folded in. New
+`lib/agent/tool-cache.tsx` `ToolCacheProvider`/`useToolCache` joins each `tool_run` to its cached
+payload by exact `(tool, args_hash)` — the store KEY *is* `get_args_hash(args)`, so it equals the new
+backend `tool_runs.args_hash` field (muffin-agent `records.py`) with no client rehashing and no
+cross-run bleed. Matched rows show size + `cachedAt` and render the FULL content through the chart /
+JSON / markdown pipeline (the capped `output_preview` never parsed as a chart); unmatched rows fall
+back to previews. Verified: backend unit test (`args_hash == get_args_hash(args)`), tsc + web export
++ headless boot smoke (runner mounts, ZERO worklet errors). **E2E chart-from-cache deferred to
+post-deploy** — requires the backend `args_hash` field live (additive; UI tolerates its absence).
+**Deferred:** the `searchItems(['cache'], { limit: 100 })` cap can miss a payload in a very large
+global cache → that row degrades to preview; switch to targeted `store.getItem(['cache', tool], hash)`
+per unique key if it bites.
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

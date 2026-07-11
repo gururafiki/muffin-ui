@@ -4,10 +4,8 @@ import { ActivityIndicator, View } from 'react-native';
 import { AdvancedOptions } from '@/components/advanced-options';
 import { Badge, Button, Card, Collapsible, Field, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
-import { useCall } from '@/features/agent-calls/use-calls';
 import { useCreatePreset } from '@/features/presets/use-presets';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
-import { CollectedData } from '@/features/agent-chat/collected-data';
 import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
 import { RunProgress } from '@/features/agent-chat/run-progress';
 import { mergeLiveEvaluations, useCriterionEvents, useSubgraphRows } from '@/features/agent-chat/run-projections';
@@ -16,6 +14,7 @@ import { useRunStream } from '@/features/agent-chat/use-run-stream';
 import type { AgentDef } from '@/lib/agent/registry';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import { collectToolRuns, CriteriaResult, ResearchResult, StructuredOutput, ToolRunsSummary, TradingResult, type Todo } from '@/lib/agent/renderers';
+import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { buildPresetConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
 
@@ -109,9 +108,6 @@ export function AgentRunner({
     })),
   ];
 
-  // Thread record → the run's time window for the data-gathered panel.
-  const { data: threadRec } = useCall(liveThreadId);
-
   const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced), inputs: values });
 
   // Deep-link autostart ("Analyse" from a stock) — only for a fresh thread and
@@ -126,7 +122,8 @@ export function AgentRunner({
   }, [autoStart, canRun, threadId, signInRequired]);
 
   return (
-    <View className="gap-4">
+    <ToolCacheProvider thread={liveThreadId} busy={busy}>
+      <View className="gap-4">
       {/* Inputs — collapsed once there is a result so the output leads. */}
       <Collapsible
         title={agent.title}
@@ -239,22 +236,17 @@ export function AgentRunner({
         )
       ) : null}
 
-      {/* What was fetched from data providers during this run. */}
-      <CollectedData
-        thread={liveThreadId}
-        values={view}
-        busy={busy}
-        windowStart={threadRec?.created_at}
-        windowEnd={busy ? undefined : threadRec?.updated_at}
-      />
-
-      {/* Run-level tool-execution summary: per-tool success/fail/cached counts,
-          drill down to inputs/outputs/errors. Grows live for criteria — the
-          merged view's evaluations carry each worker's tool_runs. */}
+      {/* Run-level tool execution: per-tool success/fail/cached counts, drill
+          down to each call's inputs/outputs/errors. Rows join the provider-call
+          cache (ToolCacheProvider) to show the full gathered payload + size +
+          timestamp on expand — this folds in the former "Data gathered" panel.
+          Grows live for criteria — the merged view's evaluations carry each
+          worker's tool_runs. */}
       <ToolRunsSummary runs={collectToolRuns(view)} />
 
       {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
       <SubagentActivity runs={subagentRuns} />
-    </View>
+      </View>
+    </ToolCacheProvider>
   );
 }

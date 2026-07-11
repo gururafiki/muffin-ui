@@ -4,6 +4,8 @@ import { Pressable, View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { Badge, Card, Collapsible, Text } from '@/components/ui';
 import type { Signal } from '@/components/ui/badge';
+import { relativeTime } from '@/features/agent-calls/threads';
+import { fmtSize, safeParse, summariseArgs, useToolCache } from '@/lib/agent/tool-cache';
 import { palette } from '@/theme/colors';
 import { TimeSeriesChart } from './chart';
 import { parseTimeSeries } from './chart-data';
@@ -23,6 +25,9 @@ export type ToolRun = {
   args_preview?: string;
   output_preview?: string;
   error?: string | null;
+  /** Store key of the cached payload (`get_args_hash(args)`) — joins a row to
+   * its full `["cache", tool]` entry for on-expand payload/size/timestamp. */
+  args_hash?: string | null;
 };
 
 type Dict = Record<string, unknown>;
@@ -60,12 +65,29 @@ function tryParse(text?: string): unknown {
   }
 }
 
-/** One expandable tool-run row: header line → args, output, error on tap. */
+/**
+ * One expandable tool-run row: header line → args, output, error on tap.
+ *
+ * When the row joins to its cached payload (`useToolCache` by `args_hash`) it
+ * shows the FULL data the run gathered — size + timestamp in the header, and the
+ * complete content run through the chart / JSON / markdown renderers on expand
+ * (the capped `output_preview` never parsed as a chart). Rows with no cache
+ * entry — errors, non-cacheable tools, `task` delegations, or historical runs
+ * predating `args_hash` — fall back to the previews. This folds the former
+ * "Data gathered" panel into "Tool execution".
+ */
 function ToolRunRow({ run }: { run: ToolRun }) {
   const [open, setOpen] = useState(false);
+  const hit = useToolCache()(run.tool ?? undefined, run.args_hash ?? undefined);
   const tone = statusTone(run.status);
-  const parsedArgs = tryParse(run.args_preview);
-  const series = run.status === 'ok' ? parseTimeSeries(run.output_preview) : undefined;
+
+  // Prefer the full cached args/payload; fall back to the capped previews.
+  const parsedArgs = hit ? hit.args : tryParse(run.args_preview);
+  const body = (hit?.text ?? '').trim();
+  const bodyJson = body.startsWith('{') || body.startsWith('[') ? safeParse(body) : undefined;
+  const outputSource = hit ? body : run.status === 'ok' ? run.output_preview : undefined;
+  const series = open ? parseTimeSeries(outputSource) : undefined;
+  const argsLine = hit ? summariseArgs(hit.args) : '';
 
   return (
     <View className="border-b border-frosting-100 py-1.5 dark:border-night-border">
@@ -74,14 +96,22 @@ function ToolRunRow({ run }: { run: ToolRun }) {
         <Text variant="body" className="flex-1 text-sm">
           {run.is_subagent_call && run.tool === 'task' ? 'delegated to subagent' : run.tool ?? 'tool'}
         </Text>
+        {hit?.size ? <Text variant="muted" className="text-xs">{fmtSize(hit.size)}</Text> : null}
+        {hit?.cachedAt ? <Text variant="muted" className="text-xs">{relativeTime(hit.cachedAt)}</Text> : null}
         {run.cache_hit ? <Badge label="cached" tone="info" /> : null}
         {run.status && run.status !== 'ok' ? <Badge label={run.status.replace(/_/g, ' ')} tone={tone} /> : null}
         <Icon name={open ? 'chevron-down' : 'chevron-right'} size={13} color={palette.frosting[400]} weight="bold" />
       </Pressable>
 
+      {argsLine ? (
+        <Text variant="muted" className="pl-4 pt-0.5 text-xs" numberOfLines={1}>
+          {argsLine}
+        </Text>
+      ) : null}
+
       {open ? (
         <View className="gap-2 pl-4 pt-2">
-          {run.args_preview ? (
+          {(hit && Object.keys(hit.args).length > 0) || run.args_preview ? (
             <View className="gap-1">
               <Text variant="label">Input</Text>
               {parsedArgs !== undefined ? (
@@ -92,7 +122,18 @@ function ToolRunRow({ run }: { run: ToolRun }) {
             </View>
           ) : null}
 
-          {run.output_preview ? (
+          {hit && body ? (
+            <View className="gap-1">
+              <Text variant="label">Output</Text>
+              {series ? (
+                <TimeSeriesChart data={series} />
+              ) : bodyJson !== undefined ? (
+                <JsonBlock value={bodyJson} />
+              ) : (
+                <Markdown value={body.length > 6000 ? body.slice(0, 6000) + '\n… (truncated)' : body} />
+              )}
+            </View>
+          ) : !hit && run.output_preview ? (
             <View className="gap-1">
               <Text variant="label">Output</Text>
               {series ? <TimeSeriesChart data={series} /> : <Markdown value={run.output_preview} />}
