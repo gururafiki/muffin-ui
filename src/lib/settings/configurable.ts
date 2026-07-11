@@ -11,7 +11,15 @@ import type { Settings } from './store';
  * a server default with a blank string.
  */
 export function buildConfigurable(settings: Settings): Record<string, unknown> {
-  const cfg: Record<string, unknown> = { llm_provider: settings.llmProvider };
+  const cfg: Record<string, unknown> = {};
+
+  // A concrete provider is a single-provider override: send it AND clear the
+  // server's `llm_chain` so the override actually wins (the chain otherwise
+  // supersedes llm_provider for every role). Empty = leave the server default.
+  if (settings.llmProvider) {
+    cfg.llm_provider = settings.llmProvider;
+    cfg.llm_chain = [];
+  }
 
   const put = (key: string, value: string) => {
     if (value && value.trim()) cfg[key] = value.trim();
@@ -39,6 +47,7 @@ export function buildConfigurable(settings: Settings): Record<string, unknown> {
   put('openai_api_key', settings.openaiApiKey);
   put('anthropic_api_key', settings.anthropicApiKey);
   put('openrouter_api_key', settings.openrouterApiKey);
+  put('ollama_api_key', settings.ollamaApiKey);
   // OpenBB BYO key — forwarded for when the backend wires per-user market-data
   // auth (M2). Harmless if the server ignores unknown configurable keys.
   put('openbb_api_key', settings.openbbApiKey);

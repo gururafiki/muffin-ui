@@ -131,10 +131,15 @@ API keys / tokens / endpoints are stripped on upload AND restore). Native pulls
 On-device keys are injected into each run's `config.configurable`, never persisted server-side.
 **`configurable.ts` field names mirror `muffin-agent`'s `BaseConfiguration` subclasses
 (`ModelConfiguration` / `McpConfiguration` / `ResearchConfiguration` / `StoreConfiguration` /
-`ToolKnowledgeConfiguration`: `llm_provider`, `model`, `openai_api_key`, `user_id`,
-`orchestrator_models`, `temperature`, `openbb_mcp_url`, `research_default_mode`,
+`ToolKnowledgeConfiguration`: `llm_provider`, `model`, `openai_api_key`, `ollama_api_key`,
+`user_id`, `orchestrator_models`, `temperature`, `openbb_mcp_url`, `research_default_mode`,
 `tool_lessons_mode` (`read_and_record` / `read_only` / `off`), `store_allowed_namespaces`, …) —
-keep them in sync with the backend.** `buildConfigurable` only emits non-empty values (with `putNum` / `putList` for
+keep them in sync with the backend.** **LLM provider selection:** `settings.llmProvider === ''`
+("Server default") sends NEITHER `llm_provider` nor `llm_chain`, so the deployment's configured
+`llm_chain` (e.g. Ollama Cloud → OpenRouter fallback) applies. Picking a concrete provider
+(`ollama` / `openrouter` / `openai` / `anthropic`) sends `llm_provider` AND `llm_chain: []` — the
+empty chain is required to override the server chain into single-provider mode (the backend's
+`llm_chain`, when non-empty, supersedes `llm_provider` for every role). `buildConfigurable` only emits non-empty values (with `putNum` / `putList` for
 numeric / comma-list knobs); the "Advanced configuration" Settings section feeds these. The agents
 read every key at runtime via `from_runnable_config`, so a knob takes effect as soon as the UI
 sends it — no backend change needed. `buildPresetConfigurable` is the no-secrets subset (strips

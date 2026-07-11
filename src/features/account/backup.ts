@@ -20,6 +20,7 @@ const EXCLUDED_SETTINGS = new Set<keyof Settings>([
   'openaiApiKey',
   'anthropicApiKey',
   'openrouterApiKey',
+  'ollamaApiKey',
   'openbbApiKey',
 ]);
 
