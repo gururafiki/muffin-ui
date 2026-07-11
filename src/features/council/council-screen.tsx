@@ -18,6 +18,8 @@ import { useRunStream } from '@/features/agent-chat/use-run-stream';
 import { palette } from '@/theme/colors';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
+import { collectToolRuns, ToolRunsSummary } from '@/lib/agent/renderers';
+import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { CouncilArena } from './council-arena';
 import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
@@ -139,6 +141,7 @@ export function CouncilScreen({
   };
 
   return (
+    <ToolCacheProvider thread={liveThreadId} busy={busy}>
     <View className="gap-4">
       <Card tone="sticker" className="gap-3">
         <View className="flex-row items-center gap-3">
@@ -252,11 +255,16 @@ export function CouncilScreen({
 
       {specialistRuns?.length ? <SubagentActivity runs={specialistRuns} /> : null}
 
+      {/* Tool execution across all 13 personas (each row's `agent` field
+          identifies the persona). Rows join the provider-call cache on expand. */}
+      <ToolRunsSummary runs={collectToolRuns(values)} />
+
       {judging || synthesis ? (
         <Animated.View entering={FadeInDown.duration(300)}>
           <JudgePanel synthesis={synthesis} judging={judging} />
         </Animated.View>
       ) : null}
     </View>
+    </ToolCacheProvider>
   );
 }

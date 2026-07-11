@@ -165,6 +165,14 @@ post-deploy** — requires the backend `args_hash` field live (additive; UI tole
 global cache → that row degrades to preview; switch to targeted `store.getItem(['cache', tool], hash)`
 per unique key if it bites.
 
+**M13 follow-up — panel for every agent (2026-07):** the panel was mounted on the three bespoke
+screens (`council-screen`, `calls/[threadId]` history, `chat-screen`) and the backend now surfaces
+`tool_runs` for `trading_decision` + `research` (declared the state channel; `researcher_node`
+forwards it) — `stock_evaluation` already surfaced it (bare deep agent). **Owed:** the `council`
+backend — each of the 13 persona subgraphs restricts output via `output_schema`, so it needs
+`tool_runs` on the persona state + `<Persona>Output` + `CouncilState` (a shared `PersonaCapture`
+mixin); the council UI panel is already mounted and will light up once that lands.
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

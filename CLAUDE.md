@@ -124,6 +124,12 @@ The whole app is organised around **"one graph → one screen"**:
   The old `collected-data.tsx` / `CollectedData` panel and its ±60s time-window heuristic were removed.
   Limitation: the `searchItems(['cache'], { limit: 100 })` cap can miss a payload in a very large
   global cache → that row degrades to preview (ROADMAP: switch to targeted `store.getItem` per key).
+  **Panel surfaces:** the generic runner (`agent-runner.tsx`) plus the bespoke screens
+  `features/council/council-screen.tsx`, `app/calls/[threadId].tsx` (history — `busy={false}`, one
+  cache fetch), and `features/agent-chat/chat-screen.tsx` each mount
+  `<ToolCacheProvider>` + `<ToolRunsSummary runs={collectToolRuns(values)} />`. The panel populates
+  only for graphs that surface `tool_runs` (criteria_analysis / trading_decision / research /
+  stock_evaluation; council pending its backend change) — it renders `null` otherwise.
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —
