@@ -16,7 +16,8 @@ import { Icon } from '@/components/icons';
 import { Badge, Card, Chip, Screen, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import type { AgentDef } from '@/lib/agent/registry';
-import type { Todo } from '@/lib/agent/renderers';
+import { collectToolRuns, ToolRunsSummary, type Todo } from '@/lib/agent/renderers';
+import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { palette } from '@/theme/colors';
 import { Conversation, type MessageActions, type SubagentRuns, type ViewMode } from './conversation';
 import { InterruptCard } from './interrupt';
@@ -97,7 +98,7 @@ export function ChatScreen({
   threadId?: string;
   initialPrompt?: string;
 }) {
-  const { stream, submitRun, resume } = useRunStream(agent, { threadId: initialThreadId });
+  const { stream, submitRun, resume, threadId: liveThreadId } = useRunStream(agent, { threadId: initialThreadId });
   // Seed the composer from a deep link only when starting a fresh conversation.
   const [draft, setDraft] = useState(initialThreadId ? '' : initialPrompt ?? '');
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
@@ -190,6 +191,7 @@ export function ChatScreen({
 
   // ── Conversation: transcript + docked composer ────────────────────────
   return (
+    <ToolCacheProvider thread={liveThreadId} busy={busy}>
     <Screen scroll={false}>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View className="pb-2">
@@ -225,6 +227,9 @@ export function ChatScreen({
             subagentRuns={subagentRuns}
           />
 
+          {/* Tool execution — rows join the provider-call cache on expand. */}
+          <ToolRunsSummary runs={collectToolRuns(values)} />
+
           {stream.interrupt ? <InterruptCard value={stream.interrupt.value} busy={busy} onResume={resume} /> : null}
 
           {stream.error ? (
@@ -254,5 +259,6 @@ export function ChatScreen({
         </View>
       </KeyboardAvoidingView>
     </Screen>
+    </ToolCacheProvider>
   );
 }

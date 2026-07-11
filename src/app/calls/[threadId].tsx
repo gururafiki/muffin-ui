@@ -9,7 +9,8 @@ import {
 } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
-import { CriterionDetails, isMessageArray, StructuredOutput, type Criterion, type Todo } from '@/lib/agent/renderers';
+import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsSummary, type Criterion, type Todo } from '@/lib/agent/renderers';
+import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 
 /**
  * Historical sub-agent rows straight from the thread's persisted values —
@@ -54,6 +55,7 @@ export default function CallDetailRoute() {
           </Text>
         </Card>
       ) : (
+        <ToolCacheProvider thread={threadId} busy={false}>
         <View className="mt-4 gap-4">
           <Card tone="sticker" className="gap-2">
             <View className="flex-row items-center gap-2">
@@ -98,7 +100,12 @@ export default function CallDetailRoute() {
               </Card>
             );
           })()}
+
+          {/* Tool execution from persisted state — rows join the provider-call
+              cache on expand for the full gathered payload. */}
+          <ToolRunsSummary runs={collectToolRuns(thread.values)} />
         </View>
+        </ToolCacheProvider>
       )}
     </Screen>
   );
