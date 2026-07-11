@@ -1,14 +1,11 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
 
 import { AgentRunner } from '@/components/agent-runner';
 import { Card, Screen, Text } from '@/components/ui';
 import { ChatScreen } from '@/features/agent-chat/chat-screen';
-import { useAttachStorage } from '@/features/agent-chat/use-active-run';
 import { CouncilScreen } from '@/features/council/council-screen';
 import { getAgent } from '@/lib/agent/registry';
-import { palette } from '@/theme/colors';
 
 const FIELD_KEYS = ['query', 'ticker', 'prompt', 'sector', 'market'];
 
@@ -24,12 +21,6 @@ export default function AgentRunnerRoute() {
   const [threadId] = useState(() => params.threadId || undefined);
   // A saved preset run targets its own assistant_id (the route param stays the graph id).
   const presetId = params.preset || undefined;
-
-  // Attach-to-running is a LEGACY-hook concern (chat only): resolve the
-  // thread's active run before mounting the stream so reopening a busy thread
-  // keeps streaming. The protocol-v2 screens (runner/council) rejoin the
-  // thread's event stream natively — no gate, no runs.list lookup.
-  const attachStorage = useAttachStorage(agent?.chat ? threadId : undefined);
 
   // Seed the runner from any field-shaped params (e.g. an "Analyse" deep link).
   const initialValues: Record<string, string> = {};
@@ -49,17 +40,6 @@ export default function AgentRunnerRoute() {
 
   // Conversational agents own their layout (chat transcript + composer).
   if (agent.chat) {
-    if (!attachStorage) {
-      return (
-        <Screen>
-          <Stack.Screen options={{ title: agent.title }} />
-          <View className="flex-1 items-center justify-center gap-3">
-            <ActivityIndicator size="large" color={palette.frosting[400]} />
-            <Text variant="muted">Checking for a live run…</Text>
-          </View>
-        </Screen>
-      );
-    }
     // Pre-fill the composer when arriving from a stock/deep link.
     const initialPrompt =
       params.prompt ||
@@ -69,7 +49,7 @@ export default function AgentRunnerRoute() {
     return (
       <>
         <Stack.Screen options={{ title: agent.title }} />
-        <ChatScreen agent={agent} threadId={threadId} initialPrompt={initialPrompt} attachStorage={attachStorage} />
+        <ChatScreen agent={agent} threadId={threadId} initialPrompt={initialPrompt} />
       </>
     );
   }

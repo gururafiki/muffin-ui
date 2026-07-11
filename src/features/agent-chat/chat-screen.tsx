@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -17,11 +18,10 @@ import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/ru
 import type { AgentDef } from '@/lib/agent/registry';
 import type { Todo } from '@/lib/agent/renderers';
 import { palette } from '@/theme/colors';
-import { Conversation, type SubagentRuns, type ViewMode } from './conversation';
+import { Conversation, type MessageActions, type SubagentRuns, type ViewMode } from './conversation';
 import { InterruptCard } from './interrupt';
 import { RunProgress } from './run-progress';
-import type { RunMetadataStorage } from './use-active-run';
-import { useAgentStream } from './use-agent-stream';
+import { useRunStream } from './use-run-stream';
 
 const MODE_HINT: Record<ViewMode, string> = {
   summary: 'Key milestones only',
@@ -82,24 +82,22 @@ function Composer({
  *
  * Fresh conversation → a centred hero (agent identity, example prompts, big
  * composer). Once the first message is sent, the composer docks to the bottom
- * and the transcript takes over — the agent-chat-ui pattern. Opening a running
- * thread attaches to its live stream via `attachStorage`.
+ * and the transcript takes over — the agent-chat-ui pattern. Runs on the
+ * protocol-v2 `useRunStream` (the same engine as the run-view screens):
+ * `stream.messages` is token-streamed and optimistically echoes the sent
+ * message; reopening a running thread rejoins its event stream natively (no
+ * attach gate). Message branching / edit-fork / regenerate are not offered.
  */
 export function ChatScreen({
   agent,
   threadId: initialThreadId,
   initialPrompt,
-  attachStorage,
 }: {
   agent: AgentDef;
   threadId?: string;
   initialPrompt?: string;
-  attachStorage?: RunMetadataStorage;
 }) {
-  const { stream, submitRun, resume, actions, liveNode } = useAgentStream(agent, {
-    threadId: initialThreadId,
-    attachStorage,
-  });
+  const { stream, submitRun, resume } = useRunStream(agent, { threadId: initialThreadId });
   // Seed the composer from a deep link only when starting a fresh conversation.
   const [draft, setDraft] = useState(initialThreadId ? '' : initialPrompt ?? '');
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
@@ -114,14 +112,14 @@ export function ChatScreen({
   const chatStarted = !!initialThreadId || messages.length > 0 || busy;
   const signInRequired = useSignInRequiredToRun();
 
+  // Copy-only action bundle — the SDK echoes the sent message optimistically,
+  // so no local echo is needed; edit/regenerate/branch are intentionally absent.
+  const actions: MessageActions = { busy, onCopy: (t) => Clipboard.setStringAsync(t).catch(() => {}) };
+
   const sendText = (text: string) => {
     if (!text.trim() || busy) return;
     setDraft('');
-    const human = { type: 'human', content: text.trim() };
-    submitRun(
-      { messages: [human] },
-      { optimisticValues: (prev) => ({ ...prev, messages: [...(prev.messages ?? []), human] }) },
-    );
+    submitRun({ messages: [{ type: 'human', content: text.trim() }] });
   };
   const send = () => sendText(draft);
 
@@ -206,7 +204,7 @@ export function ChatScreen({
 
         {busy || (todos?.length ?? 0) > 0 ? (
           <View className="pb-2">
-            <RunProgress agent={agent} values={values} todos={todos} liveNode={liveNode} busy={busy} />
+            <RunProgress agent={agent} values={values} todos={todos} busy={busy} byNode={stream.subgraphsByNode} />
           </View>
         ) : null}
 

@@ -107,14 +107,6 @@ export interface AgentDef {
   examples?: string[];
   /** Execution recipe for graph agents (deep agents use `todos` instead). */
   stages?: StageDef[];
-  /**
-   * Stream subgraph events (default true). Set `false` for graphs whose nodes
-   * are compiled agents (`<node>:<id>` namespaces): the SDK only recognises
-   * deepagents `tools:` namespaces as subagents and would apply such a
-   * subgraph's internal `values` (just `{messages}`) onto the main
-   * `stream.values`, clobbering the accumulating result mid-run.
-   */
-  subgraphs?: boolean;
 }
 
 const has = (values: Record<string, unknown>, key: string): boolean => {
@@ -207,10 +199,6 @@ export const AGENTS: AgentDef[] = [
       ...(v.market ? { market: v.market } : {}),
     }),
     resultRenderer: 'criteria',
-    // Legacy-hook flag only (see AgentDef.subgraphs). The runner now streams
-    // this graph via protocol v2 (`useRunStream`), where root `values` is
-    // never clobbered and workers surface through subgraph discovery.
-    subgraphs: false,
     advanced: [
       // NB: tool-execution capture is unconditional backend-side (the graph
       // opts in by declaring the `tool_runs` state channel) — no toggle here.

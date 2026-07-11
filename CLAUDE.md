@@ -63,19 +63,29 @@ The whole app is organised around **"one graph → one screen"**:
 - **`client.ts`** builds the `@langchain/langgraph-sdk` `Client`. `resolveApiUrl` resolves a
   relative `/api` to an absolute URL on web (the SDK builds every request with `new URL()`, which
   rejects relative bases).
-- **Two stream stacks (M12).** The RUN-VIEW screens (generic runner + council + calls detail) run on
-  **`@langchain/react` `useStream` (protocol v2)** via `features/agent-chat/use-run-stream.ts`;
-  **ChatScreen stays on the legacy `@langchain/langgraph-sdk/react` hook**
-  (`use-agent-stream.ts`) because message branching / edit-fork / regenerate has no protocol-v2
-  equivalent yet (revisit on `@langchain/react` releases). Don't mix them on one screen.
-- **Protocol v2 stack (`use-run-stream.ts` + `run-projections.ts` + `subgraph-detail.tsx`):**
+- **One stream stack — `@langchain/react` `useStream` (protocol v2), via `use-run-stream.ts`.**
+  ALL agent screens (generic runner, council, calls detail, AND ChatScreen) run on it; the legacy
+  `@langchain/langgraph-sdk/react` hook + its `use-active-run.ts` attach gate were retired in M12b.
+  `useRunStream` is the single engine: `submitRun` (run-view input or a chat `{messages:[human]}`),
+  `resume` (HITL via `stream.respond`), and the raw `stream` (token-streamed `messages`, `interrupt`,
+  `subgraphsByNode`, …). **Accepted regression:** message branching / edit-fork / regenerate have no
+  protocol-v2 equivalent, so ChatScreen no longer offers them (`MessageActions` edit/regenerate/branch
+  are optional and hidden when absent). Everything else is equal-or-better: token streaming, built-in
+  optimistic message echo (no `optimisticValues` plumbing), interrupts + atomic resume.
+  - **Native fetch (critical):** the protocol-v2 SSE transport uses `options.fetch ?? globalThis.fetch`
+    and does NOT consult the SDK's `overrideFetchImplementation` singleton (which the classic `Client`
+    REST calls do). So `use-run-stream` passes `fetch: streamingFetch()` — `expo/fetch` on native
+    (`install-fetch.native.ts`), `undefined` on web — or SSE won't stream on iOS/Android.
   - Server endpoints (`POST /threads/{id}/stream/events` + `/commands`) are served by langgraph-api
     ≥0.10; channels: `values/updates/messages/tools/lifecycle/input/tasks` + `custom`.
-  - Root `values` is root-namespace only — **the old subgraph-values clobbering cannot happen**.
-    `stream.subgraphsByNode` auto-discovers compiled-agent node invocations (criteria stages, Send
-    workers, council personas, trading analysts) with live `running/complete/error` statuses — this
-    drives `RunProgress` (registry `StageDef.node`) and the sub-agents panel (`useSubgraphRows`).
-    Plain-function nodes (merge_criteria) are never discovered — their stages rely on `done(values)`.
+  - Root `values` is root-namespace only — **subgraph-values clobbering cannot happen** (the reason
+    the old `registry.subgraphs` flag existed; it's gone). `stream.subgraphsByNode` auto-discovers
+    compiled-agent node invocations (criteria stages/Send workers, council personas, trading analysts)
+    with live `running/complete/error` statuses — drives `RunProgress` (registry `StageDef.node`) and
+    the sub-agents panel (`useSubgraphRows`). Plain-function nodes (merge_criteria) are never
+    discovered — their stages rely on `done(values)`. Deep agents (stock_evaluation) have no compiled
+    subgraphs, so `RunProgress` shows their `todos` plan + a "Now:" label from the freshest running
+    discovery node (or "Working…").
   - The root pump is ONE subscription (channels values/checkpoints/lifecycle/input/messages/tools,
     namespace prefix `[]`, **depth 1**). `useChannel(stream, ['custom'])` opens one extra ref-counted
     subscription (replay on) — that's where the backend's `criterion_evaluated` writer events arrive;
@@ -85,10 +95,15 @@ The whole app is organised around **"one graph → one screen"**:
     taps the root bus without a new connection). Scoped selectors (`useMessages(stream, target)`)
     open one subscription per namespace — mount them lazily (expanded rows only), never one-per-seat.
   - **Live vs history doctrine: events for live, state for history.** Completed runs have NO
-    replayable event stream (transient Redis buffer — verified); the hook hydrates from
-    `threads.getState` + history-seeded discovery. Backend capture channels (`subagent_runs`,
-    `tool_runs`) remain the durable record for historical detail — live rendering uses the native
-    channels instead. Mid-run refresh replays buffered events (seq/`since`).
+    replayable event stream (transient Redis buffer — verified; there is no durable event log to
+    replay). On load a finished thread makes only `GET /threads/{id}/state` (+ thread metadata + the
+    store cache search) — no event re-subscription, no `/state/checkpoint` walk. So the backend
+    capture channels (`subagent_runs`, `tool_runs`) are the **history substrate** — live rendering
+    uses the native channels, historical rendering reads persisted state. Removing them would lose all
+    historical sub-step detail. (`tool_runs` is compact; `subagent_runs` full transcripts are the
+    heavy one and the candidate to slim once the checkpoint-read latency is fixed — reconstructing
+    from checkpoints trades write-bloat for the slow read.) Mid-run refresh replays buffered events
+    (seq/`since`).
 - **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
   json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
   `tool-runs.tsx` renders backend `AgentCaptureMiddleware` output: `collectToolRuns(values)` gathers
@@ -97,16 +112,6 @@ The whole app is organised around **"one graph → one screen"**:
   so live and post-refresh render identically. Capture is unconditional backend-side — a graph opts
   in by declaring the `tool_runs` state channel. `criteria-result.tsx` badges evaluations whose
   backend truthing flag says no tools ran (`data_collected: false` → "no live data").
-- **Legacy-hook gotchas (ChatScreen only):**
-  - *Subgraph-streaming clobber (`registry.subgraphs`):* the legacy SDK applies compiled-agent
-    subgraph `values` events (`<node>:<id>` namespaces) onto the MAIN `stream.values`; only
-    deepagents `tools:<call_id>` namespaces are exempt. Mid-run `stream.values` is therefore
-    unreliable for subgraphs-enabled graphs on the legacy hook.
-  - *Live-render gate (`agents/[assistantId].tsx` + `use-active-run.ts`):* the chat branch is gated
-    on `useAttachStorage(threadId)` (a `runs.list` lookup that reconnects to an in-flight run).
-    **Pin the gate's `threadId` at mount with a `useState` initializer** — a fresh run's
-    `router.setParams({ threadId })` re-renders the same mounted screen and a live-param gate would
-    unmount it mid-run. The protocol-v2 screens need no gate (thread stream rejoins natively).
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —

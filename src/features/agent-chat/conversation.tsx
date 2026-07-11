@@ -25,10 +25,13 @@ export type ViewMode = 'summary' | 'verbose';
 export type MessageActions = {
   busy: boolean;
   onCopy: (text: string) => void;
-  onEdit: (message: AnyMessage, text: string) => void;
-  onRegenerate: (message: AnyMessage) => void;
-  branchInfo: (message: AnyMessage) => { index: number; total: number; prev?: string; next?: string } | undefined;
-  onSetBranch: (branch: string) => void;
+  // Branching / edit-fork / regenerate are legacy-hook-only capabilities; the
+  // protocol-v2 stack (ChatScreen after M12b) omits them, so they're optional
+  // and their buttons are hidden when the handler is absent.
+  onEdit?: (message: AnyMessage, text: string) => void;
+  onRegenerate?: (message: AnyMessage) => void;
+  branchInfo?: (message: AnyMessage) => { index: number; total: number; prev?: string; next?: string } | undefined;
+  onSetBranch?: (branch: string) => void;
 };
 
 type ToolCall = { name?: string; args?: Record<string, unknown>; id?: string };
@@ -354,15 +357,16 @@ function StepTimeline({
 }
 
 function BranchControls({ message, actions }: { message: AnyMessage; actions: MessageActions }) {
-  const b = actions.branchInfo(message);
-  if (!b || b.total <= 1) return null;
+  const b = actions.branchInfo?.(message);
+  if (!b || b.total <= 1 || !actions.onSetBranch) return null;
+  const onSetBranch = actions.onSetBranch;
   return (
     <View className="flex-row items-center">
-      <Pressable disabled={!b.prev} onPress={() => b.prev && actions.onSetBranch(b.prev)} className="p-1 active:opacity-60">
+      <Pressable disabled={!b.prev} onPress={() => b.prev && onSetBranch(b.prev)} className="p-1 active:opacity-60">
         <Icon name="arrow-left" size={14} color={b.prev ? palette.frosting[400] : palette.frosting[200]} />
       </Pressable>
       <Text variant="muted" className="text-xs">{b.index + 1}/{b.total}</Text>
-      <Pressable disabled={!b.next} onPress={() => b.next && actions.onSetBranch(b.next)} className="p-1 active:opacity-60">
+      <Pressable disabled={!b.next} onPress={() => b.next && onSetBranch(b.next)} className="p-1 active:opacity-60">
         <Icon name="arrow-right" size={14} color={b.next ? palette.frosting[400] : palette.frosting[200]} />
       </Pressable>
     </View>
@@ -382,12 +386,14 @@ function HumanBubble({ message, actions }: { message: AnyMessage; actions?: Mess
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(body);
 
-  if (editing && actions) {
+  const onEdit = actions?.onEdit;
+
+  if (editing && onEdit) {
     return (
       <Card tone="outline" className="gap-2">
         <Field value={text} onChangeText={setText} multiline autoFocus />
         <View className="flex-row gap-2">
-          <Button title="Save & resend" size="sm" disabled={actions.busy || !text.trim()} onPress={() => { setEditing(false); actions.onEdit(message, text.trim()); }} />
+          <Button title="Save & resend" size="sm" disabled={actions.busy || !text.trim()} onPress={() => { setEditing(false); onEdit(message, text.trim()); }} />
           <Button title="Cancel" size="sm" variant="ghost" onPress={() => setEditing(false)} />
         </View>
       </Card>
@@ -401,7 +407,7 @@ function HumanBubble({ message, actions }: { message: AnyMessage; actions?: Mess
         <View className="flex-row items-center justify-end gap-0.5 pt-1">
           <BranchControls message={message} actions={actions} />
           <ActionBtn icon="copy" onPress={() => actions.onCopy(body)} />
-          <ActionBtn icon="edit" disabled={actions.busy} onPress={() => { setText(body); setEditing(true); }} />
+          {onEdit ? <ActionBtn icon="edit" disabled={actions.busy} onPress={() => { setText(body); setEditing(true); }} /> : null}
         </View>
       ) : null}
     </Card>
@@ -417,7 +423,7 @@ function AnswerBlock({ message, actions }: { message: AnyMessage; actions?: Mess
         <View className="flex-row items-center justify-end gap-0.5 pt-1">
           <BranchControls message={message} actions={actions} />
           <ActionBtn icon="copy" onPress={() => actions.onCopy(body)} />
-          <ActionBtn icon="regenerate" disabled={actions.busy} onPress={() => actions.onRegenerate(message)} />
+          {actions.onRegenerate ? <ActionBtn icon="regenerate" disabled={actions.busy} onPress={() => actions.onRegenerate!(message)} /> : null}
         </View>
       ) : null}
     </Card>

@@ -16,7 +16,6 @@ import type { AgentDef, StageDef } from '@/lib/agent/registry';
 import { TodoList, isTodoList, type Todo } from '@/lib/agent/renderers';
 import { describeStep } from '@/lib/agent/steps';
 import { palette } from '@/theme/colors';
-import type { LiveNode } from './use-agent-stream';
 
 type StageStatus = 'done' | 'active' | 'pending';
 type ByNode = ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
@@ -42,17 +41,14 @@ function stageSnaps(stage: StageDef, byNode: ByNode | undefined): readonly Subgr
 /**
  * Resolve each stage's done/active/pending. Primary source on the protocol-v2
  * stack is subgraph discovery (`byNode`: live per-node statuses); `done(values)`
- * stays authoritative for plain-function nodes that are never discovered, and
- * the legacy `liveNode` probe keeps the chat screen working on the old hook.
+ * stays authoritative for plain-function nodes that are never discovered.
  */
 function resolveStages(
   stages: StageDef[],
   values: Record<string, unknown>,
-  liveNode: LiveNode | undefined,
   busy: boolean,
   byNode?: ByNode,
 ): StageRow[] {
-  const probe = liveNode ? [liveNode.node, ...liveNode.namespace].join(' ') : '';
   const rows: StageRow[] = stages.map((stage) => {
     const snaps = stageSnaps(stage, byNode);
     const running = busy && snaps.some((s) => s.status === 'running');
@@ -69,10 +65,8 @@ function resolveStages(
     };
   });
   if (busy && !rows.some((r) => r.status === 'active')) {
-    // No discovery signal (legacy hook / warm-up) — probe the live node…
-    let activeIdx = rows.findIndex((r) => r.status !== 'done' && r.stage.active?.test(probe));
-    // …otherwise light up the first stage that isn't finished.
-    if (activeIdx < 0) activeIdx = rows.findIndex((r) => r.status !== 'done');
+    // No discovery signal yet (warm-up) — light up the first unfinished stage.
+    const activeIdx = rows.findIndex((r) => r.status !== 'done');
     if (activeIdx >= 0) rows[activeIdx].status = 'active';
   }
   return rows;
@@ -154,23 +148,30 @@ export function RunProgress({
   agent,
   values,
   todos,
-  liveNode,
   busy,
   byNode,
 }: {
   agent: AgentDef;
   values: Record<string, unknown> | undefined;
   todos?: Todo[];
-  /** Legacy-hook live node probe (chat screen). */
-  liveNode?: LiveNode;
   busy: boolean;
   /** Protocol-v2 subgraph discovery (`stream.subgraphsByNode`). */
   byNode?: ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
 }) {
   const v = values ?? {};
-  const stageRows = agent.stages ? resolveStages(agent.stages, v, liveNode, busy, byNode) : [];
+  const stageRows = agent.stages ? resolveStages(agent.stages, v, busy, byNode) : [];
   const hasTodos = isTodoList(todos);
   const doneCount = stageRows.filter((r) => r.status === 'done').length;
+  // The freshest running node across discovery — a live "Now:" label for deep
+  // agents (no stage recipe) and a warm-up hint before a stage lights up.
+  const liveNodeLabel = (() => {
+    if (!byNode) return undefined;
+    let latest: SubgraphDiscoverySnapshot | undefined;
+    for (const snaps of byNode.values())
+      for (const s of snaps)
+        if (s.status === 'running' && (!latest || s.startedAt > latest.startedAt)) latest = s;
+    return latest ? describeStep(latest.nodeName).label : undefined;
+  })();
 
   if (!hasTodos && stageRows.length === 0) {
     // No recipe and no plan — while busy, still show a heartbeat.
@@ -179,15 +180,13 @@ export function RunProgress({
       <Card tone="muted" className="flex-row items-center gap-2.5">
         <LivePulse />
         <Text variant="muted" className="flex-1 text-sm">
-          {liveNode ? describeStep(liveNode.node).label : 'Working…'}
+          {liveNodeLabel ?? 'Working…'}
         </Text>
       </Card>
     );
   }
 
-  const nowLabel =
-    stageRows.find((r) => r.status === 'active')?.stage.label ??
-    (liveNode ? describeStep(liveNode.node).label : undefined);
+  const nowLabel = stageRows.find((r) => r.status === 'active')?.stage.label ?? liveNodeLabel;
 
   // Finished → fold away, one calm line.
   if (!busy) {

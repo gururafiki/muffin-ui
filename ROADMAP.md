@@ -271,10 +271,17 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 - **M4 ([backend-patch]):** richer chart types (candlesticks, multi-axis — `victory-native` if the
   SVG chart outgrows itself). ~~Custom-event structured progress~~ — per-criterion events shipped
   (M12/muffin-agent #103); subgraph discovery covers stage structure.
+- **M12b (done, 2026-07):** migrated ChatScreen onto the protocol-v2 `useRunStream` too — one stream
+  stack for the whole app; deleted the legacy `use-agent-stream.ts` + `use-active-run.ts` attach gate
+  and the `registry.subgraphs` flag. Accepted the message branching / edit-fork / regenerate
+  regression (no protocol-v2 equivalent; `MessageActions` makes them optional). Also fixed the native
+  streaming path: the v2 SSE transport ignores the SDK's `overrideFetchImplementation` global, so
+  `useRunStream` now passes `fetch: streamingFetch()` (expo/fetch on native). **Still owed: a real
+  iOS/Android device/simulator test of streaming** — verification so far is web + type/bundle only.
 - **M12 follow-ups:**
-  - **Migrate ChatScreen to `@langchain/react`** once message branching / edit-fork / regenerate
-    lands upstream (the only reason the legacy `use-agent-stream.ts` + `use-active-run.ts` gate
-    survive) — then delete both and the `registry.subgraphs` flag.
+  - **Message branching / edit / regenerate** — re-add if `@langchain/react` exposes a
+    message→checkpoint metadata + branch-select API (today only `submit(forkFrom)` / `state.fork` /
+    `state.listCheckpoints` exist; rebuilding branch navigation on those is possible but non-trivial).
   - **Persona sub-stage fidelity:** the root pump is depth-1, so persona INNER-node lifecycle
     (collect→compute→verdict) is inferred from persona values events (`council-live.ts`). A
     backend stage-level custom event (muffin-agent roadmap) would make it exact; alternatively a
