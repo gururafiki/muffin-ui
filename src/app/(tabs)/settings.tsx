@@ -12,7 +12,7 @@ import {
   type ToolLessonsMode,
 } from '@/lib/settings/store';
 
-const PROVIDERS: LlmProvider[] = ['openrouter', 'openai', 'anthropic'];
+const PROVIDERS: LlmProvider[] = ['ollama', 'openrouter', 'openai', 'anthropic'];
 const RESEARCH_MODES: Exclude<ResearchMode, ''>[] = ['speed', 'balanced', 'quality'];
 const TOOL_LESSONS_MODES: Exclude<ToolLessonsMode, ''>[] = ['read_and_record', 'read_only', 'off'];
 
@@ -84,6 +84,11 @@ export default function SettingsScreen() {
       <Card className="mt-4 gap-3">
         <Text variant="heading">LLM provider</Text>
         <View className="flex-row flex-wrap gap-2">
+          <Chip
+            label="Server default"
+            active={settings.llmProvider === ''}
+            onPress={() => update({ llmProvider: '' })}
+          />
           {PROVIDERS.map((p) => (
             <Chip
               key={p}
@@ -93,6 +98,10 @@ export default function SettingsScreen() {
             />
           ))}
         </View>
+        <Text variant="label">
+          &ldquo;Server default&rdquo; uses this deployment&rsquo;s configured model chain
+          (e.g. Ollama Cloud → OpenRouter). Pick a provider to override it with your own key.
+        </Text>
         <Field
           label="Model (optional)"
           autoCapitalize="none"
@@ -104,6 +113,13 @@ export default function SettingsScreen() {
 
       <Card className="mt-4 gap-3">
         <Text variant="heading">API keys</Text>
+        <Field
+          label="Ollama Cloud key"
+          autoCapitalize="none"
+          secureTextEntry
+          value={settings.ollamaApiKey}
+          onChangeText={(v) => update({ ollamaApiKey: v })}
+        />
         <Field
           label="OpenRouter key"
           autoCapitalize="none"

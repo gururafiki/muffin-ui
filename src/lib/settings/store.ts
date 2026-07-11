@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { storage } from '@/lib/storage';
 
-export type LlmProvider = 'openai' | 'anthropic' | 'openrouter';
+export type LlmProvider = 'openai' | 'anthropic' | 'openrouter' | 'ollama';
 
 /** Research effort mode. Empty string = leave the server default unchanged. */
 export type ResearchMode = '' | 'speed' | 'balanced' | 'quality';
@@ -35,11 +35,18 @@ export interface Settings {
   supabaseUrl: string;
   /** Supabase anon (public) key — enables the Account features when set. */
   supabaseAnonKey: string;
-  llmProvider: LlmProvider;
+  /**
+   * LLM provider override. Empty string = use the server's configured
+   * `llm_chain` (e.g. the deployment's Ollama→OpenRouter fallback chain).
+   * A concrete provider forces single-provider mode with your own key.
+   */
+  llmProvider: LlmProvider | '';
   model: string;
   openaiApiKey: string;
   anthropicApiKey: string;
   openrouterApiKey: string;
+  /** Ollama Cloud API key (native /api/chat, bearer auth). */
+  ollamaApiKey: string;
   /** OpenBB personal access token (BYO market-data key). */
   openbbApiKey: string;
 
@@ -79,11 +86,12 @@ export const DEFAULT_SETTINGS: Settings = {
   userId: '',
   supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '/supabase',
   supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
-  llmProvider: 'openrouter',
+  llmProvider: '',
   model: '',
   openaiApiKey: '',
   anthropicApiKey: '',
   openrouterApiKey: '',
+  ollamaApiKey: '',
   openbbApiKey: '',
   temperature: '',
   orchestratorModels: '',

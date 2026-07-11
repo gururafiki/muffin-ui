@@ -271,6 +271,14 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 - **M4 ([backend-patch]):** richer chart types (candlesticks, multi-axis — `victory-native` if the
   SVG chart outgrows itself). ~~Custom-event structured progress~~ — per-criterion events shipped
   (M12/muffin-agent #103); subgraph discovery covers stage structure.
+- **Ollama Cloud provider + server-default chain (done, 2026-07):** added `ollama` to the LLM
+  provider selector + an "Ollama Cloud key" field, and a **"Server default"** provider option
+  (`llmProvider === ''`) that sends no `llm_provider`/`llm_chain` so the deployment's configured
+  `llm_chain` (Ollama Cloud primary → OpenRouter fallback) applies. Picking a concrete provider
+  sends `llm_provider` + `llm_chain: []` to force single-provider mode. `ollamaApiKey` added to the
+  backup strip-list (keys stay private). **Deferred:** a per-user structured `llm_chain` editor
+  (multi-row provider/model/rps) — server `LLM_CHAIN` is the fallback-chain source today; the UI
+  only does server-default or single-provider override.
 - **M12b (done, 2026-07):** migrated ChatScreen onto the protocol-v2 `useRunStream` too — one stream
   stack for the whole app; deleted the legacy `use-agent-stream.ts` + `use-active-run.ts` attach gate
   and the `registry.subgraphs` flag. Accepted the message branching / edit-fork / regenerate
