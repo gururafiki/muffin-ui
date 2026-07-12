@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
 
 import { AdvancedOptions } from '@/components/advanced-options';
 import { Icon } from '@/components/icons';
-import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
+import { Avatar, Badge, Button, Card, Field, Skeleton, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
@@ -195,6 +195,18 @@ export function CouncilScreen({
           <Text variant="muted">
             {stream.error instanceof Error ? stream.error.message : String(stream.error)}
           </Text>
+        </Card>
+      ) : null}
+
+      {stream.isThreadLoading ? (
+        /* Reopened session hydrating — hold the arena's shape. */
+        <Card tone="muted" className="gap-3">
+          <View className="flex-row items-center gap-2.5">
+            <ActivityIndicator size="small" color={palette.frosting[400]} />
+            <Text variant="muted" className="flex-1 text-sm">Loading this session…</Text>
+          </View>
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-24 w-full" />
         </Card>
       ) : null}
 

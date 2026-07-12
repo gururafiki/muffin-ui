@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Chip, Screen, Text } from '@/components/ui';
+import { Badge, Card, Chip, Screen, Skeleton, Text } from '@/components/ui';
 import {
   agentTitleForThread,
   relativeTime,
@@ -101,9 +101,17 @@ export default function CallsScreen() {
 
       <View className="mt-4 gap-3">
         {isLoading ? (
-          <Card tone="muted">
-            <Text variant="muted">Loading past calls…</Text>
-          </Card>
+          /* Skeleton rows in the shape of the loaded call cards. */
+          [0, 1, 2].map((i) => (
+            <Card key={i} tone="sticker" className="flex-row items-center gap-3">
+              <Skeleton className="h-12 w-12 rounded-crumb" />
+              <View className="flex-1 gap-1.5">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-24" />
+              </View>
+              <Skeleton className="h-5 w-12 rounded-pill" />
+            </Card>
+          ))
         ) : isError ? (
           <Card tone="outline">
             <Text variant="heading">Couldn’t load calls</Text>

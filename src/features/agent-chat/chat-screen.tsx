@@ -13,7 +13,7 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Chip, Screen, Text } from '@/components/ui';
+import { Badge, Card, Chip, Screen, Skeleton, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import type { AgentDef } from '@/lib/agent/registry';
 import { collectToolRuns, ToolRunsSummary, type Todo } from '@/lib/agent/renderers';
@@ -219,6 +219,20 @@ export function ChatScreen({
           scrollEventThrottle={100}
           onContentSizeChange={() => atBottom && scrollRef.current?.scrollToEnd({ animated: true })}
           keyboardShouldPersistTaps="handled">
+          {stream.isThreadLoading && messages.length === 0 ? (
+            /* Reopened thread hydrating — transcript-shaped placeholders. */
+            <View className="gap-3">
+              <Card tone="outline" className="gap-1.5 self-end" style={{ width: '70%' }}>
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-1/2" />
+              </Card>
+              <Card tone="raised" className="gap-1.5">
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-2/3" />
+              </Card>
+            </View>
+          ) : null}
           <Conversation
             messages={messages as never}
             viewMode={viewMode}

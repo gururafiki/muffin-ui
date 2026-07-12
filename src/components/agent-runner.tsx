@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AdvancedOptions } from '@/components/advanced-options';
-import { Badge, Button, Card, Collapsible, Field, Text } from '@/components/ui';
+import { Badge, Button, Card, Collapsible, Field, Skeleton, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { useCreatePreset } from '@/features/presets/use-presets';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
@@ -35,6 +35,52 @@ function isNonEmpty(v: unknown): boolean {
   if (Array.isArray(v)) return v.length > 0;
   if (typeof v === 'object') return Object.keys(v as object).length > 0;
   return true;
+}
+
+/**
+ * Placeholder panels shown while a reopened thread hydrates (`isThreadLoading`
+ * — one `getState` that can take a while on the deployed backend). The run
+ * plan is predetermined by the registry, so its skeleton shows the real stage
+ * labels; the result and sub-agent panels keep their shape as pulsing blocks.
+ */
+function HydrationSkeleton({ agent }: { agent: AgentDef }) {
+  return (
+    <View className="gap-4">
+      <Card tone="muted" className="gap-3">
+        <View className="flex-row items-center gap-2.5">
+          <ActivityIndicator size="small" color={palette.frosting[400]} />
+          <Text variant="muted" className="flex-1 text-sm">Loading this run…</Text>
+        </View>
+        {agent.stages?.length ? (
+          <View className="gap-1.5">
+            {agent.stages.map((s) => (
+              <View key={s.key} className="flex-row items-center gap-2.5">
+                <View className="w-5 items-center">
+                  <Skeleton className="h-3.5 w-3.5 rounded-pill" />
+                </View>
+                <Text variant="body" className="flex-1 text-sm text-[#9A8BB0] dark:text-night-text-muted">
+                  {s.label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </Card>
+      {/* Headline result placeholder. */}
+      <Card className="gap-2">
+        <Skeleton className="h-5 w-28" />
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-2/3" />
+      </Card>
+      {/* Tool execution + sub-agents placeholder. */}
+      <Card tone="muted" className="gap-2">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-3.5 w-full" />
+        <Skeleton className="h-3.5 w-1/2" />
+      </Card>
+    </View>
+  );
 }
 
 /**
@@ -124,12 +170,19 @@ export function AgentRunner({
   return (
     <ToolCacheProvider thread={liveThreadId} busy={busy}>
       <View className="gap-4">
-      {/* Inputs — collapsed once there is a result so the output leads. */}
+      {/* Inputs — collapsed once there is a result so the output leads. The key
+          remounts the section when the result first lands (streamed live or
+          hydrated from history), since defaultOpen is initial-only. */}
       <Collapsible
+        key={hasResult ? 'result' : 'fresh'}
         title={agent.title}
         icon={agent.icon}
         defaultOpen={!hasResult}
-        headerRight={busy ? <ActivityIndicator size="small" color={palette.frosting[400]} /> : undefined}>
+        headerRight={
+          busy || stream.isThreadLoading ? (
+            <ActivityIndicator size="small" color={palette.frosting[400]} />
+          ) : undefined
+        }>
         <View className="gap-3">
           <Text variant="muted">{agent.tagline}</Text>
           {agent.inputs.map((f) => (
@@ -215,37 +268,44 @@ export function AgentRunner({
         </Card>
       ) : null}
 
-      {/* Done / doing / next — driven by subgraph discovery while it streams. */}
-      <RunProgress
-        agent={agent}
-        values={view}
-        todos={(view as { todos?: Todo[] } | undefined)?.todos}
-        busy={busy}
-        byNode={stream.subgraphsByNode}
-      />
+      {stream.isThreadLoading ? (
+        /* Reopened thread, state fetch in flight — hold the layout's shape. */
+        <HydrationSkeleton agent={agent} />
+      ) : (
+        <>
+          {/* Done / doing / next — driven by subgraph discovery while it streams. */}
+          <RunProgress
+            agent={agent}
+            values={view}
+            todos={(view as { todos?: Todo[] } | undefined)?.todos}
+            busy={busy}
+            byNode={stream.subgraphsByNode}
+          />
 
-      {/* Headline result — same widget live and from history. */}
-      {hasResult ? (
-        agent.resultRenderer && RESULT_RENDERERS[agent.resultRenderer] ? (
-          RESULT_RENDERERS[agent.resultRenderer](result, subagentRuns)
-        ) : (
-          <Card className="gap-2">
-            <Badge label={busy ? 'streaming result' : 'result'} tone="info" />
-            <StructuredOutput value={result} />
-          </Card>
-        )
-      ) : null}
+          {/* Headline result — same widget live and from history. */}
+          {hasResult ? (
+            agent.resultRenderer && RESULT_RENDERERS[agent.resultRenderer] ? (
+              RESULT_RENDERERS[agent.resultRenderer](result, subagentRuns)
+            ) : (
+              <Card className="gap-2">
+                <Badge label={busy ? 'streaming result' : 'result'} tone="info" />
+                <StructuredOutput value={result} />
+              </Card>
+            )
+          ) : null}
 
-      {/* Run-level tool execution: per-tool success/fail/cached counts, drill
-          down to each call's inputs/outputs/errors. Rows join the provider-call
-          cache (ToolCacheProvider) to show the full gathered payload + size +
-          timestamp on expand — this folds in the former "Data gathered" panel.
-          Grows live for criteria — the merged view's evaluations carry each
-          worker's tool_runs. */}
-      <ToolRunsSummary runs={collectToolRuns(view)} />
+          {/* Run-level tool execution: per-tool success/fail/cached counts, drill
+              down to each call's inputs/outputs/errors. Rows join the provider-call
+              cache (ToolCacheProvider) to show the full gathered payload + size +
+              timestamp on expand — this folds in the former "Data gathered" panel.
+              Grows live for criteria — the merged view's evaluations carry each
+              worker's tool_runs. */}
+          <ToolRunsSummary runs={collectToolRuns(view)} />
 
-      {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
-      <SubagentActivity runs={subagentRuns} />
+          {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
+          <SubagentActivity runs={subagentRuns} />
+        </>
+      )}
       </View>
     </ToolCacheProvider>
   );

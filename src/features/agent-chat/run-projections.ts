@@ -2,7 +2,8 @@ import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream'
 import { useChannel } from '@langchain/react';
 import { useMemo } from 'react';
 
-import type { AgentDef } from '@/lib/agent/registry';
+import type { AgentDef, StageDef } from '@/lib/agent/registry';
+import type { ToolRun } from '@/lib/agent/renderers';
 
 type Dict = Record<string, unknown>;
 
@@ -68,6 +69,15 @@ export type SubgraphRow = {
   nodeName: string;
   /** The finished worker's evaluation payload (criteria workers only). */
   evaluation?: Dict;
+  /**
+   * History fallback: the stage's persisted structured output (registry
+   * `StageDef.output` → values). Completed threads have no replayable event
+   * stream, so this is what the expanded row shows instead of the live
+   * scoped transcript.
+   */
+  output?: unknown;
+  /** History fallback: persisted `tool_runs` records attributed to this node. */
+  toolRuns?: ToolRun[];
 };
 
 const titleCase = (s: string) => s.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -84,8 +94,12 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
   const values = stream.values;
 
   return useMemo(() => {
-    const stageLabel = new Map<string, string>();
-    for (const s of agent.stages ?? []) if (s.node) stageLabel.set(s.node, s.label);
+    const stages = agent.stages ?? [];
+    // Stage for a discovered node: exact `node` match first, then the
+    // `active` regex fallback (same resolution RunProgress uses).
+    const stageFor = (node: string): StageDef | undefined =>
+      stages.find((s) => s.node === node) ?? stages.find((s) => s.active?.test(node));
+    const persistedRuns = Array.isArray(values?.tool_runs) ? (values.tool_runs as ToolRun[]) : [];
 
     // Evaluations by name — labels finished workers even after a refresh,
     // when custom events are gone but values carry the full scorecard.
@@ -99,8 +113,13 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
 
     const rows: SubgraphRow[] = [];
     for (const [node, snaps] of byNode) {
+      const stage = stageFor(node);
+      // History detail for the node's rows: its stage's persisted output +
+      // the run-level tool records the backend attributed to this agent.
+      const output = stage?.output != null ? values?.[stage.output] : undefined;
+      const toolRuns = persistedRuns.filter((r) => r.agent === node);
       snaps.forEach((snap, i) => {
-        let label = stageLabel.get(node) ?? titleCase(node);
+        let label = stage?.node === node ? stage.label : titleCase(node);
         let evaluation: Dict | undefined;
         if (node === 'criterion_evaluation') {
           evaluation = byNamespace.get(snap.namespace[0] ?? '');
@@ -121,6 +140,8 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
           namespace: snap.namespace,
           nodeName: snap.nodeName,
           evaluation,
+          output,
+          toolRuns: toolRuns.length > 0 ? toolRuns : undefined,
         });
       });
     }

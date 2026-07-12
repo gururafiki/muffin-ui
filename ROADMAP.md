@@ -173,6 +173,34 @@ backend — each of the 13 persona subgraphs restricts output via `output_schema
 `tool_runs` on the persona state + `<Persona>Output` + `CouncilState` (a shared `PersonaCapture`
 mixin); the council UI panel is already mounted and will light up once that lands.
 
+## ✅ Milestone 14 — Hydration skeletons + sub-agent history detail (2026-07)
+Two UX bugs reported on the deployed app (criteria thread reopen):
+- **No loading feedback:** `GET /threads/{id}/state` takes **28–70s** on the Oracle node
+  (checkpoint-read latency, known backend issue), during which the runner showed only the bare
+  input form, then everything popped in at once. Now `stream.isThreadLoading` renders skeletons:
+  a new `ui/Skeleton` pulsing primitive; the runner's "Loading this run…" card lists the REAL
+  registry stage labels (predetermined UI), plus result/panel-shaped blocks; chat gets
+  transcript-shaped blocks, council a session placeholder, calls list/detail card skeletons. The
+  inputs Collapsible also re-collapses when a result lands (keyed remount — `defaultOpen` is
+  initial-only), so the reopened run's output leads.
+- **"No detail was recorded for this step":** expanding a discovery-seeded stage row (e.g.
+  criteria "Classify the stock") showed nothing on a finished thread — `SubgraphDetail` read only
+  the live scoped channels (empty: completed runs have no replayable events) and `row.evaluation`
+  (criterion workers only), discarding what history DOES hold. Fix: registry `StageDef.output`
+  names the stage's values key (criteria classify/define/methodology/synthesis, research stages,
+  trading reports); `useSubgraphRows` attaches `row.output` + `row.toolRuns` (run-level
+  `tool_runs` filtered by `agent === node`), and `SubgraphDetail` falls back to them (Result via
+  `StructuredOutput` + a Tool-calls list that still joins the payload cache). Live channels win
+  when present.
+Verified: tsc + lint + web export + headless smoke against the real deployed thread through a
+local CF-Access proxy — skeleton visible at +0.6s, classify row expands into the full
+classification (rationale, confidence, data sources) with zero console errors.
+**Deferred:** (a) the 28–70s `/state` + `/threads/{id}/history` latency itself is backend
+(langgraph-api checkpoint reads on the A1 node) — the skeletons mitigate, they don't cure;
+(b) discovery-seeded stage rows appear only after the *second* slow call (`/history`) returns —
+stage rows could be pre-seeded from the registry + values once hydrated; (c) the council arena
+skeleton is a simple card, not the full 13-seat arena shape.
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

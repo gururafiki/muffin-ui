@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 
-import { Badge, Card, Screen, Text } from '@/components/ui';
+import { Badge, Card, Screen, Skeleton, Text } from '@/components/ui';
 import {
   agentTitleForThread,
   relativeTime,
@@ -44,9 +44,25 @@ export default function CallDetailRoute() {
       <Stack.Screen options={{ title }} />
 
       {isLoading ? (
-        <Card tone="muted" className="mt-4">
-          <Text variant="muted">Loading call…</Text>
-        </Card>
+        /* Skeleton mirroring the loaded layout: header card, result, panels. */
+        <View className="mt-4 gap-4">
+          <Card tone="sticker" className="gap-2">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-3 w-64" />
+          </Card>
+          <Card tone="raised" className="gap-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-2/3" />
+          </Card>
+          <Card tone="muted" className="gap-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-1/2" />
+          </Card>
+        </View>
       ) : isError || !thread ? (
         <Card tone="outline" className="mt-4">
           <Text variant="heading">Couldn’t load this call</Text>

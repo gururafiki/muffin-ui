@@ -104,6 +104,15 @@ The whole app is organised around **"one graph → one screen"**:
     heavy one and the candidate to slim once the checkpoint-read latency is fixed — reconstructing
     from checkpoints trades write-bloat for the slow read.) Mid-run refresh replays buffered events
     (seq/`since`).
+    **Sub-agent history detail (M14):** on a finished thread the scoped channels stay empty, so a
+    discovered stage row's expanded `SubgraphDetail` falls back to persisted state: the stage's
+    structured output via registry `StageDef.output` (values key) + the run-level `tool_runs`
+    records whose `agent` equals the node name — attached to `SubgraphRow` by `useSubgraphRows`.
+    Live scoped channels always win when they have data.
+    **Hydration skeletons (M14):** `stream.isThreadLoading` (initial `getState` in flight — 28–70s
+    on the deployed backend today) drives skeleton panels: the runner shows the registry stage
+    labels under "Loading this run…", chat shows transcript-shaped blocks, council a session
+    placeholder, calls list/detail card-shaped blocks (`<Skeleton>` primitive in `ui/`).
 - **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
   json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
   `tool-runs.tsx` renders backend `AgentCaptureMiddleware` output: `collectToolRuns(values)` gathers
@@ -189,7 +198,8 @@ schemes × region/tier lenses as ISO-3166 lists, rendered onto an SVG `world-map
 (portfolio + goals, Zustand store seeded with demo data, persisted on-device).
 
 ### Design system — `src/components/`
-- **`ui/`** — bakery primitives styled with NativeWind v4 `className`.
+- **`ui/`** — bakery primitives styled with NativeWind v4 `className` (incl. `Skeleton`, the
+  pulsing loading placeholder used by the hydration/loading states).
 - **Design tokens** live in `tailwind.config.js` (the `frosting`/`blueberry`/`butter`/`leaf`
   palette, `crumb`/`muffin`/`bun` radii, Baloo2/Nunito font families — note **font weight is baked
   into the family name** since native ignores `fontWeight`). **`src/theme/colors.ts` mirrors this

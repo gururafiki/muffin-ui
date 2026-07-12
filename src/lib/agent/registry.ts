@@ -71,6 +71,13 @@ export interface StageDef {
    * leave unset and rely on `done(values)`.
    */
   node?: string;
+  /**
+   * Values key holding this stage's structured output. Completed runs have no
+   * replayable event stream, so this is the history fallback shown when the
+   * stage's discovered sub-agent row is expanded (live runs show the scoped
+   * transcript instead).
+   */
+  output?: string;
   /** Dynamic sub-rows derived from state (criteria, persona votes, …). */
   children?: (values: Record<string, unknown>) => StageChild[];
   /**
@@ -142,10 +149,10 @@ export const AGENTS: AgentDef[] = [
       { key: 'max_search_results', label: 'Max search results', type: 'number', placeholder: '8' },
     ],
     stages: [
-      { key: 'classify', label: 'Understand the question', icon: 'thinking', done: (v) => has(v, 'classification'), active: /classif/i },
-      { key: 'search', label: 'Gather evidence', icon: 'research', done: (v) => has(v, 'evidence'), active: /search|retriev|collect|firecrawl/i },
-      { key: 'rerank', label: 'Rank the best sources', icon: 'criteria', done: (v) => has(v, 'reranked_evidence'), active: /rerank/i },
-      { key: 'write', label: 'Write the answer', icon: 'sparkle', done: (v) => has(v, 'output'), active: /writ|answer|synth/i },
+      { key: 'classify', label: 'Understand the question', icon: 'thinking', done: (v) => has(v, 'classification'), active: /classif/i, output: 'classification' },
+      { key: 'search', label: 'Gather evidence', icon: 'research', done: (v) => has(v, 'evidence'), active: /search|retriev|collect|firecrawl/i, output: 'evidence' },
+      { key: 'rerank', label: 'Rank the best sources', icon: 'criteria', done: (v) => has(v, 'reranked_evidence'), active: /rerank/i, output: 'reranked_evidence' },
+      { key: 'write', label: 'Write the answer', icon: 'sparkle', done: (v) => has(v, 'output'), active: /writ|answer|synth/i, output: 'output' },
     ],
   },
   {
@@ -216,9 +223,9 @@ export const AGENTS: AgentDef[] = [
     // (the old predicate skipped straight to "Synthesise the verdict" while
     // workers were still running).
     stages: [
-      { key: 'classify', label: 'Classify the stock', icon: 'thinking', node: 'ticker_classification', done: (v) => has(v, 'classification'), active: /classif/i },
-      { key: 'define', label: 'Define the criteria', icon: 'criteria', node: 'criteria_definition', done: (v) => has(v, 'criteria_definition'), active: /criteria_definition|define/i },
-      { key: 'methodology', label: 'Pick a valuation methodology', icon: 'evaluation', node: 'valuation_methodology', done: (v) => has(v, 'valuation_methodology'), active: /valuation|methodolog/i },
+      { key: 'classify', label: 'Classify the stock', icon: 'thinking', node: 'ticker_classification', done: (v) => has(v, 'classification'), active: /classif/i, output: 'classification' },
+      { key: 'define', label: 'Define the criteria', icon: 'criteria', node: 'criteria_definition', done: (v) => has(v, 'criteria_definition'), active: /criteria_definition|define/i, output: 'criteria_definition' },
+      { key: 'methodology', label: 'Pick a valuation methodology', icon: 'evaluation', node: 'valuation_methodology', done: (v) => has(v, 'valuation_methodology'), active: /valuation|methodolog/i, output: 'valuation_methodology' },
       { key: 'merge', label: 'Merge the scorecard', icon: 'files', done: (v) => has(v, 'merged_criteria'), active: /merge/i },
       {
         key: 'evaluate',
@@ -238,7 +245,7 @@ export const AGENTS: AgentDef[] = [
           return evals.map((c, i) => ({ key: c.criterion_name ?? String(i), label: c.criterion_name ?? `Criterion ${i + 1}`, done: true }));
         },
       },
-      { key: 'synthesis', label: 'Synthesise the verdict', icon: 'sparkle', node: 'synthesis', done: (v) => has(v, 'synthesis'), active: /synth/i },
+      { key: 'synthesis', label: 'Synthesise the verdict', icon: 'sparkle', node: 'synthesis', done: (v) => has(v, 'synthesis'), active: /synth/i, output: 'synthesis' },
     ],
   },
   {
@@ -277,10 +284,10 @@ export const AGENTS: AgentDef[] = [
     // debate, judge, portfolio decision), not just one field.
     resultRenderer: 'trading',
     stages: [
-      { key: 'market', label: 'Market & technicals', icon: 'markets', done: (v) => has(v, 'market_report'), active: /market_analyst/i },
-      { key: 'fundamentals', label: 'Fundamentals', icon: 'criteria', done: (v) => has(v, 'fundamentals_report'), active: /fundamentals_analyst/i },
-      { key: 'news', label: 'News', icon: 'research', done: (v) => has(v, 'news_report'), active: /news_analyst/i },
-      { key: 'sentiment', label: 'Social sentiment', icon: 'sparkle', done: (v) => has(v, 'sentiment_report'), active: /social_analyst|sentiment/i },
+      { key: 'market', label: 'Market & technicals', icon: 'markets', done: (v) => has(v, 'market_report'), active: /market_analyst/i, output: 'market_report' },
+      { key: 'fundamentals', label: 'Fundamentals', icon: 'criteria', done: (v) => has(v, 'fundamentals_report'), active: /fundamentals_analyst/i, output: 'fundamentals_report' },
+      { key: 'news', label: 'News', icon: 'research', done: (v) => has(v, 'news_report'), active: /news_analyst/i, output: 'news_report' },
+      { key: 'sentiment', label: 'Social sentiment', icon: 'sparkle', done: (v) => has(v, 'sentiment_report'), active: /social_analyst|sentiment/i, output: 'sentiment_report' },
       {
         key: 'debate',
         label: 'Bull vs bear debate',
@@ -292,10 +299,10 @@ export const AGENTS: AgentDef[] = [
           return Array.from({ length: rounds }, (_, i) => ({ key: `r${i}`, label: `Round ${i + 1}`, done: true }));
         },
       },
-      { key: 'judge', label: 'The judge rules', icon: 'council', done: (v) => has(v, 'investment_judge'), active: /judge/i },
-      { key: 'trader', label: 'Trader drafts the plan', icon: 'trading', done: (v) => has(v, 'trader'), active: /trader/i },
+      { key: 'judge', label: 'The judge rules', icon: 'council', done: (v) => has(v, 'investment_judge'), active: /judge/i, output: 'investment_judge' },
+      { key: 'trader', label: 'Trader drafts the plan', icon: 'trading', done: (v) => has(v, 'trader'), active: /trader/i, output: 'trader' },
       { key: 'risk', label: 'Risk debate', icon: 'warning', done: (v) => has(v, 'portfolio_decision'), active: /risk|debator/i },
-      { key: 'portfolio', label: 'Portfolio call', icon: 'portfolio', done: (v) => has(v, 'portfolio_decision'), active: /portfolio/i },
+      { key: 'portfolio', label: 'Portfolio call', icon: 'portfolio', done: (v) => has(v, 'portfolio_decision'), active: /portfolio/i, output: 'portfolio_decision' },
     ],
     advanced: [
       { key: 'max_investment_debate_rounds', label: 'Bull/bear debate rounds', type: 'number', placeholder: '2' },

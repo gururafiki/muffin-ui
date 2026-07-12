@@ -9,4 +9,5 @@ export { MuffinLogo } from './logo';
 export { PlaidBackground } from './plaid-background';
 export { ScallopDivider } from './scallop-divider';
 export { Screen } from './screen';
+export { Skeleton } from './skeleton';
 export { Text } from './text';
