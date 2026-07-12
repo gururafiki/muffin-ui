@@ -168,10 +168,10 @@ per unique key if it bites.
 **M13 follow-up — panel for every agent (2026-07):** the panel was mounted on the three bespoke
 screens (`council-screen`, `calls/[threadId]` history, `chat-screen`) and the backend now surfaces
 `tool_runs` for `trading_decision` + `research` (declared the state channel; `researcher_node`
-forwards it) — `stock_evaluation` already surfaced it (bare deep agent). **Owed:** the `council`
-backend — each of the 13 persona subgraphs restricts output via `output_schema`, so it needs
-`tool_runs` on the persona state + `<Persona>Output` + `CouncilState` (a shared `PersonaCapture`
-mixin); the council UI panel is already mounted and will light up once that lands.
+forwards it) — `stock_evaluation` already surfaced it (bare deep agent). ~~**Owed:** the `council`
+backend~~ — landed: muffin-agent #109 declared the channel on all 13 persona subgraphs
+(State + `<Persona>Output` + `CouncilState`) and #116 extended it to the 4 ReAct specialists;
+the council panel populates on runs from 2026-07-12 onward (see M15).
 
 ## ✅ Milestone 14 — Hydration skeletons + sub-agent history detail (2026-07)
 Two UX bugs reported on the deployed app (criteria thread reopen):
@@ -200,6 +200,40 @@ classification (rationale, confidence, data sources) with zero console errors.
 (b) discovery-seeded stage rows appear only after the *second* slow call (`/history`) returns —
 stage rows could be pre-seeded from the registry + values once hydrated; (c) the council arena
 skeleton is a simple card, not the full 13-seat arena shape.
+
+## ✅ Milestone 15 — Council arena: specialists as members + structured member detail (2026-07)
+Three council-page complaints from the deployed app: specialists only appeared as generic
+"sub-agents" rows at the bottom; persona/specialist output looked messy and half empty (plain
+text, no sense of what the member did or collected, no step timeline); and no tool-execution
+stats. All 19 members (13 personas + 6 optional specialists) emit the same `AnalystSignal` into
+`values.persona_signals`, so the fix is metadata + rendering:
+- **One member model** (`personas.ts`): `PersonaMeta` gains `kind` + `steps`;
+  `COUNCIL_SPECIALISTS` (slugs = backend agent_ids, 6 new `specialist-*` Phosphor icons) +
+  `COUNCIL_MEMBERS` + `MEMBER_SLUGS` + `toolRunAgentSlug()` (strips the `_data_collection`
+  suffix `tool_runs.agent` carries). Specialist seats join the grid when any specialist shows in
+  signals / live fold / discovery, or when a fresh run's `include_specialists` toggle asks for
+  them (all-or-nothing flag) — `deriveCouncil` returns `members` and stages over it; `VoteBar`
+  takes `seats` (was hardcoded `/ 13`); specialist avatars label their compute stage "Computing…".
+- **`MemberDetail`** (new, replaces the two inline cards): icon header + signal/confidence →
+  step timeline (per-member `steps`, checked from live stage or settled history) → "Why"
+  reasoning as `Markdown` → typed evidence via `StructuredOutput` (collapsible) → "Data
+  collected" (`ToolRunList` of the member's own `tool_runs`, cache-joined) → live digest chips →
+  `SubgraphDetail` scoped transcript while streaming. Personas and specialists render identically.
+- **Sub-agents panel** is now a safety net only (discovered nodes not in `MEMBER_SLUGS`);
+  `ToolRunsSummary` gains `emptyMessage` — finished councils that predate capture say
+  "re-run to capture" instead of rendering nothing. `useSubgraphRows` tool-run join also accepts
+  `<node>_data_collection`.
+Verified: tsc + lint + web export + headless smokes through a local CF-Access proxy against three
+real deployed threads — a fresh 19-member run (arena + Valuation/Buffett detail incl. 7
+cache-joined tool runs; "Tool execution: 58 calls · 6 failed"), the user's original 19-signal
+thread, and an old 13-persona thread (no specialist seats, empty-state hint). Zero new console
+errors (a pre-existing React #418 hydration mismatch reproduces on the UNMODIFIED deployed site —
+see backlog).
+**Deferred:** (a) `technicals` + `sentiment` fetch via `cached_invoke`, which bypasses
+`AgentCaptureMiddleware` — their detail cards show evidence but never "Data collected" (backend
+backlog: capture in `cached_invoke`); (b) React error #418 (SSG hydration mismatch) fires on
+every page of the deployed export — pre-existing, needs its own investigation; (c) exact
+per-node sub-stage events for specialists (2-node subgraphs reuse the persona stage inference).
 
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.

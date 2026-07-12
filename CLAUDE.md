@@ -138,7 +138,14 @@ The whole app is organised around **"one graph → one screen"**:
   cache fetch), and `features/agent-chat/chat-screen.tsx` each mount
   `<ToolCacheProvider>` + `<ToolRunsSummary runs={collectToolRuns(values)} />`. The panel populates
   only for graphs that surface `tool_runs` (criteria_analysis / trading_decision / research /
-  stock_evaluation; council pending its backend change) — it renders `null` otherwise.
+  stock_evaluation / council — the 13 personas since muffin-agent #109, the 4 ReAct specialists
+  since #116; `technicals`/`sentiment` fetch via `cached_invoke` which bypasses capture, so they
+  never contribute records) — it renders `null` otherwise, except when the caller passes
+  `emptyMessage` (council does, for finished runs predating capture). Council records carry
+  `agent: "<slug>_data_collection"` — join via `toolRunAgentSlug()` (`features/council/personas.ts`),
+  and `useSubgraphRows` accepts the suffixed form too. The council screen itself is member-unified
+  (M15): `COUNCIL_MEMBERS` = 13 personas + 6 optional specialists in one arena grid, one
+  `MemberDetail` card for both kinds.
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —

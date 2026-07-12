@@ -26,6 +26,12 @@ const STAGE_LABEL: Record<PersonaStage, string> = {
   done: '',
 };
 
+/** Specialists are 2-node fetch→compute subgraphs — no evidence/verdict split. */
+const SPECIALIST_STAGE_LABEL: Partial<Record<PersonaStage, string>> = {
+  scoring: 'Computing…',
+  deciding: 'Computing…',
+};
+
 const toneColor: Record<'bullish' | 'bearish' | 'neutral', string> = {
   bullish: palette.bullish,
   bearish: palette.bearish,
@@ -124,7 +130,7 @@ export function PersonaAvatar({
         </View>
       ) : (
         <Text variant="muted" numberOfLines={1} className="text-center text-[9px] text-frosting-400">
-          {STAGE_LABEL[stage]}
+          {(meta.kind === 'specialist' ? SPECIALIST_STAGE_LABEL[stage] : undefined) ?? STAGE_LABEL[stage]}
         </Text>
       )}
     </Pressable>

@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
 
 import { AdvancedOptions } from '@/components/advanced-options';
 import { Icon } from '@/components/icons';
-import { Avatar, Badge, Button, Card, Field, Skeleton, Text } from '@/components/ui';
+import { Badge, Button, Card, Field, Skeleton, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
-import { SubagentActivity, SubagentStateDigest } from '@/features/agent-chat/conversation';
+import { SubagentActivity } from '@/features/agent-chat/conversation';
 import { RunProgress } from '@/features/agent-chat/run-progress';
 import { useSubgraphRows } from '@/features/agent-chat/run-projections';
 import { SubgraphDetail } from '@/features/agent-chat/subgraph-detail';
@@ -23,22 +23,39 @@ import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { CouncilArena } from './council-arena';
 import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
-import { COUNCIL_PERSONAS, getPersonaMeta, normalizeSlug } from './personas';
+import { MemberDetail } from './member-detail';
+import {
+  COUNCIL_MEMBERS,
+  COUNCIL_PERSONAS,
+  COUNCIL_SPECIALISTS,
+  getPersonaMeta,
+  MEMBER_SLUGS,
+  normalizeSlug,
+  toolRunAgentSlug,
+  type PersonaMeta,
+} from './personas';
 import { signalTone, type PersonaSignal, type PersonaStage, type VoteTally } from './types';
 import { VoteBar } from './vote-bar';
 
 /**
- * Derive every persona's arena view (stage/signal/tally). Root
+ * Derive every member's arena view (stage/signal/tally). Root
  * `values.persona_signals` is authoritative (barrier / history); mid-run the
- * per-persona live fold (namespaced values events) and subgraph-discovery
+ * per-member live fold (namespaced values events) and subgraph-discovery
  * statuses fill the gap — both are monotone, so seats never regress.
+ *
+ * Specialists are optional per run (`include_specialists`, all six or none):
+ * their seats join the grid when any specialist shows up in signals / live
+ * events / discovery, or — before any events land — when the toggle says a
+ * fresh run asked for them.
  */
 function deriveCouncil(
   values: Record<string, unknown> | undefined,
   live: Map<string, PersonaLive>,
   byNode: ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]> | undefined,
   busy: boolean,
+  wantSpecialists: boolean,
 ): {
+  members: PersonaMeta[];
   signals: Record<string, PersonaSignal>;
   stages: Record<string, PersonaStage>;
   synthesis: Record<string, unknown> | null;
@@ -61,8 +78,15 @@ function deriveCouncil(
     }
   }
 
+  const specialistsPresent =
+    COUNCIL_SPECIALISTS.some(
+      (s) => signals[s.slug] || live.has(s.slug) || discovered.has(s.slug),
+    ) ||
+    (busy && wantSpecialists);
+  const members = specialistsPresent ? COUNCIL_MEMBERS : COUNCIL_PERSONAS;
+
   const stages = Object.fromEntries(
-    COUNCIL_PERSONAS.map((p) => {
+    members.map((p) => {
       if (signals[p.slug]) return [p.slug, 'done' as PersonaStage];
       const liveStage = live.get(p.slug)?.stage;
       if (busy && liveStage) return [p.slug, liveStage];
@@ -73,7 +97,7 @@ function deriveCouncil(
     }),
   );
   const synthesis = (values?.council_synthesis as Record<string, unknown>) ?? null;
-  return { signals, stages, synthesis, tally };
+  return { members, signals, stages, synthesis, tally };
 }
 
 /**
@@ -107,25 +131,28 @@ export function CouncilScreen({
   const query = queryEdit ?? savedInputs?.query ?? '';
 
   const live = useCouncilLive(stream);
-  const { signals, stages, synthesis, tally } = useMemo(
-    () => deriveCouncil(values, live, stream.subgraphsByNode, busy),
-    [values, live, stream.subgraphsByNode, busy],
+  const wantSpecialists = Boolean(advanced.include_specialists);
+  const { members, signals, stages, synthesis, tally } = useMemo(
+    () => deriveCouncil(values, live, stream.subgraphsByNode, busy, wantSpecialists),
+    [values, live, stream.subgraphsByNode, busy, wantSpecialists],
   );
-  const judging = busy && Object.keys(signals).length >= COUNCIL_PERSONAS.length && !synthesis;
+  const judging = busy && Object.keys(signals).length >= members.length && !synthesis;
 
   const totalVotes = tally.bullish + tally.bearish + tally.neutral;
   const selSignal = selected ? signals[selected] : undefined;
   const selMeta = selected ? getPersonaMeta(selected) : undefined;
 
-  // Discovered subgraph rows. Personas surface in the arena / persona detail;
-  // any non-persona row is an added specialist (valuation, news-sentiment, …)
-  // shown in its own panel with a live scoped transcript.
+  // Discovered subgraph rows. Known members (personas + specialists) surface
+  // in the arena / member detail; anything else — a future graph node the UI
+  // doesn't know yet — falls back to the generic sub-agents panel.
   const discovered = useSubgraphRows(agent, stream as never);
-  const personaSlugs = useMemo(() => new Set(COUNCIL_PERSONAS.map((p) => p.slug)), []);
   const selRow = selected ? discovered.find((r) => normalizeSlug(r.nodeName) === selected) : undefined;
   const selLive = selected ? live.get(selected) : undefined;
-  const specialistRuns = discovered
-    .filter((r) => !personaSlugs.has(normalizeSlug(r.nodeName)) && r.nodeName !== 'council_judge')
+  const selToolRuns = selected
+    ? collectToolRuns(values).filter((r) => toolRunAgentSlug(r.agent) === selected)
+    : [];
+  const unknownRuns = discovered
+    .filter((r) => !MEMBER_SLUGS.has(normalizeSlug(r.nodeName)) && r.nodeName !== 'council_judge')
     .map((row) => ({
       name: row.label,
       status: row.status,
@@ -150,7 +177,11 @@ export function CouncilScreen({
           </View>
           <View className="flex-1">
             <Text variant="heading">Investor Council</Text>
-            <Text variant="muted">13 legends debate, a judge decides.</Text>
+            <Text variant="muted">
+              {members.length > COUNCIL_PERSONAS.length
+                ? '13 legends + 6 specialists debate, a judge decides.'
+                : '13 legends debate, a judge decides.'}
+            </Text>
           </View>
         </View>
         <Field
@@ -216,12 +247,13 @@ export function CouncilScreen({
 
       {busy || totalVotes > 0 ? (
         <Card className="gap-2">
-          <VoteBar tally={tally} />
+          <VoteBar tally={tally} seats={members.length} />
         </Card>
       ) : null}
 
       {busy || totalVotes > 0 ? (
         <CouncilArena
+          members={members}
           stages={stages}
           signals={signals}
           selected={selected}
@@ -230,46 +262,36 @@ export function CouncilScreen({
         />
       ) : null}
 
-      {selMeta ? (
+      {selected && selMeta ? (
         <Animated.View entering={FadeIn.duration(200)}>
-          <Pressable onPress={() => setSelected(null)}>
-            <Card className="gap-2">
-              <View className="flex-row items-center gap-3">
-                <Avatar name={selMeta.name} size={44} />
-                <View className="flex-1">
-                  <Text variant="heading">{selMeta.name}</Text>
-                  <Text variant="muted">{selMeta.style}</Text>
-                </View>
-                {selSignal?.signal ? <Badge label={selSignal.signal} tone={signalTone(selSignal.signal)} /> : null}
-              </View>
-              {typeof selSignal?.confidence === 'number' ? (
-                <Text variant="muted">confidence {Math.round(selSignal.confidence * 100)}%</Text>
-              ) : null}
-              {selSignal?.reasoning ? (
-                <Text variant="body">{selSignal.reasoning}</Text>
-              ) : (
-                <Text variant="muted">{selMeta.name} is still deliberating…</Text>
-              )}
-            </Card>
-          </Pressable>
+          <MemberDetail
+            meta={selMeta}
+            signal={selSignal}
+            stage={stages[selected] ?? 'pending'}
+            busy={busy}
+            liveValues={selLive?.values}
+            row={selRow}
+            stream={stream}
+            toolRuns={selToolRuns}
+            onDismiss={() => setSelected(null)}
+          />
         </Animated.View>
       ) : null}
 
-      {selected && (selRow || selLive?.values) ? (
-        <Animated.View entering={FadeIn.duration(200)}>
-          <Card tone="muted" className="gap-3">
-            <Text variant="label">How {selMeta?.name ?? 'they'} worked</Text>
-            <SubagentStateDigest values={selLive?.values} />
-            {selRow ? <SubgraphDetail stream={stream} row={selRow} /> : null}
-          </Card>
-        </Animated.View>
-      ) : null}
+      {/* Safety net: discovered nodes the UI has no member metadata for yet. */}
+      {unknownRuns?.length ? <SubagentActivity runs={unknownRuns} /> : null}
 
-      {specialistRuns?.length ? <SubagentActivity runs={specialistRuns} /> : null}
-
-      {/* Tool execution across all 13 personas (each row's `agent` field
-          identifies the persona). Rows join the provider-call cache on expand. */}
-      <ToolRunsSummary runs={collectToolRuns(values)} />
+      {/* Tool execution across every member (each row's `agent` field carries
+          the member's collect_data agent name). Rows join the provider-call
+          cache on expand. Older runs predate capture — say so. */}
+      <ToolRunsSummary
+        runs={collectToolRuns(values)}
+        emptyMessage={
+          !busy && totalVotes > 0
+            ? 'No tool telemetry was recorded for this run — re-run the council to capture per-member tool calls.'
+            : undefined
+        }
+      />
 
       {judging || synthesis ? (
         <Animated.View entering={FadeInDown.duration(300)}>

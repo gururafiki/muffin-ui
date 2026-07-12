@@ -1,18 +1,23 @@
 import { View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
-import { COUNCIL_PERSONAS } from './personas';
+import type { PersonaMeta } from './personas';
 import { PersonaAvatar } from './persona-avatar';
 import type { PersonaSignal, PersonaStage } from './types';
 
-/** The arena: 13 investor avatars, live-animated as the debate unfolds. */
+/**
+ * The arena: the sitting members (13 personas, +6 specialists when the run
+ * includes them), live-animated as the debate unfolds.
+ */
 export function CouncilArena({
+  members,
   stages,
   signals,
   selected,
   onSelect,
   active,
 }: {
+  members: PersonaMeta[];
   stages: Record<string, PersonaStage>;
   signals: Record<string, PersonaSignal>;
   selected: string | null;
@@ -26,7 +31,7 @@ export function CouncilArena({
         <Text variant="muted">{active ? 'in session' : 'tap an avatar'}</Text>
       </View>
       <View className="flex-row flex-wrap justify-center gap-y-3">
-        {COUNCIL_PERSONAS.map((meta) => (
+        {members.map((meta) => (
           <PersonaAvatar
             key={meta.slug}
             meta={meta}

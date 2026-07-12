@@ -217,10 +217,21 @@ function ToolStatRow({ stat }: { stat: ToolStat }) {
 /**
  * Run-level tool-execution summary: total success/fail per tool (tap a tool to
  * see its individual runs with inputs/outputs/errors) plus a failures roll-up.
- * Collapsed by default; renders nothing when telemetry produced no records.
+ * Collapsed by default; with no records it renders nothing — unless the caller
+ * passes `emptyMessage` (a hint for finished runs that predate capture).
  */
-export function ToolRunsSummary({ runs }: { runs?: ToolRun[] }) {
-  if (!runs?.length) return null;
+export function ToolRunsSummary({ runs, emptyMessage }: { runs?: ToolRun[]; emptyMessage?: string }) {
+  if (!runs?.length) {
+    if (!emptyMessage) return null;
+    return (
+      <Card tone="muted">
+        <View className="flex-row items-center gap-2">
+          <Icon name="tools" size={16} color={palette.frosting[400]} />
+          <Text variant="muted" className="flex-1 text-xs">{emptyMessage}</Text>
+        </View>
+      </Card>
+    );
+  }
   const { stats, failures } = summarise(runs);
   const total = runs.length;
   const failed = failures.length;

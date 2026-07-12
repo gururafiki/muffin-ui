@@ -22,18 +22,19 @@ function Segment({ frac, color }: { frac: number; color: string }) {
 }
 
 /** Animated tally of the council's bull/hold/bear votes as they arrive. */
-export function VoteBar({ tally }: { tally: VoteTally }) {
+export function VoteBar({ tally, seats }: { tally: VoteTally; seats: number }) {
   const total = tally.bullish + tally.bearish + tally.neutral;
+  const denom = Math.max(seats, total, 1);
 
   return (
     <View className="gap-2">
       <View className="flex-row items-center justify-between">
         <Text variant="label">Votes in</Text>
-        <Text variant="muted">{total} / 13</Text>
+        <Text variant="muted">{total} / {denom}</Text>
       </View>
       <View className="h-3 flex-row overflow-hidden rounded-pill bg-crust dark:bg-night-surface-muted">
         {SEGMENTS.map((s) => (
-          <Segment key={s.key} frac={total ? tally[s.key] / 13 : 0} color={s.color} />
+          <Segment key={s.key} frac={total ? tally[s.key] / denom : 0} color={s.color} />
         ))}
       </View>
       <View className="flex-row flex-wrap gap-3">

@@ -115,9 +115,12 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
     for (const [node, snaps] of byNode) {
       const stage = stageFor(node);
       // History detail for the node's rows: its stage's persisted output +
-      // the run-level tool records the backend attributed to this agent.
+      // the run-level tool records the backend attributed to this agent. The
+      // council members' inner collect agents are named `<node>_data_collection`.
       const output = stage?.output != null ? values?.[stage.output] : undefined;
-      const toolRuns = persistedRuns.filter((r) => r.agent === node);
+      const toolRuns = persistedRuns.filter(
+        (r) => r.agent === node || r.agent === `${node}_data_collection`,
+      );
       snaps.forEach((snap, i) => {
         let label = stage?.node === node ? stage.label : titleCase(node);
         let evaluation: Dict | undefined;

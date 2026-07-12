@@ -29,6 +29,7 @@ import {
   ChartDonutIcon,
   ChartLineUpIcon,
   ChartPieSliceIcon,
+  CoinsIcon,
   CheckIcon,
   CheckCircleIcon,
   ChefHatIcon,
@@ -47,6 +48,7 @@ import {
   FunctionIcon,
   GasPumpIcon,
   GearIcon,
+  GaugeIcon,
   GlobeIcon,
   GlobeHemisphereEastIcon,
   GlobeHemisphereWestIcon,
@@ -60,6 +62,7 @@ import {
   MagnifyingGlassIcon,
   MoneyIcon,
   MountainsIcon,
+  NewspaperIcon,
   PackageIcon,
   PaperPlaneTiltIcon,
   PawPrintIcon,
@@ -67,6 +70,8 @@ import {
   PlantIcon,
   PlayIcon,
   PlusIcon,
+  PulseIcon,
+  ReceiptIcon,
   RocketIcon,
   RulerIcon,
   ScalesIcon,
@@ -168,6 +173,14 @@ export const iconRegistry = {
   'persona-jhunjhunwala': PawPrintIcon,
   'persona-druckenmiller': WavesIcon,
   'persona-damodaran': CalculatorIcon,
+
+  // ── Council specialist accents ───────────────────────────────────────
+  'specialist-technicals': PulseIcon,
+  'specialist-sentiment': GaugeIcon,
+  'specialist-fundamentals': ReceiptIcon,
+  'specialist-growth': ChartLineUpIcon,
+  'specialist-valuation': CoinsIcon,
+  'specialist-news': NewspaperIcon,
 
   // ── Generic UI ─────────────────────────────────────────────────────
   'chevron-right': CaretRightIcon,
