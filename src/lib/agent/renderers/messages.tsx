@@ -29,6 +29,16 @@ export function messageKind(message: AnyMessage): string {
   return (message.type ?? message.role ?? 'ai').toLowerCase();
 }
 
+/** Parse a whole body as JSON when it looks like one (mirrors ToolResult). */
+function tryParseJson(t: string): unknown {
+  if (!(t.startsWith('{') || t.startsWith('[')) || t.length >= 8000) return undefined;
+  try {
+    return JSON.parse(t);
+  } catch {
+    return undefined;
+  }
+}
+
 const textContent = messageText;
 
 /** Render a single LangChain message (human / ai / tool). */
@@ -47,10 +57,19 @@ export function MessageBubble({ message }: { message: AnyMessage }) {
   }
 
   const isHuman = kind === 'human' || kind === 'user';
+  const json = isHuman ? undefined : tryParseJson(body.trim());
   return (
     <Card tone={isHuman ? 'outline' : 'raised'} className="gap-2">
       <Badge label={isHuman ? 'you' : (message.name ?? 'agent')} tone="info" />
-      {body ? isHuman ? <Text variant="body">{body}</Text> : <Markdown value={body} /> : null}
+      {body ? (
+        isHuman ? (
+          <Text variant="body">{body}</Text>
+        ) : json !== undefined ? (
+          <JsonBlock value={json} />
+        ) : (
+          <Markdown value={body} />
+        )
+      ) : null}
       {toolCalls.length > 0 && (
         <View className="gap-1">
           {toolCalls.map((tc, i) => (

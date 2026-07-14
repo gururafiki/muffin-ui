@@ -2,10 +2,9 @@ import { View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
 import {
-  BULL_BEAR_DEBATERS,
   DebateView,
-  RISK_DEBATERS,
   bullBearTurns,
+  debatersForTurns,
   namedMessageTurns,
 } from '@/features/multi-agent/debate';
 import { JsonBlock } from './json-block';
@@ -34,7 +33,11 @@ export function TradingResult({ value }: { value: unknown }) {
   const conviction = typeof judge.conviction === 'number' ? judge.conviction : undefined;
   const summary = str(pd.executive_summary) ?? str(judge.summary);
 
-  const debateTurns = bullBearTurns(v.investment_bull_responses, v.investment_bear_responses);
+  // Bull/Bear debate: prefer the conference message list (muffin-agent #117),
+  // fall back to the legacy per-speaker lists for pre-migration threads.
+  const debateTurns = Array.isArray(v.investment_debate_messages)
+    ? namedMessageTurns(v.investment_debate_messages)
+    : bullBearTurns(v.investment_bull_responses, v.investment_bear_responses);
   const riskTurns = namedMessageTurns(v.risk_debate_messages);
 
   return (
@@ -55,12 +58,12 @@ export function TradingResult({ value }: { value: unknown }) {
       <ReportSection title="Sentiment" icon="sparkle" markdown={str(v.sentiment_report)} />
 
       {/* Debates — rendered as actual conversations. */}
-      <DebateView title="Bull vs Bear" icon="council" debaters={BULL_BEAR_DEBATERS} turns={debateTurns} />
+      <DebateView title="Bull vs Bear" icon="council" debaters={debatersForTurns(debateTurns)} turns={debateTurns} />
       {str(judge.summary) && summary !== str(judge.summary) ? (
         <ReportSection title="Judge's verdict" icon="council" markdown={judge.summary as string} />
       ) : null}
       {str(trader.reasoning) ? <ReportSection title="Trader's plan" icon="evaluation" markdown={trader.reasoning as string} /> : null}
-      <DebateView title="Risk debate" icon="warning" debaters={RISK_DEBATERS} turns={riskTurns} />
+      <DebateView title="Risk debate" icon="warning" debaters={debatersForTurns(riskTurns)} turns={riskTurns} />
     </View>
   );
 }

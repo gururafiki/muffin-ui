@@ -235,6 +235,41 @@ backlog: capture in `cached_invoke`); (b) React error #418 (SSG hydration mismat
 every page of the deployed export — pre-existing, needs its own investigation; (c) exact
 per-node sub-stage events for specialists (2-node subgraphs reuse the persona stage inference).
 
+## ✅ Milestone 16 — Trading debate detail + collapsed debaters (2026-07)
+Four trading_decision-page complaints from the deployed app:
+- **Sub-agents rendered as plain text / "Risk debate" sub-agent empty:** the risk-debate sub-agent
+  row had no `output` mapping, so expanding it said "No detail was recorded for this step" even
+  though `risk_debate_messages` (3 valid turns) was in state; bull/bear had no sub-agent row at all
+  because they were plain function nodes, not a discovered subgraph. Paired with **muffin-agent
+  #117**, which migrated the Bull/Bear debate onto the `multi_agent` conference framework — so both
+  debates are now real conference subgraphs (`investment_debate` / `risk_debate`) that discovery
+  surfaces as symmetric sub-agent rows, and the judge/trader stay plain nodes (correctly no rows).
+  The registry gains a `detail: 'debate'` renderer id + a widened `StageDef.output` (now a values
+  key **or a selector** — the bull/bear stage's output is a selector that reads
+  `investment_debate_messages ?? { legacy bull/bear lists }` so pre-migration threads still render);
+  `stageOutput(stage, values)` narrows the union in one place (and filters empty `[]`/`{}`).
+  `SubgraphDetail` renders `detail: 'debate'` rows as a `DebateView` (conference message list →
+  `namedMessageTurns`; legacy lists → `bullBearTurns`), so the risk row now shows its turns and the
+  bull/bear row appears + renders on fresh runs.
+- **Debaters not collapsed by default:** `DebateView` used to always show the first 2 turns with a
+  bespoke "Show N more turns" toggle. It's now a standard `Collapsible` (Card + title + "N turns"
+  meta), collapsed by default, revealing every turn on expand — the same pattern as the "Tool
+  execution" panel. Debater presentation is derived from the actual turn speakers
+  (`debatersForTurns` — fuzzy-matches `bull_researcher` / `bull` / `aggressive_debator` / …), so
+  bubbles resolve regardless of conference vs legacy speaker ids.
+- **Tool-execution stats:** the panel was already mounted (`agent-runner.tsx`); it now passes an
+  `emptyMessage` so a settled trading run with no captured records (threads predating muffin-agent
+  #108, 2026-07-12) shows an explanatory card instead of nothing.
+- **JSON-as-plain-text sub-agent output:** `AnswerBlock` (conversation timeline) and `MessageBubble`
+  now run a whole-body `tryParseJson` and render `JsonBlock` when a model answers with a raw JSON
+  blob — mirroring `ToolResult`.
+Verified: tsc + lint + web export + headless smoke through a local CF-Access proxy.
+**Deferred:** (a) analyst intermediate transcripts are still not persisted backend-side, so a
+finished thread's sub-agent "sub-steps" are the `tool_runs` records only (not a full step-by-step
+transcript); (b) the risk-debate sub-agent row's inner `DebateView` repeats the row's own title
+(minor redundancy — kept to reuse the single debate component); (c) pre-#108 trading threads show
+the tool-execution empty-state hint.
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
