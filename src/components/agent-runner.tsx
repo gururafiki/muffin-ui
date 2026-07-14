@@ -300,7 +300,14 @@ export function AgentRunner({
               timestamp on expand — this folds in the former "Data gathered" panel.
               Grows live for criteria — the merged view's evaluations carry each
               worker's tool_runs. */}
-          <ToolRunsSummary runs={collectToolRuns(view)} />
+          <ToolRunsSummary
+            runs={collectToolRuns(view)}
+            emptyMessage={
+              !busy
+                ? 'No tool telemetry was recorded for this run — older runs predate capture; re-run the agent to capture per-tool calls here.'
+                : undefined
+            }
+          />
 
           {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
           <SubagentActivity runs={subagentRuns} />

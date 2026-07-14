@@ -11,6 +11,15 @@ import type { IconName } from '@/components/icons';
 
 export type CustomScreen = 'council';
 
+/**
+ * A bespoke renderer for a stage's expanded sub-agent detail, resolved
+ * UI-side in `subgraph-detail.tsx` (mirrors `AgentDef.resultRenderer`, so the
+ * registry stays free of JSX/component imports). `'debate'` renders the
+ * stage's `output` (a conference message list, or the legacy bull/bear lists)
+ * as a `DebateView` conversation.
+ */
+export type StageDetail = 'debate';
+
 export interface AgentInputField {
   key: string;
   label: string;
@@ -72,12 +81,21 @@ export interface StageDef {
    */
   node?: string;
   /**
-   * Values key holding this stage's structured output. Completed runs have no
-   * replayable event stream, so this is the history fallback shown when the
-   * stage's discovered sub-agent row is expanded (live runs show the scoped
-   * transcript instead).
+   * This stage's structured output — a values key, or a selector for stages
+   * whose output spans several keys / needs a legacy fallback (e.g. the
+   * bull/bear debate). Completed runs (and conference subgraphs, which write a
+   * non-default messages channel) have no scoped transcript, so this is the
+   * history fallback shown when the stage's discovered sub-agent row is
+   * expanded. Resolve via `stageOutput(stage, values)`, never `stage.output`
+   * directly.
    */
-  output?: string;
+  output?: string | ((values: Record<string, unknown>) => unknown);
+  /**
+   * Bespoke renderer id for this stage's expanded detail (resolved in
+   * `subgraph-detail.tsx`). When unset the detail falls back to the generic
+   * `StructuredOutput` of `output`.
+   */
+  detail?: StageDetail;
   /** Dynamic sub-rows derived from state (criteria, persona votes, …). */
   children?: (values: Record<string, unknown>) => StageChild[];
   /**
@@ -116,13 +134,29 @@ export interface AgentDef {
   stages?: StageDef[];
 }
 
-const has = (values: Record<string, unknown>, key: string): boolean => {
-  const v = values[key];
-  if (v == null) return false;
-  if (Array.isArray(v)) return v.length > 0;
-  if (typeof v === 'object') return Object.keys(v as object).length > 0;
-  return true;
+const isEmpty = (v: unknown): boolean => {
+  if (v == null) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.values(v as object).every(isEmpty);
+  return false;
 };
+
+const has = (values: Record<string, unknown>, key: string): boolean => !isEmpty(values[key]);
+
+/**
+ * Resolve a stage's `output` (values key or selector) against the run state,
+ * returning `undefined` for empty results (null / `[]` / `{}` / an object whose
+ * every value is empty) so callers can treat "no output" uniformly. The single
+ * place that narrows the `string | selector` union.
+ */
+export function stageOutput(
+  stage: StageDef,
+  values: Record<string, unknown> | undefined,
+): unknown {
+  if (stage.output == null || values == null) return undefined;
+  const raw = typeof stage.output === 'function' ? stage.output(values) : values[stage.output];
+  return isEmpty(raw) ? undefined : raw;
+}
 
 const ticker: AgentInputField = {
   key: 'ticker',
@@ -289,19 +323,28 @@ export const AGENTS: AgentDef[] = [
       { key: 'news', label: 'News', icon: 'research', done: (v) => has(v, 'news_report'), active: /news_analyst/i, output: 'news_report' },
       { key: 'sentiment', label: 'Social sentiment', icon: 'sparkle', done: (v) => has(v, 'sentiment_report'), active: /social_analyst|sentiment/i, output: 'sentiment_report' },
       {
+        // Both debates are now real conference subgraphs (muffin-agent #117),
+        // so they're discovered as sub-agent rows. Their turns live in a
+        // non-default messages channel (no scoped transcript), so `output`
+        // supplies the history/detail substrate and `detail: 'debate'` renders
+        // it as a conversation. `?? { bull, bear }` keeps pre-migration threads
+        // (legacy list channels) rendering.
         key: 'debate',
         label: 'Bull vs bear debate',
         icon: 'council',
-        done: (v) => has(v, 'investment_judge'),
+        node: 'investment_debate',
+        done: (v) => has(v, 'investment_debate_messages') || has(v, 'investment_judge'),
         active: /bull|bear|invest.*debat|research_manager/i,
-        children: (v) => {
-          const rounds = (v.investment_bull_responses as unknown[] | undefined)?.length ?? 0;
-          return Array.from({ length: rounds }, (_, i) => ({ key: `r${i}`, label: `Round ${i + 1}`, done: true }));
-        },
+        output: (v) =>
+          v.investment_debate_messages ??
+          (has(v, 'investment_bull_responses') || has(v, 'investment_bear_responses')
+            ? { bull: v.investment_bull_responses, bear: v.investment_bear_responses }
+            : undefined),
+        detail: 'debate',
       },
       { key: 'judge', label: 'The judge rules', icon: 'council', done: (v) => has(v, 'investment_judge'), active: /judge/i, output: 'investment_judge' },
       { key: 'trader', label: 'Trader drafts the plan', icon: 'trading', done: (v) => has(v, 'trader'), active: /trader/i, output: 'trader' },
-      { key: 'risk', label: 'Risk debate', icon: 'warning', done: (v) => has(v, 'portfolio_decision'), active: /risk|debator/i },
+      { key: 'risk', label: 'Risk debate', icon: 'warning', node: 'risk_debate', done: (v) => has(v, 'risk_debate_messages') || has(v, 'portfolio_decision'), active: /risk|debator/i, output: 'risk_debate_messages', detail: 'debate' },
       { key: 'portfolio', label: 'Portfolio call', icon: 'portfolio', done: (v) => has(v, 'portfolio_decision'), active: /portfolio/i, output: 'portfolio_decision' },
     ],
     advanced: [

@@ -104,11 +104,19 @@ The whole app is organised around **"one graph → one screen"**:
     heavy one and the candidate to slim once the checkpoint-read latency is fixed — reconstructing
     from checkpoints trades write-bloat for the slow read.) Mid-run refresh replays buffered events
     (seq/`since`).
-    **Sub-agent history detail (M14):** on a finished thread the scoped channels stay empty, so a
+    **Sub-agent history detail (M14/M16):** on a finished thread the scoped channels stay empty, so a
     discovered stage row's expanded `SubgraphDetail` falls back to persisted state: the stage's
-    structured output via registry `StageDef.output` (values key) + the run-level `tool_runs`
-    records whose `agent` equals the node name — attached to `SubgraphRow` by `useSubgraphRows`.
-    Live scoped channels always win when they have data.
+    structured output via registry `StageDef.output` + the run-level `tool_runs` records whose
+    `agent` equals the node name — attached to `SubgraphRow` by `useSubgraphRows`. `StageDef.output`
+    is a **values key OR a selector** `(values) => unknown` (for stages whose output spans several
+    keys / needs a legacy fallback, e.g. the bull/bear debate); always resolve it via
+    `stageOutput(stage, values)` (registry.ts), never `stage.output` directly — it narrows the union
+    and filters empty `[]`/`{}`. `StageDef.detail` (M16) is a bespoke expanded-detail renderer id
+    (like `AgentDef.resultRenderer`): `detail: 'debate'` renders the output as a `DebateView`
+    conversation. Both trading debates (`investment_debate` / `risk_debate`) are conference
+    subgraphs (muffin-agent #117) whose turns live in a non-default messages channel, so the scoped
+    transcript is empty even live — they rely on `output` + `detail: 'debate'`. Live scoped channels
+    always win when they have data.
     **Hydration skeletons (M14):** `stream.isThreadLoading` (initial `getState` in flight — 28–70s
     on the deployed backend today) drives skeleton panels: the runner shows the registry stage
     labels under "Loading this run…", chat shows transcript-shaped blocks, council a session

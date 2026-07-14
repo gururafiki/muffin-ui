@@ -84,8 +84,10 @@ One graph → one screen. Lists the five deployed agents and your saved presets.
 - **Data gathered** (collapsible) — every provider/tool call the run made (from the tool-
   result cache), success/failure badges, expandable to the raw payload; a **time-series
   chart** draws automatically when a payload is price/indicator data.
-- **Sub-agents** — a soft panel of the specialists a deep run delegated to, each an avatar
-  row you tap to expand into its own nested timeline.
+- **Sub-agents** — a soft panel of the compiled subgraphs a run delegated to (analysts, the
+  bull/bear + risk debate conferences, criteria workers, council members), each an avatar row you
+  tap to expand into its own detail (a nested timeline, a debate conversation, or the structured
+  output + tool calls a finished run kept).
 
 #### Chat agents (Stock Evaluation)
 Deep-agent evaluation runs as a **multi-turn chat**:
@@ -157,8 +159,9 @@ Headline outputs are rendered by shape (`src/lib/agent/renderers/`):
 - **Research** — markdown answer, key findings, tappable sources, confidence badge.
 - **Criteria** — weighted per-criterion **score bars**, composite gauge, positives/
   negatives, thesis.
-- **Trading** — verdict + **conviction gauge**, analyst reports, **bull-vs-bear** and
-  **risk-debate** transcripts, and the trader plan (action, entry/stop/take-profit, sizing).
+- **Trading** — verdict + **conviction gauge**, analyst reports, the **bull-vs-bear** and
+  **risk-debate** conversations (collapsed by default, tap to read every turn), and the trader plan
+  (action, entry/stop/take-profit, sizing).
 - **Charts** — a lightweight `react-native-svg` **time-series line + volume-bar** chart
   drawn from price-history / indicator tool outputs.
 - Plus generic **markdown / JSON / structured-output / step-timeline / to-do** renderers.

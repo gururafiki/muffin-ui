@@ -416,9 +416,12 @@ function HumanBubble({ message, actions }: { message: AnyMessage; actions?: Mess
 
 function AnswerBlock({ message, actions }: { message: AnyMessage; actions?: MessageActions }) {
   const body = messageText(message.content);
+  // A model that answers with a raw JSON blob (some sub-agents do) should
+  // render as pretty JSON, not an unformatted markdown wall — mirror ToolResult.
+  const json = tryParseJson(body.trim());
   return (
     <Card tone="raised" className="gap-2">
-      <Markdown value={body} />
+      {json !== undefined ? <JsonBlock value={json} /> : <Markdown value={body} />}
       {actions ? (
         <View className="flex-row items-center justify-end gap-0.5 pt-1">
           <BranchControls message={message} actions={actions} />

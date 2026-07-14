@@ -2,7 +2,7 @@ import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream'
 import { useChannel } from '@langchain/react';
 import { useMemo } from 'react';
 
-import type { AgentDef, StageDef } from '@/lib/agent/registry';
+import { stageOutput, type AgentDef, type StageDef, type StageDetail } from '@/lib/agent/registry';
 import type { ToolRun } from '@/lib/agent/renderers';
 
 type Dict = Record<string, unknown>;
@@ -78,6 +78,8 @@ export type SubgraphRow = {
   output?: unknown;
   /** History fallback: persisted `tool_runs` records attributed to this node. */
   toolRuns?: ToolRun[];
+  /** Bespoke expanded-detail renderer id (registry `StageDef.detail`). */
+  detail?: StageDetail;
 };
 
 const titleCase = (s: string) => s.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -117,7 +119,7 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
       // History detail for the node's rows: its stage's persisted output +
       // the run-level tool records the backend attributed to this agent. The
       // council members' inner collect agents are named `<node>_data_collection`.
-      const output = stage?.output != null ? values?.[stage.output] : undefined;
+      const output = stage ? stageOutput(stage, values) : undefined;
       const toolRuns = persistedRuns.filter(
         (r) => r.agent === node || r.agent === `${node}_data_collection`,
       );
@@ -145,6 +147,7 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
           evaluation,
           output,
           toolRuns: toolRuns.length > 0 ? toolRuns : undefined,
+          detail: stage?.detail,
         });
       });
     }

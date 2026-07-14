@@ -4,6 +4,12 @@ import { View } from 'react-native';
 
 import { Collapsible, Text } from '@/components/ui';
 import {
+  DebateView,
+  bullBearTurns,
+  debatersForTurns,
+  namedMessageTurns,
+} from '@/features/multi-agent/debate';
+import {
   CriterionDetails,
   StructuredOutput,
   ToolRunList,
@@ -13,6 +19,17 @@ import {
 } from '@/lib/agent/renderers';
 import { Conversation } from './conversation';
 import type { SubgraphRow } from './run-projections';
+
+/** Shape a stage's `detail: 'debate'` output into a `DebateView` conversation. */
+function DebateDetail({ output, label }: { output: unknown; label: string }) {
+  const turns = Array.isArray(output)
+    ? namedMessageTurns(output)
+    : bullBearTurns(
+        (output as { bull?: unknown } | null)?.bull,
+        (output as { bear?: unknown } | null)?.bear,
+      );
+  return <DebateView title={label} debaters={debatersForTurns(turns)} turns={turns} defaultOpen />;
+}
 
 /** Map protocol-v2 assembled tool calls onto the `ToolRunList` row shape. */
 function toToolRuns(
@@ -65,10 +82,14 @@ export function SubgraphDetail({ stream, row }: { stream: unknown; row: Subgraph
     <View className="gap-3">
       {row.evaluation ? <CriterionDetails c={row.evaluation as Criterion} /> : null}
       {output != null ? (
-        <View className="gap-1">
-          <Text variant="label">Result</Text>
-          <StructuredOutput value={output} />
-        </View>
+        row.detail === 'debate' ? (
+          <DebateDetail output={output} label={row.label} />
+        ) : (
+          <View className="gap-1">
+            <Text variant="label">Result</Text>
+            <StructuredOutput value={output} />
+          </View>
+        )
       ) : null}
       {runs.length > 0 ? (
         <Collapsible title="Tool calls" icon="tools" meta={`${runs.length}`}>

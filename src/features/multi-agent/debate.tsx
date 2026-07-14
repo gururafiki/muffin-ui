@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/icons';
-import { Avatar, Card, Text, type Signal } from '@/components/ui';
+import { Avatar, Card, Collapsible, Text, type Signal } from '@/components/ui';
 import { cn } from '@/lib/cn';
 // Direct import (not the renderers barrel) to avoid a require cycle with
 // trading-result.tsx, which lives in that barrel and renders this component.
@@ -59,54 +58,42 @@ function TurnBubble({ debater, text }: { debater: Debater; text: string }) {
 
 /**
  * A multi-agent debate as an actual conversation — opposing voices face each
- * other as chat bubbles. Collapsed to the opening exchange; "N more turns"
- * reveals the rest. Generic over muffin's multi_agent debates (bull vs bear,
- * risk debators, …).
+ * other as chat bubbles. Collapsed by default (standard `Collapsible`, same
+ * pattern as the "Tool execution" panel); expanding reveals every turn.
+ * Generic over muffin's multi_agent debates (bull vs bear, risk debators, …).
  */
 export function DebateView({
   title,
   icon,
   debaters,
   turns,
-  initiallyVisible = 2,
+  defaultOpen = false,
 }: {
   title: string;
   icon?: IconName;
   debaters: Debater[];
   turns: DebateTurn[];
-  initiallyVisible?: number;
+  defaultOpen?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
   if (turns.length === 0) return null;
   const byId = new Map(debaters.map((d) => [d.id, d]));
-  const shown = expanded ? turns : turns.slice(0, initiallyVisible);
-  const hidden = turns.length - shown.length;
 
   return (
-    <Card tone="muted" className="gap-3">
-      <View className="flex-row items-center gap-2">
-        {icon ? <Icon name={icon} size={15} color={palette.frosting[500]} /> : null}
-        <Text variant="label" className="flex-1">{title}</Text>
-        <Text variant="muted" className="text-xs">{turns.length} turns</Text>
-      </View>
-      <View className="gap-3">
-        {shown.map((t, i) => {
-          const d = byId.get(t.speaker);
-          if (!d) return null;
-          return <TurnBubble key={i} debater={d} text={t.text} />;
-        })}
-      </View>
-      {hidden > 0 ? (
-        <Pressable onPress={() => setExpanded(true)} className="items-center py-1 active:opacity-70">
-          <Text className="font-heading text-sm text-frosting-600 dark:text-frosting-300">
-            Show {hidden} more turn{hidden > 1 ? 's' : ''} ↓
-          </Text>
-        </Pressable>
-      ) : expanded && turns.length > initiallyVisible ? (
-        <Pressable onPress={() => setExpanded(false)} className="items-center py-1 active:opacity-70">
-          <Text className="font-heading text-sm text-frosting-600 dark:text-frosting-300">Collapse ↑</Text>
-        </Pressable>
-      ) : null}
+    <Card tone="muted" className="gap-2">
+      <Collapsible
+        title={title}
+        icon={icon}
+        meta={`${turns.length} turn${turns.length === 1 ? '' : 's'}`}
+        defaultOpen={defaultOpen}
+      >
+        <View className="gap-3 pt-1">
+          {turns.map((t, i) => {
+            const d = byId.get(t.speaker);
+            if (!d) return null;
+            return <TurnBubble key={i} debater={d} text={t.text} />;
+          })}
+        </View>
+      </Collapsible>
     </Card>
   );
 }
@@ -125,12 +112,7 @@ export function bullBearTurns(bull: unknown, bear: unknown): DebateTurn[] {
   return turns;
 }
 
-export const BULL_BEAR_DEBATERS: Debater[] = [
-  { id: 'bull', name: 'Bull', tone: 'bullish', icon: 'trend-up', side: 'left' },
-  { id: 'bear', name: 'Bear', tone: 'bearish', icon: 'trend-down', side: 'right' },
-];
-
-/** Turns from LangChain messages carrying a `name` (risk debators). */
+/** Turns from LangChain messages carrying a `name` (conference debaters). */
 export function namedMessageTurns(messages: unknown): DebateTurn[] {
   if (!Array.isArray(messages)) return [];
   const turns: DebateTurn[] = [];
@@ -148,8 +130,35 @@ export function namedMessageTurns(messages: unknown): DebateTurn[] {
   return turns;
 }
 
-export const RISK_DEBATERS: Debater[] = [
-  { id: 'aggressive_debator', name: 'Aggressive', tone: 'bearish', icon: 'trend-up', side: 'left' },
-  { id: 'conservative_debator', name: 'Conservative', tone: 'info', icon: 'account-other', side: 'right' },
-  { id: 'neutral_debator', name: 'Neutral', tone: 'neutral', icon: 'council', side: 'left' },
+/**
+ * Presentation for a debater, matched by fuzzy speaker name so it works across
+ * the conference speaker ids (`bull_researcher` / `aggressive_debator` / …),
+ * the legacy short ids (`bull` / `bear`), and any future roles.
+ */
+const DEBATER_STYLE: { match: RegExp; style: Omit<Debater, 'id'> }[] = [
+  { match: /bull/i, style: { name: 'Bull', tone: 'bullish', icon: 'trend-up', side: 'left' } },
+  { match: /bear/i, style: { name: 'Bear', tone: 'bearish', icon: 'trend-down', side: 'right' } },
+  { match: /aggress/i, style: { name: 'Aggressive', tone: 'bearish', icon: 'trend-up', side: 'left' } },
+  { match: /conserv/i, style: { name: 'Conservative', tone: 'info', icon: 'account-other', side: 'right' } },
+  { match: /neutral/i, style: { name: 'Neutral', tone: 'neutral', icon: 'council', side: 'left' } },
 ];
+
+function styleFor(speaker: string, index: number): Omit<Debater, 'id'> {
+  const hit = DEBATER_STYLE.find((d) => d.match.test(speaker));
+  if (hit) return hit.style;
+  const name = speaker.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return { name, tone: 'info', side: index % 2 === 0 ? 'left' : 'right' };
+}
+
+/**
+ * Build the `Debater[]` for a set of turns, deriving each debater's `id` from
+ * the actual `speaker` on the turns so bubbles always resolve — regardless of
+ * whether the turns came from a conference message list or the legacy lists.
+ */
+export function debatersForTurns(turns: DebateTurn[]): Debater[] {
+  const byId = new Map<string, Debater>();
+  for (const t of turns) {
+    if (!byId.has(t.speaker)) byId.set(t.speaker, { id: t.speaker, ...styleFor(t.speaker, byId.size) });
+  }
+  return [...byId.values()];
+}
