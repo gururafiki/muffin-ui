@@ -1,7 +1,7 @@
 import type { Client } from '@langchain/langgraph-sdk';
 import { useStream } from '@langchain/react';
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { makeClient } from '@/lib/agent/client';
 import { streamingFetch } from '@/lib/agent/install-fetch';
@@ -47,7 +47,6 @@ export function useRunStream(
   const router = useRouter();
   const client: Client = useMemo(() => makeClient(getSettings()), []);
   const [threadId, setThreadId] = useState<string | undefined>(opts.threadId);
-  const inputsRef = useRef<Record<string, string> | undefined>(undefined);
 
   const stream = useStream<AgentState>({
     client,
@@ -59,11 +58,12 @@ export function useRunStream(
     // streaming fetch (expo/fetch) here or SSE won't stream on iOS/Android.
     fetch: streamingFetch(),
     onThreadId: (id: string) => {
+      // No thread metadata is written here: the Calls tab renders from the
+      // server's own `metadata.graph_id` + `extract`ed inputs (see
+      // `agent-calls/threads.ts`), so a fresh thread is fully recognisable
+      // without a client-side tag.
       setThreadId(id);
       router.setParams({ threadId: id });
-      client.threads
-        .update(id, { metadata: { agentId: agent.id, ...(inputsRef.current ? { inputs: inputsRef.current } : {}) } })
-        .catch(() => {});
       queryClient.invalidateQueries({ queryKey: ['threads'] });
     },
   });
@@ -75,13 +75,8 @@ export function useRunStream(
   /** Start (or continue) a run with a shaped graph `input`. */
   const submitRun = (
     input: Record<string, unknown>,
-    o?: {
-      overrides?: Record<string, unknown>;
-      /** Raw field values to tag onto the thread for the Calls descriptor. */
-      inputs?: Record<string, string>;
-    },
+    o?: { overrides?: Record<string, unknown> },
   ) => {
-    if (o?.inputs) inputsRef.current = o.inputs;
     void stream.submit(input as never, { config: runConfig(o?.overrides) });
   };
 

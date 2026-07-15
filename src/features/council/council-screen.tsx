@@ -8,7 +8,6 @@ import { AdvancedOptions } from '@/components/advanced-options';
 import { Icon } from '@/components/icons';
 import { Badge, Button, Card, Field, Skeleton, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
-import { threadInputs } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { SubagentActivity } from '@/features/agent-chat/conversation';
 import { RunProgress } from '@/features/agent-chat/run-progress';
@@ -124,11 +123,15 @@ export function CouncilScreen({
   const busy = stream.isLoading;
   const signInRequired = useSignInRequiredToRun();
 
-  // Prefill inputs from thread metadata (Calls reopen) or streamed state.
+  // Prefill inputs from persisted/streamed state (Calls reopen). The run input
+  // (ticker/query) lands in the graph state, so no client-tagged metadata is
+  // needed — `stream.values` hydrates on reopen; `savedThread.values` is the
+  // fallback until it does.
   const { data: savedThread } = useCall(liveThreadId);
-  const savedInputs = savedThread ? threadInputs(savedThread) : undefined;
-  const ticker = tickerEdit ?? savedInputs?.ticker ?? (values?.ticker as string | undefined) ?? '';
-  const query = queryEdit ?? savedInputs?.query ?? '';
+  const savedValues = savedThread?.values as Record<string, unknown> | undefined;
+  const asStr = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  const ticker = tickerEdit ?? asStr(values?.ticker) ?? asStr(savedValues?.ticker) ?? '';
+  const query = queryEdit ?? asStr(values?.query) ?? asStr(savedValues?.query) ?? '';
 
   const live = useCouncilLive(stream);
   const wantSpecialists = Boolean(advanced.include_specialists);
@@ -163,7 +166,6 @@ export function CouncilScreen({
     setSelected(null);
     submitRun(agent.buildInput({ ticker, query }), {
       overrides: buildOverrides(agent.advanced, advanced),
-      inputs: { ticker, ...(query ? { query } : {}) },
     });
   };
 

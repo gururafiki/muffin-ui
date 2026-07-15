@@ -56,6 +56,15 @@ The whole app is organised around **"one graph → one screen"**:
   "Advanced options" (`src/components/advanced-options.tsx`); `overrides.ts` (`initialOverrides` /
   `buildOverrides`) turns the collected values into a `configurable` patch merged over global
   settings at run start (used by both the generic runner and the council screen).
+- **`features/agent-calls/threads.ts`** — the Calls tab renders each past run from data the
+  **LangGraph server owns**, not app-written tags: `threadGraphId` reads `metadata.graph_id` (set by
+  the server on every run, 1:1 with a registry `id`) → title / icon / filter / "reopen into the
+  agent's screen". `searchThreads` uses `select` (omit `values` — full thread state is tens of
+  KB/thread, so this shrinks the list payload ~100× vs the default that returns `values`) plus
+  `extract` (`{ticker: 'values.ticker', …}`) to pull just the descriptor inputs out of persisted
+  state. So `use-run-stream` writes **no thread metadata** — the app-tagged `agentId`/`inputs` scheme
+  (which the M12b `useStream` migration silently broke, leaving every recent Calls item as a generic
+  "Agent run") is gone. Deep-agent runs (free-text prompt, no ticker/query) get no one-liner.
 - **`presets.ts`** wraps the SDK `assistants.search/create/delete` to save named, **non-secret**
   configured assistants per graph (Agents tab). Presets store only the allowlisted `configurable`
   from `buildPresetConfigurable` — never API keys / `user_id`; those are re-injected from on-device

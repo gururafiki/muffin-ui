@@ -154,7 +154,7 @@ export function AgentRunner({
     })),
   ];
 
-  const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced), inputs: values });
+  const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced) });
 
   // Deep-link autostart ("Analyse" from a stock) — only for a fresh thread and
   // never when sign-in is required (the guard below prompts instead).
