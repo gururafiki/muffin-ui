@@ -270,6 +270,30 @@ transcript); (b) the risk-debate sub-agent row's inner `DebateView` repeats the 
 (minor redundancy — kept to reuse the single debate component); (c) pre-#108 trading threads show
 the tool-execution empty-state hint.
 
+## ✅ Milestone 17 — Calls render from `graph_id`, not app-written metadata (2026-07)
+Fixes a live regression **and** a latent payload bloat on the Calls tab. Every recent run showed up
+as a generic "Agent run": the tab derived its title/icon/filter from an app-written `metadata.agentId`
+tag, and the M12b `useStream` migration silently broke that write (a fire-and-forget
+`threads.update` in `onThreadId`) — 0 of the threads created after 2026-07-11 carried the tag.
+- **Render from the server's own `graph_id`.** `threadAgentId` → `threadGraphId` reads
+  `metadata.graph_id`, which LangGraph sets on **every** run and which is identical to the registry
+  `id`. So the whole backlog of "Agent run" items resolves retroactively on deploy — no re-runs — and
+  new runs need no client-side tag. Unknown/null `graph_id` (a thread that never started a run) still
+  falls back to the generic read-only detail.
+- **No more thread-metadata writes.** The `agentId`/`inputs` write and its `inputsRef`/`submitRun`
+  `inputs` plumbing are deleted. The Calls descriptor ("AAPL · Is the moat durable?") and council
+  input-restore now read the raw inputs from **persisted state**, not a tag.
+- **~100× lighter list payload.** `searchThreads` adds `select: [thread_id, created_at, updated_at,
+  status, metadata]` (omitting `values` — the search default returns full thread state, tens of
+  KB/thread; measured 2086 KB → 16 KB across 50 threads) and `extract: {ticker, query, narrative}`
+  (langgraph-api ≥0.11 pulls those keys out of state server-side into a compact `extracted` field).
+  Rendering rides entirely on `graph_id` + protocol-v2 discovery + persisted state.
+Verified: tsc + web export + headless Calls smoke through a CF-Access proxy against the deployed
+backend (existing `graph_id`-tagged threads render correct titles/icons/filters + reopen).
+**Deferred:** deep-agent (`stock_evaluation`) runs have a free-text prompt, not a ticker/query, so
+they show no descriptor one-liner (title is self-descriptive); `extract` path indexing
+(`values.messages[0].content`) didn't reliably yield a short prompt to use instead.
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

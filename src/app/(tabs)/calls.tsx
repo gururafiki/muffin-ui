@@ -15,8 +15,8 @@ import {
   agentTitleForThread,
   relativeTime,
   threadAgentIcon,
-  threadAgentId,
   threadDescriptor,
+  threadGraphId,
   threadStatusTone,
 } from '@/features/agent-calls/threads';
 import { useCalls } from '@/features/agent-calls/use-calls';
@@ -42,12 +42,12 @@ function StatusBadge({ status }: { status: Thread['status'] }) {
 export default function CallsScreen() {
   const router = useRouter();
   const { data: threads, isLoading, isError, error } = useCalls();
-  const [filter, setFilter] = useState<string>('all'); // 'all' | agentId | 'other'
+  const [filter, setFilter] = useState<string>('all'); // 'all' | graphId | 'other'
 
   // Open into the agent's own screen (resumes chat / reopens the saved result).
   // Threads from an unknown/legacy agent fall back to the read-only detail page.
   const openThread = (thread: Thread) => {
-    const id = threadAgentId(thread);
+    const id = threadGraphId(thread);
     if (id && getAgent(id)) {
       router.push({ pathname: '/agents/[assistantId]', params: { assistantId: id, threadId: thread.thread_id } });
     } else {
@@ -59,7 +59,7 @@ export default function CallsScreen() {
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const t of threads ?? []) {
-      const id = threadAgentId(t);
+      const id = threadGraphId(t);
       const key = id && getAgent(id) ? id : 'other';
       c[key] = (c[key] ?? 0) + 1;
     }
@@ -68,7 +68,7 @@ export default function CallsScreen() {
 
   const visible = (threads ?? []).filter((t) => {
     if (filter === 'all') return true;
-    const id = threadAgentId(t);
+    const id = threadGraphId(t);
     const key = id && getAgent(id) ? id : 'other';
     return key === filter;
   });
