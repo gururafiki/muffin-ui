@@ -238,6 +238,17 @@ schemes × region/tier lenses as ISO-3166 lists, rendered onto an SVG `world-map
 TanStack Query (server state) · Zustand (client state: settings, wealth, map view) · MMKV /
 localStorage (persistence).
 
+## Agent skills
+`.agents/skills/<name>/` holds real, git-tracked `SKILL.md` content; `.claude/skills/<name>` is a
+relative symlink to it (`../../.agents/skills/<name>`) — that's what Claude Code actually reads.
+This repo owns the React Native / UI skills (canonical home, so it's self-sufficient standalone):
+`react-native-skills` (perf/architecture rules for RN & Expo), `web-design-guidelines` (fetches and
+audits against Vercel's Web Interface Guidelines), `react-best-practices` (React/Next.js performance),
+`composition-patterns` (compound components, avoiding boolean-prop sprawl). The same four are
+mirrored at `muffin-umbrella/.agents+.claude/skills` since Claude Code is always opened with the
+umbrella as root — see the umbrella `CLAUDE.md` for the full convention. Add a new skill here first,
+then copy it into the umbrella.
+
 ## Conventions
 - TS **strict**; path aliases `@/*` → `src/*`, `@/assets/*` → `assets/*`.
 - **React Compiler is enabled** (`app.json` `experiments.reactCompiler`) — avoid redundant manual memoization.
