@@ -6,15 +6,6 @@ export interface StepInfo {
   icon: IconName;
 }
 
-/** A captured graph-node execution, used to build the run timeline. */
-export interface RunStep extends StepInfo {
-  id: string;
-  node: string;
-  /** Subgraph path (e.g. a sub-agent namespace); empty at the top level. */
-  namespace: string[];
-  ts: number;
-}
-
 /**
  * Map a deep-agent graph node / tool / middleware name to a friendly one-liner.
  *

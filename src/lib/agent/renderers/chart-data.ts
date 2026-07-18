@@ -1,6 +1,6 @@
 /**
  * Time-series detection for tool outputs — pure data logic, no React/RN
- * imports, so it can be exercised standalone (see `__fixtures__/`).
+ * imports, so it can be exercised standalone.
  *
  * Recognises the shapes the OpenBB MCP tools return (price history,
  * indicators): a JSON array of records — optionally wrapped in

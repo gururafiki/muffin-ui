@@ -92,12 +92,6 @@ export const COUNCIL_MEMBERS: PersonaMeta[] = [...COUNCIL_PERSONAS, ...COUNCIL_S
 const BY_SLUG = new Map(COUNCIL_MEMBERS.map((p) => [p.slug, p]));
 
 export const MEMBER_SLUGS: ReadonlySet<string> = new Set(BY_SLUG.keys());
-export const SPECIALIST_SLUGS: ReadonlySet<string> = new Set(
-  COUNCIL_SPECIALISTS.map((s) => s.slug),
-);
-
-export const prettyPersona = (slug: string): string =>
-  BY_SLUG.get(slug)?.name ?? slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 /** Normalise a streamed agent_id to a known member slug, if possible. */
 export function normalizeSlug(raw: string | undefined): string {

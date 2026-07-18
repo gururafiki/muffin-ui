@@ -25,10 +25,3 @@ export function signalTone(signal?: string): keyof VoteTally {
   if (/sell|bear|negative|underperform|reduce/.test(v)) return 'bearish';
   return 'neutral';
 }
-
-/** Persona subgraph node → live stage (collect_data → compute_evidence → …). */
-export const SUBNODE_STAGE: Record<string, PersonaStage> = {
-  collect_data: 'collecting',
-  compute_evidence: 'scoring',
-  render_verdict: 'deciding',
-};
