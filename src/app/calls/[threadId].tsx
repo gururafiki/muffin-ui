@@ -9,7 +9,8 @@ import {
 } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
-import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsSummary, type Criterion, type Todo } from '@/lib/agent/renderers';
+import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsSummary, type Todo } from '@/lib/agent/renderers';
+import { parseArray, zCriterionEvaluation } from '@/lib/agent/schemas';
 import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 
 /**
@@ -20,9 +21,7 @@ import { ToolCacheProvider } from '@/lib/agent/tool-cache';
  */
 function historicalRuns(values: Record<string, unknown> | undefined): SubagentRun[] {
   const captured = values?.subagent_runs as SubagentRuns | undefined;
-  const evals = Array.isArray(values?.criterion_evaluations)
-    ? (values.criterion_evaluations as Criterion[])
-    : [];
+  const evals = parseArray(zCriterionEvaluation, values?.criterion_evaluations, 'criterion_evaluations');
   return [
     ...(captured ? Object.values(captured) : []),
     ...evals.map((c) => ({

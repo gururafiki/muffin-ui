@@ -1,8 +1,10 @@
-import { useChannel } from '@langchain/react';
+import { useChannel, type Event } from '@langchain/react';
 import { useMemo } from 'react';
 
+import { parseOr, zPersonaSignal, type PersonaSignal } from '@/lib/agent/schemas';
+import type { AnyStream } from '@/lib/agent/stream-types';
 import { normalizeSlug } from './personas';
-import type { PersonaSignal, PersonaStage } from './types';
+import type { PersonaStage } from './types';
 
 type Dict = Record<string, unknown>;
 
@@ -29,20 +31,21 @@ export type PersonaLive = {
  * history seeding and the barrier values. Historical threads never enter
  * here — root values carry the full council.
  */
-export function useCouncilLive(stream: unknown): Map<string, PersonaLive> {
-  const events = useChannel(stream as never, ['values'], undefined, { replay: false });
+export function useCouncilLive(stream: AnyStream): Map<string, PersonaLive> {
+  const events = useChannel(stream, ['values'], undefined, { replay: false });
   return useMemo(() => {
     const bySlug = new Map<string, PersonaLive>();
-    for (const ev of events as { params?: { namespace?: string[]; data?: Dict } }[]) {
-      const ns0 = ev?.params?.namespace?.[0];
+    for (const ev of events as Event[]) {
+      if (ev.method !== 'values') continue;
+      const ns0 = ev.params.namespace?.[0];
       if (!ns0) continue; // root values — handled by stream.values
       const slug = normalizeSlug(ns0.split(':')[0] ?? '');
       if (!slug) continue;
-      const values = (ev.params?.data ?? {}) as Dict;
+      const values: Dict = ev.params.data ?? {};
 
       const ownSignals = values.persona_signals;
       const signal: PersonaSignal | undefined = Array.isArray(ownSignals)
-        ? (ownSignals[ownSignals.length - 1] as PersonaSignal | undefined)
+        ? parseOr(zPersonaSignal, ownSignals[ownSignals.length - 1], 'persona_signals event')
         : undefined;
 
       let stage: PersonaStage = 'collecting';

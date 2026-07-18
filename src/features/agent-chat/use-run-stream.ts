@@ -6,11 +6,10 @@ import { useMemo, useState } from 'react';
 import { makeClient } from '@/lib/agent/client';
 import { streamingFetch } from '@/lib/agent/install-fetch';
 import type { AgentDef } from '@/lib/agent/registry';
+import type { AgentInput, AgentState } from '@/lib/agent/stream-types';
 import { queryClient } from '@/lib/query';
 import { buildConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
-
-export type AgentState = { messages?: unknown[] } & Record<string, unknown>;
 
 /**
  * Protocol-v2 stream engine for every agent screen (generic runner, council,
@@ -73,11 +72,8 @@ export function useRunStream(
   });
 
   /** Start (or continue) a run with a shaped graph `input`. */
-  const submitRun = (
-    input: Record<string, unknown>,
-    o?: { overrides?: Record<string, unknown> },
-  ) => {
-    void stream.submit(input as never, { config: runConfig(o?.overrides) });
+  const submitRun = (input: AgentInput, o?: { overrides?: Record<string, unknown> }) => {
+    void stream.submit(input, { config: runConfig(o?.overrides) });
   };
 
   /** Resume a human-in-the-loop interrupt with the on-device run config. */

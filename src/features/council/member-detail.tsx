@@ -6,6 +6,7 @@ import { SubagentStateDigest } from '@/features/agent-chat/conversation';
 import type { SubgraphRow } from '@/features/agent-chat/run-projections';
 import { SubgraphDetail } from '@/features/agent-chat/subgraph-detail';
 import { Markdown, StructuredOutput, ToolRunList, type ToolRun } from '@/lib/agent/renderers';
+import type { AnyStream } from '@/lib/agent/stream-types';
 import { palette } from '@/theme/colors';
 import type { MemberStep, PersonaMeta } from './personas';
 import { signalTone, type PersonaSignal, type PersonaStage } from './types';
@@ -66,7 +67,7 @@ export function MemberDetail({
   busy: boolean;
   liveValues?: Record<string, unknown>;
   row?: SubgraphRow;
-  stream: unknown;
+  stream: AnyStream;
   toolRuns: ToolRun[];
   onDismiss: () => void;
 }) {

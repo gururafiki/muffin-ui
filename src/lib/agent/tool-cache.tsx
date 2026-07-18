@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, use, type ReactNode } from 'react';
 
 import { makeClient } from '@/lib/agent/client';
 import { getSettings } from '@/lib/settings/store';
@@ -66,7 +66,7 @@ const ToolCacheContext = createContext<ToolCacheLookup>(() => undefined);
 
 /** Rows outside a provider (live subgraph view) get no join → preview-only. */
 export function useToolCache(): ToolCacheLookup {
-  return useContext(ToolCacheContext);
+  return use(ToolCacheContext);
 }
 
 /**

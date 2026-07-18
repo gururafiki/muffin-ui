@@ -1,18 +1,20 @@
-import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
-import { useChannel } from '@langchain/react';
+import { useChannel, type Event } from '@langchain/react';
 import { useMemo } from 'react';
 
 import { stageOutput, type AgentDef, type StageDef, type StageDetail } from '@/lib/agent/registry';
-import type { ToolRun } from '@/lib/agent/renderers';
+import {
+  parseArray,
+  parseOr,
+  zCriterionEvaluation,
+  zCriterionEvent,
+  zToolRun,
+  type CriterionEvaluation,
+  type ToolRun,
+} from '@/lib/agent/schemas';
+import type { AnyStream, RunStream } from '@/lib/agent/stream-types';
+import { titleCase } from '@/lib/format';
 
 type Dict = Record<string, unknown>;
-
-/** The shape `useRunStream` returns for `stream` — only what we read here. */
-export type RunStreamLike = {
-  values: Dict;
-  isLoading: boolean;
-  subgraphsByNode: ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
-};
 
 /**
  * Fold the run's `custom`-channel events (backend `get_stream_writer()`) into
@@ -22,23 +24,26 @@ export type RunStreamLike = {
  * workers commit in one parent superstep (root `values` only shows the full
  * scorecard at the barrier).
  */
-export function useCriterionEvents(stream: unknown): {
+export function useCriterionEvents(stream: AnyStream): {
   /** evaluation by criterion_name, in arrival order. */
-  byName: Map<string, Dict>;
+  byName: Map<string, CriterionEvaluation>;
   /** evaluation by the worker's first namespace segment (`<node>:<task-id>`). */
-  byNamespace: Map<string, Dict>;
+  byNamespace: Map<string, CriterionEvaluation>;
 } {
-  const events = useChannel(stream as never, ['custom']);
+  const events = useChannel(stream, ['custom']);
   return useMemo(() => {
-    const byName = new Map<string, Dict>();
-    const byNamespace = new Map<string, Dict>();
-    for (const ev of events as { params?: { namespace?: string[]; data?: { payload?: unknown } } }[]) {
-      const payload = ev?.params?.data?.payload as { type?: string; evaluation?: Dict } | undefined;
-      if (payload?.type !== 'criterion_evaluated' || !payload.evaluation) continue;
-      const name = payload.evaluation.criterion_name;
-      if (typeof name === 'string' && name) byName.set(name, payload.evaluation);
-      const ns = ev.params?.namespace?.[0];
-      if (ns) byNamespace.set(ns, payload.evaluation);
+    const byName = new Map<string, CriterionEvaluation>();
+    const byNamespace = new Map<string, CriterionEvaluation>();
+    for (const ev of events as Event[]) {
+      if (ev.method !== 'custom') continue;
+      const payload: unknown = ev.params.data?.payload;
+      if ((payload as { type?: unknown } | undefined)?.type !== 'criterion_evaluated') continue;
+      const parsed = parseOr(zCriterionEvent, payload, 'criterion_evaluated event');
+      if (!parsed) continue;
+      const { evaluation } = parsed;
+      if (evaluation.criterion_name) byName.set(evaluation.criterion_name, evaluation);
+      const ns = ev.params.namespace?.[0];
+      if (ns) byNamespace.set(ns, evaluation);
     }
     return { byName, byNamespace };
   }, [events]);
@@ -50,7 +55,10 @@ export function useCriterionEvents(stream: unknown): {
  * criteria rows appear one-by-one mid-run and are superseded by the identical
  * checkpoint-backed list at the superstep barrier.
  */
-export function mergeLiveEvaluations(values: Dict | undefined, byName: Map<string, Dict>): Dict {
+export function mergeLiveEvaluations(
+  values: Dict | undefined,
+  byName: Map<string, CriterionEvaluation>,
+): Dict {
   const v = values ?? {};
   if (byName.size === 0) return v;
   const root = Array.isArray(v.criterion_evaluations) ? (v.criterion_evaluations as Dict[]) : [];
@@ -68,7 +76,7 @@ export type SubgraphRow = {
   namespace: readonly string[];
   nodeName: string;
   /** The finished worker's evaluation payload (criteria workers only). */
-  evaluation?: Dict;
+  evaluation?: CriterionEvaluation;
   /**
    * History fallback: the stage's persisted structured output (registry
    * `StageDef.output` → values). Completed threads have no replayable event
@@ -82,15 +90,13 @@ export type SubgraphRow = {
   detail?: StageDetail;
 };
 
-const titleCase = (s: string) => s.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
 /**
  * Rows for the sub-agents panel, straight from protocol-v2 subgraph discovery:
  * one row per compiled-agent node invocation (criteria stages, Send workers,
  * council personas, trading analysts) with a LIVE status — replaces the
  * checkpoint-history walk (`use-subagent-runs.ts`) entirely.
  */
-export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): SubgraphRow[] {
+export function useSubgraphRows(agent: AgentDef, stream: RunStream): SubgraphRow[] {
   const { byNamespace, byName } = useCriterionEvents(stream);
   const byNode = stream.subgraphsByNode;
   const values = stream.values;
@@ -101,15 +107,13 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
     // `active` regex fallback (same resolution RunProgress uses).
     const stageFor = (node: string): StageDef | undefined =>
       stages.find((s) => s.node === node) ?? stages.find((s) => s.active?.test(node));
-    const persistedRuns = Array.isArray(values?.tool_runs) ? (values.tool_runs as ToolRun[]) : [];
+    const persistedRuns = parseArray(zToolRun, values?.tool_runs, 'values.tool_runs');
 
     // Evaluations by name — labels finished workers even after a refresh,
     // when custom events are gone but values carry the full scorecard.
-    const evals = new Map<string, Dict>(byName);
-    if (Array.isArray(values?.criterion_evaluations)) {
-      for (const e of values.criterion_evaluations as Dict[]) {
-        if (typeof e?.criterion_name === 'string') evals.set(e.criterion_name, e);
-      }
+    const evals = new Map<string, CriterionEvaluation>(byName);
+    for (const e of parseArray(zCriterionEvaluation, values?.criterion_evaluations, 'values.criterion_evaluations')) {
+      if (e.criterion_name) evals.set(e.criterion_name, e);
     }
     const unclaimed = [...evals.values()];
 
@@ -125,7 +129,7 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
       );
       snaps.forEach((snap, i) => {
         let label = stage?.node === node ? stage.label : titleCase(node);
-        let evaluation: Dict | undefined;
+        let evaluation: CriterionEvaluation | undefined;
         if (node === 'criterion_evaluation') {
           evaluation = byNamespace.get(snap.namespace[0] ?? '');
           if (evaluation) {
@@ -135,7 +139,7 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
             // Refresh case: events gone; hand out finished evaluations in order.
             evaluation = unclaimed.shift();
           }
-          const name = typeof evaluation?.criterion_name === 'string' ? evaluation.criterion_name : undefined;
+          const name = evaluation?.criterion_name;
           label = name ? `Criterion — ${name}` : `Criterion ${i + 1} — evaluating…`;
         }
         rows.push({
@@ -155,7 +159,7 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStreamLike): Subgrap
     // buffer is gone and discovery seeding may be empty) still get a row —
     // the panel's per-criterion detail must not depend on live discovery.
     for (const evaluation of unclaimed) {
-      const name = typeof evaluation.criterion_name === 'string' ? evaluation.criterion_name : undefined;
+      const name = evaluation.criterion_name;
       rows.push({
         key: `eval:${name ?? rows.length}`,
         label: name ? `Criterion — ${name}` : 'Criterion',

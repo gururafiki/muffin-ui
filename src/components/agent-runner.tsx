@@ -144,7 +144,7 @@ export function AgentRunner({
   // + protocol-v2 discovered subgraph invocations (criteria stages/workers,
   // trading analysts) with live statuses and scoped transcript detail.
   const captured = (view as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
-  const discovered = useSubgraphRows(agent, stream as never);
+  const discovered = useSubgraphRows(agent, stream);
   const subagentRuns: SubagentRun[] = [
     ...(captured ? Object.values(captured) : []),
     ...discovered.map((row) => ({

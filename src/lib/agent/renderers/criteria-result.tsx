@@ -7,33 +7,18 @@ import { Badge, Card, Chip, Collapsible, Text } from '@/components/ui';
 // require cycle (renderers barrel → this file → conversation → barrel), so the
 // nested-transcript rendering is injected by the caller via `renderTranscript`.
 import type { SubagentRun } from '@/features/agent-chat/conversation';
+import { parseArray, zCriterionEvaluation, type CriterionEvaluation } from '@/lib/agent/schemas';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
 import { Markdown } from './markdown';
-import { ToolRunList, type ToolRun } from './tool-runs';
+import { ToolRunList } from './tool-runs';
 import { ConfidenceBar, ReportSection, ScoreBar, TagRow, toneColor, Verdict, toneForSignal } from './widgets';
 
 type Dict = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
 
-type SubCriterion = { name?: string; criterion_name?: string; signal?: string; score?: number; reasoning?: string };
-
-export type Criterion = {
-  criterion_name?: string;
-  signal?: string;
-  score?: number;
-  confidence?: number;
-  weight?: number;
-  reasoning?: string;
-  counterargument?: string;
-  evidence_summary?: unknown[];
-  data_sources?: unknown[];
-  limitations?: unknown[];
-  sub_criteria?: SubCriterion[];
-  tool_runs?: ToolRun[];
-  /** Backend truthing flag: false = the worker made zero tool calls. */
-  data_collected?: boolean;
-};
+/** One scorecard row — the schema-validated worker evaluation. */
+export type Criterion = CriterionEvaluation;
 
 /**
  * The evaluation collected no live data — either the backend truthing pass
@@ -283,7 +268,11 @@ export function CriteriaResult({
   const v = value as Dict;
   const cls = (v.classification ?? {}) as Dict;
   const synth = (v.synthesis ?? {}) as Dict;
-  const criteria = (v.criterion_evaluations ?? v.merged_criteria ?? []) as Criterion[];
+  const criteria = parseArray(
+    zCriterionEvaluation,
+    v.criterion_evaluations ?? v.merged_criteria,
+    'criterion_evaluations',
+  );
   const valuation = (v.valuation_methodology ?? {}) as Dict;
 
   return (
@@ -298,7 +287,7 @@ export function CriteriaResult({
         />
       ) : null}
 
-      {Array.isArray(criteria) && criteria.length > 0 ? (
+      {criteria.length > 0 ? (
         <Card className="gap-0">
           <Text variant="label" className="mb-1">Criteria ({criteria.length})</Text>
           {criteria.map((c, i) => (

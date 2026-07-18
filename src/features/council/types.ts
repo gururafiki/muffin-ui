@@ -8,13 +8,8 @@ export type PersonaStage =
   | 'deciding'
   | 'done';
 
-export interface PersonaSignal {
-  agent_id?: string;
-  signal?: string;
-  confidence?: number;
-  reasoning?: string;
-  evidence?: Record<string, unknown>;
-}
+/** One member's verdict — validated at the stream boundary (see schemas.ts). */
+export type { PersonaSignal } from '@/lib/agent/schemas';
 
 export type VoteTally = { bullish: number; bearish: number; neutral: number };
 

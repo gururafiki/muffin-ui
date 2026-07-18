@@ -17,6 +17,7 @@ import { useRunStream } from '@/features/agent-chat/use-run-stream';
 import { palette } from '@/theme/colors';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
+import { parseArray, zPersonaSignal } from '@/lib/agent/schemas';
 import { collectToolRuns, ToolRunsSummary } from '@/lib/agent/renderers';
 import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { CouncilArena } from './council-arena';
@@ -62,7 +63,7 @@ function deriveCouncil(
 } {
   const signals: Record<string, PersonaSignal> = {};
   for (const [slug, entry] of live) if (entry.signal) signals[slug] = entry.signal;
-  for (const sig of (values?.persona_signals as PersonaSignal[] | undefined) ?? []) {
+  for (const sig of parseArray(zPersonaSignal, values?.persona_signals, 'persona_signals')) {
     const slug = normalizeSlug(sig.agent_id);
     if (slug) signals[slug] = sig;
   }
@@ -148,7 +149,7 @@ export function CouncilScreen({
   // Discovered subgraph rows. Known members (personas + specialists) surface
   // in the arena / member detail; anything else — a future graph node the UI
   // doesn't know yet — falls back to the generic sub-agents panel.
-  const discovered = useSubgraphRows(agent, stream as never);
+  const discovered = useSubgraphRows(agent, stream);
   const selRow = selected ? discovered.find((r) => normalizeSlug(r.nodeName) === selected) : undefined;
   const selLive = selected ? live.get(selected) : undefined;
   const selToolRuns = selected

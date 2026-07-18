@@ -14,9 +14,9 @@ import {
   StructuredOutput,
   ToolRunList,
   type AnyMessage,
-  type Criterion,
   type ToolRun,
 } from '@/lib/agent/renderers';
+import type { AnyStream } from '@/lib/agent/stream-types';
 import { Conversation } from './conversation';
 import type { SubgraphRow } from './run-projections';
 
@@ -58,12 +58,12 @@ function toToolRuns(
  * structured output (registry `StageDef.output`), and the run-level `tool_runs`
  * records the backend attributed to this node.
  */
-export function SubgraphDetail({ stream, row }: { stream: unknown; row: SubgraphRow }) {
-  const scopedMessages = useMessages(stream as never, row.namespace);
-  const toolCalls = useToolCalls(stream as never, row.namespace);
+export function SubgraphDetail({ stream, row }: { stream: AnyStream; row: SubgraphRow }) {
+  const scopedMessages = useMessages(stream, row.namespace);
+  const toolCalls = useToolCalls(stream, row.namespace);
 
   const messages = scopedMessages.map((m) => toMessageDict(m)) as AnyMessage[];
-  const liveRuns = toToolRuns(toolCalls as never);
+  const liveRuns = toToolRuns(toolCalls);
   // Live tool calls win (they carry running/error states mid-run); persisted
   // records are the history substrate once the stream is gone.
   const runs = liveRuns.length > 0 ? liveRuns : (row.toolRuns ?? []);
@@ -80,7 +80,7 @@ export function SubgraphDetail({ stream, row }: { stream: unknown; row: Subgraph
 
   return (
     <View className="gap-3">
-      {row.evaluation ? <CriterionDetails c={row.evaluation as Criterion} /> : null}
+      {row.evaluation ? <CriterionDetails c={row.evaluation} /> : null}
       {output != null ? (
         row.detail === 'debate' ? (
           <DebateDetail output={output} label={row.label} />
