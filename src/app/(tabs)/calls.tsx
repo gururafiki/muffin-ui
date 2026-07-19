@@ -130,37 +130,47 @@ export default function CallsScreen() {
     </View>
   );
 
-  const empty = isLoading ? (
-    /* Skeleton rows in the shape of the loaded call cards. */
-    <View className="gap-3">
-      {[0, 1, 2].map((i) => (
-        <Card key={i} tone="sticker" className="flex-row items-center gap-3">
-          <Skeleton className="h-12 w-12 rounded-crumb" />
-          <View className="flex-1 gap-1.5">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-3 w-24" />
+  // Loading / error / empty render in the plain scroll layout — the FlashList
+  // only ever mounts with rows (its ListEmptyComponent doesn't reliably update
+  // in-place on web, verified in the M18 smoke test).
+  if (isLoading || isError || visible.length === 0) {
+    return (
+      <Screen plaid>
+        {header}
+        {isLoading ? (
+          /* Skeleton rows in the shape of the loaded call cards. */
+          <View className="gap-3">
+            {[0, 1, 2].map((i) => (
+              <Card key={i} tone="sticker" className="flex-row items-center gap-3">
+                <Skeleton className="h-12 w-12 rounded-crumb" />
+                <View className="flex-1 gap-1.5">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </View>
+                <Skeleton className="h-5 w-12 rounded-pill" />
+              </Card>
+            ))}
           </View>
-          <Skeleton className="h-5 w-12 rounded-pill" />
-        </Card>
-      ))}
-    </View>
-  ) : isError ? (
-    <Card tone="outline">
-      <Text variant="heading">Couldn’t load calls</Text>
-      <Text variant="muted">
-        {error instanceof Error ? error.message : 'Check the API URL and key in Settings.'}
-      </Text>
-    </Card>
-  ) : !threads || threads.length === 0 ? (
-    <Card tone="muted">
-      <Text variant="heading">No past calls yet</Text>
-      <Text variant="muted">Run an agent and it’ll show up here.</Text>
-    </Card>
-  ) : (
-    <Card tone="muted">
-      <Text variant="muted">No calls for this filter.</Text>
-    </Card>
-  );
+        ) : isError ? (
+          <Card tone="outline">
+            <Text variant="heading">Couldn’t load calls</Text>
+            <Text variant="muted">
+              {error instanceof Error ? error.message : 'Check the API URL and key in Settings.'}
+            </Text>
+          </Card>
+        ) : !threads || threads.length === 0 ? (
+          <Card tone="muted">
+            <Text variant="heading">No past calls yet</Text>
+            <Text variant="muted">Run an agent and it’ll show up here.</Text>
+          </Card>
+        ) : (
+          <Card tone="muted">
+            <Text variant="muted">No calls for this filter.</Text>
+          </Card>
+        )}
+      </Screen>
+    );
+  }
 
   return (
     <Screen scroll={false} plaid contentClassName="pb-0">
@@ -171,7 +181,6 @@ export default function CallsScreen() {
         renderItem={({ item }) => <CallCard thread={item} onOpen={openThread} />}
         ItemSeparatorComponent={Separator}
         ListHeaderComponent={header}
-        ListEmptyComponent={empty}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 96 }}
       />
