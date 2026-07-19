@@ -47,15 +47,31 @@ emulator), enter an LLM key. Web defaults to the same-origin `/api` proxy (`EXPO
 
 ### Agent layer — `src/lib/agent/` (the core integration)
 The whole app is organised around **"one graph → one screen"**:
-- **`registry.ts`** maps a LangGraph `assistant_id` (from `muffin-agent/langgraph.json`:
-  `research`, `council`, `criteria_analysis`, `stock_evaluation`, `trading_decision`) → the inputs
-  its UI collects, a `buildInput` that shapes those into the run `input`, and the `resultKey`
-  carrying the headline output. **Adding an agent = adding one entry here.** A `custom` key opts an
-  agent into a bespoke screen (e.g. `council`) instead of the generic runner. An optional
-  `advanced: AdvancedField[]` declares **per-run `configurable` overrides** surfaced in the runner's
-  "Advanced options" (`src/components/advanced-options.tsx`); `overrides.ts` (`initialOverrides` /
-  `buildOverrides`) turns the collected values into a `configurable` patch merged over global
-  settings at run start (used by both the generic runner and the council screen).
+- **`registry/`** (a package: `types.ts`, `helpers.ts`, one file per agent, `index.ts` assembling
+  `AGENTS`; import path is still `@/lib/agent/registry`) maps a LangGraph `assistant_id` (from
+  `muffin-agent/langgraph.json`: `research`, `council`, `criteria_analysis`, `stock_evaluation`,
+  `trading_decision`) → the inputs its UI collects, a `buildInput` that shapes those into the run
+  `input`, and the `resultKey` carrying the headline output. **Adding an agent = adding one file
+  there and listing it in `index.ts`.** A `custom` key opts an agent into a bespoke screen (e.g.
+  `council`) instead of the generic runner. An optional `advanced: AdvancedField[]` declares
+  **per-run `configurable` overrides** surfaced in the runner's "Advanced options"
+  (`src/components/advanced-options.tsx`); `overrides.ts` (`initialOverrides` / `buildOverrides`)
+  turns the collected values into a `configurable` patch merged over global settings at run start
+  (used by both the generic runner and the council screen).
+- **`stream-types.ts` + `schemas.ts` — the typed stream boundary.** `RunStream`
+  (= `UseStreamReturn<AgentState>`) is the nameable handle type; helpers/wrappers that only forward
+  a stream into selector hooks take the library's erased `AnyStream` — never `unknown`, never
+  `as never`. `schemas.ts` holds zod `looseObject` schemas for every backend-owned payload the app
+  reads (`ToolRun` / `CriterionEvaluation` / `PersonaSignal` / the `criterion_evaluated` writer
+  event) — **they mirror `muffin-agent` state shapes; keep them in sync with the backend** exactly
+  like `settings/configurable.ts`. Parse with `parseArray`/`parseOr` (skip malformed members,
+  one dev warning per label); the domain types (`ToolRun`, `Criterion`, `PersonaSignal`) derive
+  from these schemas and are re-exported from their old homes.
+- **`stream-context.tsx`** shares the CURRENT surface's already-configured stream handle
+  (`RunStreamProvider` / `useRunStreamContext`) so detail components (`SubgraphDetail`,
+  `MemberDetail`) reach it without prop drilling. This is deliberately NOT the library's
+  `StreamProvider` (which *creates* a stream from server options — ours wraps the `useRunStream`
+  handle with its custom client/fetch/`onThreadId`). It is mounted by `RunSurface` (below).
 - **`features/agent-calls/threads.ts`** — the Calls tab renders each past run from data the
   **LangGraph server owns**, not app-written tags: `threadGraphId` reads `metadata.graph_id` (set by
   the server on every run, 1:1 with a registry `id`) → title / icon / filter / "reopen into the
@@ -119,7 +135,7 @@ The whole app is organised around **"one graph → one screen"**:
     `agent` equals the node name — attached to `SubgraphRow` by `useSubgraphRows`. `StageDef.output`
     is a **values key OR a selector** `(values) => unknown` (for stages whose output spans several
     keys / needs a legacy fallback, e.g. the bull/bear debate); always resolve it via
-    `stageOutput(stage, values)` (registry.ts), never `stage.output` directly — it narrows the union
+    `stageOutput(stage, values)` (registry/helpers.ts), never `stage.output` directly — it narrows the union
     and filters empty `[]`/`{}`. `StageDef.detail` (M16) is a bespoke expanded-detail renderer id
     (like `AgentDef.resultRenderer`): `detail: 'debate'` renders the output as a `DebateView`
     conversation. Both trading debates (`investment_debate` / `risk_debate`) are conference
@@ -139,8 +155,9 @@ The whole app is organised around **"one graph → one screen"**:
   in by declaring the `tool_runs` state channel. `criteria-result.tsx` badges evaluations whose
   backend truthing flag says no tools ran (`data_collected: false` → "no live data").
   **Cache join (folds in the former "Data gathered" panel):** `tool-runs.tsx` rows expand to the FULL
-  gathered payload — `lib/agent/tool-cache.tsx`'s `ToolCacheProvider` (mounted in `agent-runner.tsx`)
-  fetches the run's provider-call cache (`store.searchItems(['cache'])`, polls 10s while busy) and
+  gathered payload — `lib/agent/tool-cache.tsx`'s `ToolCacheProvider` (mounted via `RunSurface`)
+  fetches the run's provider-call cache (`store.searchItems(['cache'])`, one global query key,
+  polls 10s while busy — paused in background via the `focusManager`/`AppState` wiring) and
   exposes `useToolCache()`, an exact `(tool, args_hash) → CachedItem` lookup (the store KEY *is*
   `get_args_hash(args)`, so it equals the backend `tool_runs.args_hash` — no client rehashing, no
   cross-run bleed). A matched row shows size + `cachedAt` in its header and runs the full content
@@ -150,10 +167,13 @@ The whole app is organised around **"one graph → one screen"**:
   The old `collected-data.tsx` / `CollectedData` panel and its ±60s time-window heuristic were removed.
   Limitation: the `searchItems(['cache'], { limit: 100 })` cap can miss a payload in a very large
   global cache → that row degrades to preview (ROADMAP: switch to targeted `store.getItem` per key).
-  **Panel surfaces:** the generic runner (`agent-runner.tsx`) plus the bespoke screens
-  `features/council/council-screen.tsx`, `app/calls/[threadId].tsx` (history — `busy={false}`, one
-  cache fetch), and `features/agent-chat/chat-screen.tsx` each mount
-  `<ToolCacheProvider>` + `<ToolRunsSummary runs={collectToolRuns(values)} />`. The panel populates
+  **Panel surfaces:** the three live screens (generic runner, council, chat) mount
+  **`<RunSurface stream threadId>`** (`features/agent-shared/run-surface.tsx`) — it owns the
+  cross-cutting wiring (`ToolCacheProvider` + `RunStreamProvider`), with `RunErrorCard` /
+  `HydrationCard` for the shared error/hydration markup; each surface then renders
+  `<ToolRunsSummary runs={collectToolRuns(values)} />` where its layout wants it.
+  `app/calls/[threadId].tsx` (history — no live stream, `busy={false}`, one cache fetch) mounts
+  the `ToolCacheProvider` sub-slice directly. The panel populates
   only for graphs that surface `tool_runs` (criteria_analysis / trading_decision / research /
   stock_evaluation / council — the 13 personas since muffin-agent #109, the 4 ReAct specialists
   since #116; `technicals`/`sentiment` fetch via `cached_invoke` which bypasses capture, so they
@@ -194,9 +214,19 @@ empty chain is required to override the server chain into single-provider mode (
 numeric / comma-list knobs); the "Advanced configuration" Settings section feeds these. The agents
 read every key at runtime via `from_runnable_config`, so a knob takes effect as soon as the UI
 sends it — no backend change needed. `buildPresetConfigurable` is the no-secrets subset (strips
-`*_api_key` + `user_id`) used when saving an assistant preset. `store.ts` is a Zustand store
-persisted via the storage abstraction; `getSettings()` is a non-reactive snapshot for use outside
-React (building a run config).
+`*_api_key` + `user_id`) used when saving an assistant preset. `getSettings()` is a non-reactive
+snapshot for use outside React (building a run config). The Settings SCREEN is schema-driven
+(`app/(tabs)/settings.tsx`: a `SECTIONS` data table + three small renderers; each field subscribes
+to only its own store key).
+
+### Persisted stores — zustand `persist` + `lib/storage/zustand.ts`
+The three on-device stores (`lib/settings/store.ts`, `features/wealth/store.ts`,
+`features/markets/map-view-store.ts`) all use zustand's `persist` middleware with **`version` +
+`migrate`** over the shared `persistStorage()` adapter (`lib/storage/zustand.ts`). The adapter
+(a) adopts pre-middleware bare-JSON payloads as `{state, version: 0}` on read so long-time users'
+data flows through `migrate` instead of being discarded, and (b) optionally debounces writes
+(settings uses 400ms — it persists per keystroke) with a web `beforeunload` flush. **Renaming or
+retyping a persisted field REQUIRES a version bump + a `migrate` case** — that's the point.
 
 ### Platform-split files (Metro convention)
 `foo.web.ts` / `foo.native.ts` / `foo.ts` — Metro picks the web or native variant, `.ts` is the
@@ -216,27 +246,43 @@ loads fonts (Baloo2 + Nunito), wraps `QueryClientProvider` / `GestureHandlerRoot
 (e.g. an "Analyse" link passing `ticker`/`sector`/`market` + `autostart=1`).
 
 ### Features — `src/features/`
-Self-contained domains: **`council/`** (bespoke 13-persona screen, `streamSubgraphs` per-persona
-stages), **`markets/`** (the configurable globe — `classification.ts` defines MSCI/FTSE/World-Bank
-schemes × region/tier lenses as ISO-3166 lists, rendered onto an SVG `world-map`), **`wealth/`**
-(portfolio + goals, Zustand store seeded with demo data, persisted on-device).
+- **`agent-shared/`** — the streaming primitives EVERY run surface uses: `use-run-stream.ts`,
+  `run-projections.ts`, `run-progress.tsx`, `subgraph-detail.tsx`, `run-surface.tsx`, and the
+  transcript cluster (`conversation.tsx` — the mutually-recursive Conversation/StepTimeline pair;
+  `conversation-turns.ts` — pure fold logic + types, `coerceMessages` accepts `BaseMessage`
+  instances via the SDK's `toMessageDict`; `message-bubbles.tsx`; `subagent-activity.tsx`).
+  Council / agent-runner / calls import from here — never sideways from `agent-chat`.
+- **`agent-chat/`** — just the conversational feature now: `chat-screen.tsx` + `interrupt.tsx`.
+- **`agent-runner/`** — the generic single-shot run screen, decomposed: `agent-runner.tsx`
+  (orchestration), `run-input-form.tsx`, `save-preset-card.tsx` (self-contained mutation),
+  `run-results.tsx` (result renderers + hydration skeleton).
+- **`council/`** — bespoke 13-persona screen (arena, member detail, live persona fold).
+- **`markets/`** — the configurable globe (`classification.ts` defines MSCI/FTSE/World-Bank
+  schemes × region/tier lenses as ISO-3166 lists, rendered onto an SVG `world-map`).
+- **`wealth/`** — portfolio + goals (persisted store seeded with demo data).
 
 ### Design system — `src/components/`
 - **`ui/`** — bakery primitives styled with NativeWind v4 `className` (incl. `Skeleton`, the
   pulsing loading placeholder used by the hydration/loading states).
 - **Design tokens** live in `tailwind.config.js` (the `frosting`/`blueberry`/`butter`/`leaf`
-  palette, `crumb`/`muffin`/`bun` radii, Baloo2/Nunito font families — note **font weight is baked
+  palette, the **`ink` text ramp** — `ink`/`ink-muted`/`ink-soft`/`ink-faint` for body → muted →
+  done/disabled → placeholder text on light; never inline an arbitrary `text-[#hex]` —
+  `crumb`/`muffin`/`bun` radii, Baloo2/Nunito font families — note **font weight is baked
   into the family name** since native ignores `fontWeight`). **`src/theme/colors.ts` mirrors this
   palette** for APIs that need raw color values (navigation theme, status bar, SVG fills, charts) —
-  **keep the two in sync.**
+  **keep the two in sync** — and is the single home for the categorical chart palettes
+  (`chartColors.allocation` / `.sector`) and the world-map light fills (`mapColors`).
 - **`icons/`** — `<Icon name="…" />` + `registry.ts` mapping semantic names → Phosphor `*Icon`
   components (duotone default). Call sites never import Phosphor directly, so a glyph can be swapped
   for a custom doodle SVG by editing the registry. SVGs import as React components via
   `react-native-svg-transformer` (configured in `metro.config.js`).
 
 ### State management
-TanStack Query (server state) · Zustand (client state: settings, wealth, map view) · MMKV /
-localStorage (persistence).
+TanStack Query (server state; `lib/query.ts` also wires `focusManager` to `AppState` on native so
+interval refetches pause in background) · Zustand (client state: settings, wealth, map view — see
+the persisted-stores section above) · MMKV / localStorage (persistence). Long lists virtualize with
+`@shopify/flash-list` — but render loading/error/empty states OUTSIDE the list in the plain scroll
+layout: its web `ListEmptyComponent` does not update in place (verified in the M18 smoke test).
 
 ## Agent skills
 `.agents/skills/<name>/` holds real, git-tracked `SKILL.md` content; `.claude/skills/<name>` is a

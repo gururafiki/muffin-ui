@@ -294,6 +294,48 @@ backend (existing `graph_id`-tagged threads render correct titles/icons/filters 
 they show no descriptor one-liner (title is self-descriptive); `extract` path indexing
 (`values.messages[0].content`) didn't reliably yield a short prompt to use instead.
 
+## ✅ Milestone 18 — Top-shape refactor: structure, typed stream boundary, persistence, perf (2026-07)
+A whole-codebase health pass driven by an audit against the repo's own skills
+(`composition-patterns`, `react-best-practices`, `react-native-skills`, `web-design-guidelines`).
+No feature changes — six phases of consolidation:
+- **Dead code + deps:** deleted the orphaned pre-M12b cluster (`lib/agent/types.ts`,
+  `renderers/timeline-item.tsx`, unused council/steps exports, fixtures); uninstalled `@expo/ui`,
+  `expo-device`, `expo-glass-effect`, `expo-image`, `expo-symbols` (`@langchain/core` stays — a
+  required peerDependency).
+- **Typed stream boundary:** `lib/agent/stream-types.ts` (`RunStream` = `UseStreamReturn<AgentState>`,
+  re-exported `AnyStream`) killed all nine `as never` casts; `lib/agent/schemas.ts` (**zod**, new dep)
+  validates the backend-owned payloads (ToolRun / CriterionEvaluation / PersonaSignal / the
+  `criterion_evaluated` event) at every boundary — loose schemas + skip-and-dev-warn, so drift
+  degrades one row, never a panel. `ToolRun`/`Criterion`/`PersonaSignal` types now derive from the
+  schemas (single source).
+- **Structure:** new `features/agent-shared/` owns the streaming primitives every surface shares
+  (`use-run-stream`, `run-projections`, `run-progress`, `subgraph-detail`, the split conversation
+  cluster, `run-surface`). The 616-line `conversation.tsx` split into pure fold logic
+  (`conversation-turns.ts`), bubbles, panels, and the recursive timeline cluster; `Conversation`
+  accepts `BaseMessage` instances directly (SDK `toMessageDict` coercion) and memoizes `buildTurns`.
+  **`RunSurface`** (+ `RunErrorCard`/`HydrationCard` + a typed `RunStreamProvider` context) replaced
+  the 4× hand-rolled ToolCacheProvider/error/skeleton scaffolding; `SubgraphDetail`/`MemberDetail`
+  read the stream from context instead of a drilled `unknown` prop. `agent-runner` moved out of
+  `components/` into `features/agent-runner/` split four ways; `registry.ts` became a `registry/`
+  package (one file per agent — adding an agent = adding one file); Settings is schema-driven
+  (`SECTIONS` data + three renderers, per-field store subscriptions).
+- **Persistence:** all three on-device stores (settings / wealth / map-view) moved to zustand
+  `persist` with `version` + `migrate`; `lib/storage/zustand.ts` adopts pre-middleware bare payloads
+  as `{state, version: 0}` (existing users lose nothing — smoke-verified) and debounces the
+  settings writes 400ms (was a full JSON write per keystroke).
+- **Perf:** bar fills animate `scaleX` (off the layout pass; VoteBar keeps `width` intentionally —
+  documented); Calls tab virtualized with **@shopify/flash-list** (new dep; empty/loading states
+  render outside the list — its web `ListEmptyComponent` doesn't update in place, smoke-verified);
+  one global `['tool-cache']` query key (fetch ignores thread); TanStack `focusManager` wired to
+  `AppState` so the 10s poll pauses in background; Portfolio uses `useShallow` selectors.
+- **Polish:** tailwind `ink` ramp (`DEFAULT/muted/soft/faint`) replaced every arbitrary
+  `text-[#hex]`; chart palettes + map fills centralised in `theme/colors.ts`; a11y roles/labels on
+  all icon-only pressables; auth `LinkText` is a real focusable button; `titleCase` deduped into
+  `lib/format.ts` (was 6 copies); tab icons built once at module scope.
+Verified: tsc + eslint clean per phase; web export; **20/20 headless smoke checks** (every tab +
+runner/council/chat surfaces, legacy-payload migration, debounced persistence surviving reload,
+FlashList data path with 20 stubbed threads, zero Reanimated/worklet errors).
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
@@ -403,6 +445,18 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 ---
 
 ## Cross-cutting backlog (from completed milestones)
+- **M18 follow-ups:**
+  - **Transcript windowing** — `Conversation` renders every turn; very long runs deserve a
+    "show earlier turns" expander (buildTurns is memoized, but the render itself is unbounded).
+  - **Targeted tool-cache reads** — `searchItems(['cache'], {limit: 100})` can miss payloads in a
+    very large global cache; switch the join to per-key `store.getItem` (pre-existing item, restated).
+  - **World-map per-path memoization** — 177 SVG paths re-render on every selection change; a
+    memoized Path row would limit it to the fill-changed ones.
+  - **Drill-list virtualization** — `markets/drill-list.tsx` (~40 rows) still `.map()`s in a
+    ScrollView; FlashList is now a dependency if it ever grows.
+  - **Grandfathered `useMemo`s** — a handful predate the React Compiler convention and are
+    redundant-but-harmless; strip opportunistically when touching those files (keep the
+    load-bearing mount-time snapshot in `use-run-stream.ts`).
 - **M1:** real illustrated muffin mascot (the rest of the M1 backlog — token streaming, repo
   extraction — has shipped).
 - **M2 (deferred backend work):** declare `config_schema` on each graph so the app can render
