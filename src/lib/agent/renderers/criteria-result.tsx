@@ -6,7 +6,7 @@ import { Badge, Card, Chip, Collapsible, Text } from '@/components/ui';
 // Type-only import — a runtime import of Conversation here would create a
 // require cycle (renderers barrel → this file → conversation → barrel), so the
 // nested-transcript rendering is injected by the caller via `renderTranscript`.
-import type { SubagentRun } from '@/features/agent-chat/conversation';
+import type { SubagentRun } from '@/features/agent-shared/conversation-turns';
 import { parseArray, zCriterionEvaluation, type CriterionEvaluation } from '@/lib/agent/schemas';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';

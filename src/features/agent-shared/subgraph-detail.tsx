@@ -16,7 +16,7 @@ import {
   type AnyMessage,
   type ToolRun,
 } from '@/lib/agent/renderers';
-import type { AnyStream } from '@/lib/agent/stream-types';
+import { useRunStreamContext } from '@/lib/agent/stream-context';
 import { Conversation } from './conversation';
 import type { SubgraphRow } from './run-projections';
 
@@ -58,7 +58,8 @@ function toToolRuns(
  * structured output (registry `StageDef.output`), and the run-level `tool_runs`
  * records the backend attributed to this node.
  */
-export function SubgraphDetail({ stream, row }: { stream: AnyStream; row: SubgraphRow }) {
+export function SubgraphDetail({ row }: { row: SubgraphRow }) {
+  const stream = useRunStreamContext();
   const scopedMessages = useMessages(stream, row.namespace);
   const toolCalls = useToolCalls(stream, row.namespace);
 

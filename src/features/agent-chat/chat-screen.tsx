@@ -13,16 +13,16 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Chip, Screen, Skeleton, Text } from '@/components/ui';
+import { Card, Chip, Screen, Skeleton, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
+import { Conversation, type MessageActions, type SubagentRuns, type ViewMode } from '@/features/agent-shared/conversation';
+import { RunProgress } from '@/features/agent-shared/run-progress';
+import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
+import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import type { AgentDef } from '@/lib/agent/registry';
 import { collectToolRuns, ToolRunsSummary, type Todo } from '@/lib/agent/renderers';
-import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { palette } from '@/theme/colors';
-import { Conversation, type MessageActions, type SubagentRuns, type ViewMode } from './conversation';
 import { InterruptCard } from './interrupt';
-import { RunProgress } from './run-progress';
-import { useRunStream } from './use-run-stream';
 
 const MODE_HINT: Record<ViewMode, string> = {
   summary: 'Key milestones only',
@@ -191,7 +191,7 @@ export function ChatScreen({
 
   // ── Conversation: transcript + docked composer ────────────────────────
   return (
-    <ToolCacheProvider thread={liveThreadId} busy={busy}>
+    <RunSurface stream={stream} threadId={liveThreadId}>
     <Screen scroll={false}>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View className="pb-2">
@@ -234,7 +234,7 @@ export function ChatScreen({
             </View>
           ) : null}
           <Conversation
-            messages={messages as never}
+            messages={messages}
             viewMode={viewMode}
             busy={busy}
             actions={actions}
@@ -246,12 +246,7 @@ export function ChatScreen({
 
           {stream.interrupt ? <InterruptCard value={stream.interrupt.value} busy={busy} onResume={resume} /> : null}
 
-          {stream.error ? (
-            <Card tone="outline" className="gap-1">
-              <Badge label="error" tone="bearish" />
-              <Text variant="muted">{stream.error instanceof Error ? stream.error.message : String(stream.error)}</Text>
-            </Card>
-          ) : null}
+          <RunErrorCard error={stream.error} />
         </ScrollView>
 
         {!atBottom ? (
@@ -273,6 +268,6 @@ export function ChatScreen({
         </View>
       </KeyboardAvoidingView>
     </Screen>
-    </ToolCacheProvider>
+    </RunSurface>
   );
 }

@@ -2,11 +2,10 @@ import { ActivityIndicator, Pressable, useColorScheme, View } from 'react-native
 
 import { Icon } from '@/components/icons';
 import { Badge, Card, Collapsible, Text } from '@/components/ui';
-import { SubagentStateDigest } from '@/features/agent-chat/conversation';
-import type { SubgraphRow } from '@/features/agent-chat/run-projections';
-import { SubgraphDetail } from '@/features/agent-chat/subgraph-detail';
+import type { SubgraphRow } from '@/features/agent-shared/run-projections';
+import { SubagentStateDigest } from '@/features/agent-shared/subagent-activity';
+import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { Markdown, StructuredOutput, ToolRunList, type ToolRun } from '@/lib/agent/renderers';
-import type { AnyStream } from '@/lib/agent/stream-types';
 import { palette } from '@/theme/colors';
 import type { MemberStep, PersonaMeta } from './personas';
 import { signalTone, type PersonaSignal, type PersonaStage } from './types';
@@ -57,7 +56,6 @@ export function MemberDetail({
   busy,
   liveValues,
   row,
-  stream,
   toolRuns,
   onDismiss,
 }: {
@@ -67,7 +65,6 @@ export function MemberDetail({
   busy: boolean;
   liveValues?: Record<string, unknown>;
   row?: SubgraphRow;
-  stream: AnyStream;
   toolRuns: ToolRun[];
   onDismiss: () => void;
 }) {
@@ -146,7 +143,7 @@ export function MemberDetail({
 
       <SubagentStateDigest values={digestValues} />
 
-      {rowHasBody ? <SubgraphDetail stream={stream} row={row!} /> : null}
+      {rowHasBody ? <SubgraphDetail row={row!} /> : null}
     </Card>
   );
 }

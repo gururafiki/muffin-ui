@@ -1,25 +1,25 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
 
 import { AdvancedOptions } from '@/components/advanced-options';
 import { Icon } from '@/components/icons';
-import { Badge, Button, Card, Field, Skeleton, Text } from '@/components/ui';
+import { Button, Card, Field, Skeleton, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import { useCall } from '@/features/agent-calls/use-calls';
-import { SubagentActivity } from '@/features/agent-chat/conversation';
-import { RunProgress } from '@/features/agent-chat/run-progress';
-import { useSubgraphRows } from '@/features/agent-chat/run-projections';
-import { SubgraphDetail } from '@/features/agent-chat/subgraph-detail';
-import { useRunStream } from '@/features/agent-chat/use-run-stream';
+import { RunProgress } from '@/features/agent-shared/run-progress';
+import { useSubgraphRows } from '@/features/agent-shared/run-projections';
+import { HydrationCard, RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
+import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
+import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
+import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import { palette } from '@/theme/colors';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { parseArray, zPersonaSignal } from '@/lib/agent/schemas';
 import { collectToolRuns, ToolRunsSummary } from '@/lib/agent/renderers';
-import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { CouncilArena } from './council-arena';
 import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
@@ -160,7 +160,7 @@ export function CouncilScreen({
     .map((row) => ({
       name: row.label,
       status: row.status,
-      renderDetail: () => <SubgraphDetail stream={stream} row={row} />,
+      renderDetail: () => <SubgraphDetail row={row} />,
     }));
 
   const convene = () => {
@@ -171,7 +171,7 @@ export function CouncilScreen({
   };
 
   return (
-    <ToolCacheProvider thread={liveThreadId} busy={busy}>
+    <RunSurface stream={stream} threadId={liveThreadId}>
     <View className="gap-4">
       <Card tone="sticker" className="gap-3">
         <View className="flex-row items-center gap-3">
@@ -223,25 +223,14 @@ export function CouncilScreen({
         )}
       </Card>
 
-      {stream.error ? (
-        <Card tone="outline" className="gap-1">
-          <Badge label="error" tone="bearish" />
-          <Text variant="muted">
-            {stream.error instanceof Error ? stream.error.message : String(stream.error)}
-          </Text>
-        </Card>
-      ) : null}
+      <RunErrorCard error={stream.error} />
 
       {stream.isThreadLoading ? (
         /* Reopened session hydrating — hold the arena's shape. */
-        <Card tone="muted" className="gap-3">
-          <View className="flex-row items-center gap-2.5">
-            <ActivityIndicator size="small" color={palette.frosting[400]} />
-            <Text variant="muted" className="flex-1 text-sm">Loading this session…</Text>
-          </View>
+        <HydrationCard label="Loading this session…">
           <Skeleton className="h-3.5 w-full" />
           <Skeleton className="h-24 w-full" />
-        </Card>
+        </HydrationCard>
       ) : null}
 
       {busy ? (
@@ -274,7 +263,6 @@ export function CouncilScreen({
             busy={busy}
             liveValues={selLive?.values}
             row={selRow}
-            stream={stream}
             toolRuns={selToolRuns}
             onDismiss={() => setSelected(null)}
           />
@@ -302,6 +290,6 @@ export function CouncilScreen({
         </Animated.View>
       ) : null}
     </View>
-    </ToolCacheProvider>
+    </RunSurface>
   );
 }

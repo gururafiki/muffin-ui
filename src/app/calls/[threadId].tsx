@@ -8,7 +8,8 @@ import {
   threadStatusTone,
 } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
-import { Conversation, SubagentActivity, type SubagentRun, type SubagentRuns } from '@/features/agent-chat/conversation';
+import { Conversation, type SubagentRun, type SubagentRuns } from '@/features/agent-shared/conversation';
+import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
 import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsSummary, type Todo } from '@/lib/agent/renderers';
 import { parseArray, zCriterionEvaluation } from '@/lib/agent/schemas';
 import { ToolCacheProvider } from '@/lib/agent/tool-cache';

@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
-import { AgentRunner } from '@/components/agent-runner';
+import { AgentRunner } from '@/features/agent-runner/agent-runner';
 import { Card, Screen, Text } from '@/components/ui';
 import { ChatScreen } from '@/features/agent-chat/chat-screen';
 import { CouncilScreen } from '@/features/council/council-screen';
