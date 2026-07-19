@@ -11,7 +11,7 @@ const variants: Record<Variant, string> = {
   title: 'font-title text-2xl text-frosting-700 dark:text-frosting-100',
   heading: 'font-heading text-lg text-ink dark:text-night-text',
   body: 'font-body text-base text-ink dark:text-night-text',
-  muted: 'font-body text-sm text-[#7A6A92] dark:text-night-text-muted',
+  muted: 'font-body text-sm text-ink-muted dark:text-night-text-muted',
   label: 'font-heading text-xs uppercase tracking-wide text-frosting-500 dark:text-frosting-300',
   mono: 'font-mono text-sm text-ink dark:text-night-text',
 };

@@ -1,4 +1,5 @@
 import type { IconName } from '@/components/icons';
+import { titleCase } from '@/lib/format';
 
 export interface StepInfo {
   /** One-line, human-readable description of what this graph step is doing. */
@@ -45,9 +46,6 @@ export function describeStep(node: string): StepInfo {
   return { label: humanize(node), icon: 'sparkle' };
 }
 
-function titleCase(s: string): string {
-  return s.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 function firstString(args: Record<string, unknown>, keys: string[]): string | undefined {
   for (const k of keys) {

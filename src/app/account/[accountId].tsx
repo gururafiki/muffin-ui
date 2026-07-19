@@ -81,7 +81,11 @@ export default function AccountScreen() {
                         </Text>
                       ) : null}
                     </View>
-                    <Pressable onPress={() => removeHolding(account.id, h.id)} hitSlop={8}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${h.symbol}`}
+                      onPress={() => removeHolding(account.id, h.id)}
+                      hitSlop={8}>
                       <Icon name="close" size={18} color={palette.frosting[400]} weight="bold" />
                     </Pressable>
                   </Card>

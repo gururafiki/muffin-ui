@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useColorScheme, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { palette } from '@/theme/colors';
+import { mapColors, palette } from '@/theme/colors';
 import {
   getScheme,
   UNCLASSIFIED_COLOR,
@@ -49,9 +49,9 @@ export function WorldMap({
     return { fills, groups, viewBox };
   }, [scheme, lens, focusGroup]);
 
-  const ocean = dark ? palette.night.surface : '#F4ECDD';
+  const ocean = dark ? palette.night.surface : mapColors.ocean;
   const stroke = dark ? palette.night.bg : palette.dough;
-  const dim = dark ? palette.night.surfaceMuted : '#EAE0EE';
+  const dim = dark ? palette.night.surfaceMuted : mapColors.dim;
 
   return (
     <View

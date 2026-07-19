@@ -8,6 +8,7 @@
  * date-like field plus numeric fields. Produces chart-ready line series
  * (plus a volume bar series when present) for `TimeSeriesChart`.
  */
+import { titleCase } from '@/lib/format';
 
 export interface SeriesPoint {
   /** Epoch millis. */
@@ -83,9 +84,7 @@ function numericKeys(rows: Row[], dateKey: string): string[] {
   );
 }
 
-function labelFor(key: string): string {
-  return key.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const labelFor = titleCase;
 
 function buildPoints(rows: Row[], dateKey: string, key: string): SeriesPoint[] {
   const points: SeriesPoint[] = [];

@@ -64,8 +64,14 @@ module.exports = {
         // Bakery surfaces (light).
         dough: '#FBF3E3', // warm cream app background
         crust: '#F3E7D2', // deeper cream raised surface
-        // Near-black grape — doodle outlines + body text on light.
-        ink: '#2E2140',
+        // Grape ink text ramp (light theme): outlines/body → muted → soft
+        // (done/disabled) → faint (placeholders, inactive tabs).
+        ink: {
+          DEFAULT: '#2E2140',
+          muted: '#7A6A92',
+          soft: '#9A8BB0',
+          faint: '#BCA9D2',
+        },
         // Subtle plaid / gingham pattern.
         plaid: {
           DEFAULT: '#ECE0F4',

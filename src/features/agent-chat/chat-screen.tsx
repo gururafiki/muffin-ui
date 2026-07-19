@@ -251,6 +251,8 @@ export function ChatScreen({
 
         {!atBottom ? (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Scroll to latest message"
             onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
             className="absolute bottom-24 right-1 h-10 w-10 items-center justify-center rounded-pill border-2 border-frosting-300 bg-white active:opacity-80 dark:border-night-border dark:bg-night-surface">
             <Icon name="arrow-down" size={20} color={palette.frosting[600]} weight="bold" />

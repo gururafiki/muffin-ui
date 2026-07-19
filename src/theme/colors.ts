@@ -30,6 +30,10 @@ export const palette = {
   crust: '#F3E7D2',
   // Near-black grape — outlines + text on light.
   ink: '#2E2140',
+  // Ink text ramp on light (mirrors tailwind `ink.muted/.soft/.faint`).
+  inkMuted: '#7A6A92',
+  inkSoft: '#9A8BB0',
+  inkFaint: '#BCA9D2',
   // Plaid / gingham pattern.
   plaid: { base: '#ECE0F4', line: '#DBC8EC' },
   // "Blueberry night" dark surfaces.
@@ -50,13 +54,24 @@ export const palette = {
   black: '#2E2140',
 } as const;
 
+/** Categorical chart palettes (brand-harmonised). One home for the raw hexes. */
+export const chartColors = {
+  /** Allocation bars (wealth). */
+  allocation: ['#875DAE', '#A47EC6', '#6E63A6', '#E9A94D', '#C2A4DC', '#6F4A93', '#7FB35C', '#524785', '#B79AD8'],
+  /** Sector donut slices (markets). */
+  sector: ['#875DAE', '#A47EC6', '#6E63A6', '#524785', '#C2A4DC', '#6F4A93', '#9B7BC4', '#E9A94D', '#B79AD8', '#7FB35C', '#5A3C77'],
+} as const;
+
+/** World-map fills (light theme; dark uses the night surfaces). */
+export const mapColors = { ocean: '#F4ECDD', dim: '#EAE0EE' } as const;
+
 export const theme = {
   light: {
     background: palette.dough,
     surface: palette.white,
     surfaceMuted: palette.crust,
     text: palette.ink,
-    textMuted: '#7A6A92',
+    textMuted: palette.inkMuted,
     primary: palette.frosting[500],
     accent: palette.butter[500],
     border: palette.frosting[200],

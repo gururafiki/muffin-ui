@@ -1,6 +1,7 @@
 import { View, type ViewProps } from 'react-native';
 
 import { cn } from '@/lib/cn';
+import { palette } from '@/theme/colors';
 
 type Tone = 'raised' | 'outline' | 'muted' | 'sticker';
 
@@ -23,7 +24,7 @@ const tones: Record<Tone, string> = {
 
 // Hard offset "sticker" shadow (RN; react-native-web maps to box-shadow).
 const stickerShadow = {
-  shadowColor: '#2E2140',
+  shadowColor: palette.ink,
   shadowOpacity: 0.13,
   shadowRadius: 0,
   shadowOffset: { width: 0, height: 4 },

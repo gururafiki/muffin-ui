@@ -22,7 +22,7 @@ export function Field({ label, hint, error, rightSlot, className, ...props }: Fi
       {label ? <Text variant="label">{label}</Text> : null}
       <View className="justify-center">
         <TextInput
-          placeholderTextColor={dark ? palette.night.textMuted : '#B6A8CC'}
+          placeholderTextColor={dark ? palette.night.textMuted : palette.inkFaint}
           className={cn(
             'rounded-crumb border-2 border-frosting-200 bg-white px-3 py-3 font-body text-base text-ink',
             'dark:border-night-border dark:bg-night-surface dark:text-night-text',

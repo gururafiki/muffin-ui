@@ -12,7 +12,7 @@ export function JsonBlock({ value }: { value: unknown }) {
   }
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <Text variant="mono" className="text-xs text-[#7A6A92] dark:text-night-text-muted">
+      <Text variant="mono" className="text-xs text-ink-muted dark:text-night-text-muted">
         {text}
       </Text>
     </ScrollView>

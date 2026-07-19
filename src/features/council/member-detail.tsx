@@ -84,13 +84,12 @@ export function MemberDetail({
 
   return (
     <Card className="gap-3">
-      <Pressable onPress={onDismiss} className="flex-row items-center gap-3 active:opacity-70">
-        <View
-          className="h-11 w-11 items-center justify-center rounded-pill border-2"
-          style={{
-            borderColor: dark ? palette.night.border : palette.frosting[200],
-            backgroundColor: dark ? palette.night.surface : palette.white,
-          }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Dismiss ${meta.name} details`}
+        onPress={onDismiss}
+        className="flex-row items-center gap-3 active:opacity-70">
+        <View className="h-11 w-11 items-center justify-center rounded-pill border-2 border-frosting-200 bg-white dark:border-night-border dark:bg-night-surface">
           <Icon
             name={meta.icon}
             size={24}

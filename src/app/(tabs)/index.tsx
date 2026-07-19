@@ -134,7 +134,11 @@ export default function HomeScreen() {
             <Text variant="heading" className="flex-1">
               {sel.name}
             </Text>
-            <Pressable onPress={() => setSelectedIso(null)} hitSlop={8}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss country details"
+              onPress={() => setSelectedIso(null)}
+              hitSlop={8}>
               <Icon name="close" size={18} color={palette.frosting[400]} weight="bold" />
             </Pressable>
           </View>

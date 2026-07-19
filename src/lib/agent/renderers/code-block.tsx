@@ -41,7 +41,7 @@ export function CodeBlock({ text, language }: { text: string; language?: string 
     kw: dark ? palette.frosting[300] : palette.frosting[600],
     str: dark ? palette.leaf[400] : palette.leaf[600],
     num: dark ? palette.butter[400] : palette.butter[600],
-    com: dark ? palette.night.textMuted : '#9A8BB0',
+    com: dark ? palette.night.textMuted : palette.inkSoft,
     txt: dark ? palette.night.text : palette.ink,
   };
   const tokens = tokenize(text.replace(/\n$/, ''));

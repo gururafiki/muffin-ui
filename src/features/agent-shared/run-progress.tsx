@@ -101,7 +101,7 @@ function StageChecklist({ rows }: { rows: StageRow[] }) {
               variant="body"
               className={cn(
                 'flex-1 text-sm',
-                r.status === 'done' && 'text-[#9A8BB0] dark:text-night-text-muted',
+                r.status === 'done' && 'text-ink-soft dark:text-night-text-muted',
                 r.status === 'active' && 'font-heading',
               )}>
               {r.stage.label}

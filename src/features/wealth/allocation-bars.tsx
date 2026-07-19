@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Card, Chip, Text } from '@/components/ui';
+import { chartColors } from '@/theme/colors';
 import {
   allocationByAccount,
   allocationByAssetType,
@@ -11,7 +12,7 @@ import {
   type AllocationSlice,
 } from './portfolio';
 
-const COLORS = ['#875DAE', '#A47EC6', '#6E63A6', '#E9A94D', '#C2A4DC', '#6F4A93', '#7FB35C', '#524785', '#B79AD8'];
+const COLORS = chartColors.allocation;
 
 function Row({ slice, total, color, currency }: { slice: AllocationSlice; total: number; color: string; currency: string }) {
   const frac = total ? slice.value / total : 0;

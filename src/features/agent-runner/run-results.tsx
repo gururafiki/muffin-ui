@@ -52,7 +52,7 @@ export function HydrationSkeleton({ agent }: { agent: AgentDef }) {
                 <View className="w-5 items-center">
                   <Skeleton className="h-3.5 w-3.5 rounded-pill" />
                 </View>
-                <Text variant="body" className="flex-1 text-sm text-[#9A8BB0] dark:text-night-text-muted">
+                <Text variant="body" className="flex-1 text-sm text-ink-soft dark:text-night-text-muted">
                   {s.label}
                 </Text>
               </View>

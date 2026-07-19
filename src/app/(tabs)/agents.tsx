@@ -65,6 +65,8 @@ export default function AgentsScreen() {
                   <Text variant="muted">{getAgent(p.graphId)?.title ?? p.graphId}</Text>
                 </View>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete preset ${p.name}`}
                   onPress={() => deletePreset.mutate(p.id)}
                   hitSlop={8}
                   className="p-1 active:opacity-60">

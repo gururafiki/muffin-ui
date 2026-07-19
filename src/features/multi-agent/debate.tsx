@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Icon, type IconName } from '@/components/icons';
 import { Avatar, Card, Collapsible, Text, type Signal } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { titleCase } from '@/lib/format';
 // Direct import (not the renderers barrel) to avoid a require cycle with
 // trading-result.tsx, which lives in that barrel and renders this component.
 import { Markdown } from '@/lib/agent/renderers/markdown';
@@ -146,8 +147,7 @@ const DEBATER_STYLE: { match: RegExp; style: Omit<Debater, 'id'> }[] = [
 function styleFor(speaker: string, index: number): Omit<Debater, 'id'> {
   const hit = DEBATER_STYLE.find((d) => d.match.test(speaker));
   if (hit) return hit.style;
-  const name = speaker.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  return { name, tone: 'info', side: index % 2 === 0 ? 'left' : 'right' };
+  return { name: titleCase(speaker), tone: 'info', side: index % 2 === 0 ? 'left' : 'right' };
 }
 
 /**

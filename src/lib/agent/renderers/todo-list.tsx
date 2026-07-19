@@ -37,7 +37,7 @@ function TodoRow({ todo }: { todo: Todo }) {
       </View>
       <Text
         variant="body"
-        className={cn('flex-1 text-sm', done && 'text-[#9A8BB0] line-through', active && 'font-heading')}>
+        className={cn('flex-1 text-sm', done && 'text-ink-soft line-through', active && 'font-heading')}>
         {label}
       </Text>
     </View>

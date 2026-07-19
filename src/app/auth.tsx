@@ -369,14 +369,17 @@ function LinkText({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  // A real Pressable (not Text onPress) so the web build renders a focusable,
+  // keyboard-activatable control with a button role.
   return (
-    <Text
-      className={cn(
-        'font-heading text-sm text-frosting-600 dark:text-frosting-300',
-        disabled && 'opacity-50',
-      )}
-      onPress={disabled ? undefined : onPress}>
-      {label}
-    </Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={6}
+      className={cn('active:opacity-60', disabled && 'opacity-50')}>
+      <Text className="font-heading text-sm text-frosting-600 dark:text-frosting-300">{label}</Text>
+    </Pressable>
   );
 }

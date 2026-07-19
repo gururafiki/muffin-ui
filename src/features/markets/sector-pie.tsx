@@ -2,14 +2,11 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 
-import { palette } from '@/theme/colors';
+import { chartColors, palette } from '@/theme/colors';
 import { SECTORS, SECTOR_WEIGHTS, type Sector } from './taxonomy';
 
 // Categorical palette harmonised with the brand grape/blueberry + butter accents.
-const SLICE_COLORS = [
-  '#875DAE', '#A47EC6', '#6E63A6', '#524785', '#C2A4DC', '#6F4A93',
-  '#9B7BC4', '#E9A94D', '#B79AD8', '#7FB35C', '#5A3C77',
-];
+const SLICE_COLORS = chartColors.sector;
 
 const SIZE = 240;
 const C = SIZE / 2;
@@ -90,7 +87,7 @@ export function SectorPie({
                   fontSize={13}
                   fontWeight="bold"
                   textAnchor="middle"
-                  fill="#FFFFFF">
+                  fill={palette.white}>
                   {s.weight}%
                 </SvgText>
               ) : null}
@@ -101,7 +98,7 @@ export function SectorPie({
         <SvgText x={C} y={C - 4} fontSize={14} fontWeight="bold" textAnchor="middle" fill={palette.frosting[700]}>
           {selected ? selected.sector.name.split(' ')[0] : 'Sectors'}
         </SvgText>
-        <SvgText x={C} y={C + 15} fontSize={12} textAnchor="middle" fill="#7A6A92">
+        <SvgText x={C} y={C + 15} fontSize={12} textAnchor="middle" fill={palette.inkMuted}>
           {selected ? `${selected.weight}% wt` : 'tap a slice'}
         </SvgText>
       </Svg>
