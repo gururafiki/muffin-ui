@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-import { storage } from '@/lib/storage';
+import { persistStorage } from '@/lib/storage/zustand';
 
 export type LlmProvider = 'openai' | 'anthropic' | 'openrouter' | 'ollama';
 
@@ -107,35 +108,35 @@ export const DEFAULT_SETTINGS: Settings = {
   storeAllowedNamespaces: '',
 };
 
-const STORAGE_KEY = 'muffin.settings.v1';
-
-function load(): Settings {
-  const raw = storage.getString(STORAGE_KEY);
-  if (!raw) return DEFAULT_SETTINGS;
-  try {
-    return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
-
 interface SettingsState extends Settings {
   setMany: (patch: Partial<Settings>) => void;
   reset: () => void;
 }
 
-export const useSettings = create<SettingsState>((set, get) => ({
-  ...load(),
-  setMany: (patch) => {
-    set(patch);
-    const { setMany, reset, ...values } = get();
-    storage.set(STORAGE_KEY, JSON.stringify(values));
-  },
-  reset: () => {
-    set(DEFAULT_SETTINGS);
-    storage.delete(STORAGE_KEY);
-  },
-}));
+/**
+ * Persisted via zustand `persist`: `version` + `migrate` guard on-device data
+ * across shape changes (the storage adapter wraps pre-middleware bare payloads
+ * as version 0), and the 400ms debounce batches the per-keystroke writes the
+ * Settings screen produces.
+ */
+export const useSettings = create<SettingsState>()(
+  persist(
+    (set) => ({
+      ...DEFAULT_SETTINGS,
+      setMany: (patch) => set(patch),
+      reset: () => set(DEFAULT_SETTINGS),
+    }),
+    {
+      name: 'muffin.settings.v1',
+      version: 1,
+      // v0 (legacy bare payload) has the same field names as v1 — adopt as is;
+      // add cases here when a field is renamed/retyped.
+      migrate: (persisted) => persisted as Settings,
+      storage: persistStorage({ debounceMs: 400 }),
+      partialize: ({ setMany, reset, ...values }) => values,
+    },
+  ),
+);
 
 /** Non-reactive snapshot for use outside React (e.g. building a run config). */
 export const getSettings = (): Settings => {

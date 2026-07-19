@@ -1,10 +1,12 @@
 /**
  * Globe view preferences — which classification scheme + lens the world map
- * uses. Persisted on-device so the choice sticks between sessions.
+ * uses. Persisted on-device (zustand `persist`, version + migrate) so the
+ * choice sticks between sessions.
  */
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-import { storage } from '@/lib/storage';
+import { persistStorage } from '@/lib/storage/zustand';
 import type { LensId, SchemeId } from './classification';
 
 interface MapView {
@@ -13,36 +15,26 @@ interface MapView {
 }
 
 const DEFAULTS: MapView = { scheme: 'msci', lens: 'region' };
-const STORAGE_KEY = 'muffin.mapview.v1';
-
-function load(): MapView {
-  const raw = storage.getString(STORAGE_KEY);
-  if (!raw) return DEFAULTS;
-  try {
-    return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<MapView>) };
-  } catch {
-    return DEFAULTS;
-  }
-}
 
 interface MapViewState extends MapView {
   setScheme: (scheme: SchemeId) => void;
   setLens: (lens: LensId) => void;
 }
 
-export const useMapView = create<MapViewState>((set, get) => ({
-  ...load(),
-  setScheme: (scheme) => {
-    set({ scheme });
-    persist(get);
-  },
-  setLens: (lens) => {
-    set({ lens });
-    persist(get);
-  },
-}));
-
-function persist(get: () => MapViewState) {
-  const { scheme, lens } = get();
-  storage.set(STORAGE_KEY, JSON.stringify({ scheme, lens }));
-}
+export const useMapView = create<MapViewState>()(
+  persist(
+    (set) => ({
+      ...DEFAULTS,
+      setScheme: (scheme) => set({ scheme }),
+      setLens: (lens) => set({ lens }),
+    }),
+    {
+      name: 'muffin.mapview.v1',
+      version: 1,
+      // v0 (legacy bare payload) has the same shape as v1 — adopt as is.
+      migrate: (persisted) => persisted as MapView,
+      storage: persistStorage(),
+      partialize: ({ scheme, lens }) => ({ scheme, lens }),
+    },
+  ),
+);

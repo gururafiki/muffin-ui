@@ -9,7 +9,7 @@ import { View } from 'react-native';
 import { Button, Card, Chip, Collapsible, Field, Screen, Text } from '@/components/ui';
 import { AccountCard } from '@/features/account/account-card';
 import { reinitAuth } from '@/lib/auth/store';
-import { DEFAULT_SETTINGS, useSettings, type Settings } from '@/lib/settings/store';
+import { useSettings, type Settings } from '@/lib/settings/store';
 
 type SettingKey = keyof Settings;
 
@@ -207,9 +207,7 @@ export default function SettingsScreen() {
           title="Reset to defaults"
           variant="secondary"
           onPress={() => {
-            const s = useSettings.getState();
-            s.reset();
-            s.setMany(DEFAULT_SETTINGS);
+            useSettings.getState().reset();
             setSaved(false);
           }}
         />
