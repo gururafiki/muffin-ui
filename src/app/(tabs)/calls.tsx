@@ -1,4 +1,5 @@
 import type { Thread } from '@langchain/langgraph-sdk';
+import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -38,6 +39,34 @@ function StatusBadge({ status }: { status: Thread['status'] }) {
     </Animated.View>
   );
 }
+
+function CallCard({ thread, onOpen }: { thread: Thread; onOpen: (thread: Thread) => void }) {
+  const descriptor = threadDescriptor(thread);
+  return (
+    <Pressable onPress={() => onOpen(thread)} className="active:opacity-80">
+      <Card tone="sticker" className="flex-row items-center gap-3">
+        <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
+          <Icon name={threadAgentIcon(thread)} size={26} color={palette.frosting[600]} />
+        </View>
+        <View className="flex-1 gap-1">
+          <View className="flex-row items-center gap-2">
+            <Text variant="heading" className="flex-shrink">{agentTitleForThread(thread)}</Text>
+            <StatusBadge status={thread.status} />
+          </View>
+          {descriptor ? (
+            <Text variant="body" className="text-sm" numberOfLines={1}>
+              {descriptor}
+            </Text>
+          ) : null}
+          <Text variant="muted" className="text-xs">{relativeTime(thread.created_at)}</Text>
+        </View>
+        <Icon name="chevron-right" size={20} color={palette.frosting[300]} weight="bold" />
+      </Card>
+    </Pressable>
+  );
+}
+
+const Separator = () => <View className="h-3" />;
 
 export default function CallsScreen() {
   const router = useRouter();
@@ -79,8 +108,8 @@ export default function CallsScreen() {
     ...(counts.other ? [{ key: 'other', label: 'Other' }] : []),
   ];
 
-  return (
-    <Screen plaid>
+  const header = (
+    <View className="pb-4">
       <Text variant="title" className="pt-4">
         Calls
       </Text>
@@ -98,64 +127,54 @@ export default function CallsScreen() {
           ))}
         </ScrollView>
       ) : null}
+    </View>
+  );
 
-      <View className="mt-4 gap-3">
-        {isLoading ? (
-          /* Skeleton rows in the shape of the loaded call cards. */
-          [0, 1, 2].map((i) => (
-            <Card key={i} tone="sticker" className="flex-row items-center gap-3">
-              <Skeleton className="h-12 w-12 rounded-crumb" />
-              <View className="flex-1 gap-1.5">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-24" />
-              </View>
-              <Skeleton className="h-5 w-12 rounded-pill" />
-            </Card>
-          ))
-        ) : isError ? (
-          <Card tone="outline">
-            <Text variant="heading">Couldn’t load calls</Text>
-            <Text variant="muted">
-              {error instanceof Error ? error.message : 'Check the API URL and key in Settings.'}
-            </Text>
-          </Card>
-        ) : !threads || threads.length === 0 ? (
-          <Card tone="muted">
-            <Text variant="heading">No past calls yet</Text>
-            <Text variant="muted">Run an agent and it’ll show up here.</Text>
-          </Card>
-        ) : visible.length === 0 ? (
-          <Card tone="muted">
-            <Text variant="muted">No calls for this filter.</Text>
-          </Card>
-        ) : (
-          visible.map((thread) => {
-            const descriptor = threadDescriptor(thread);
-            return (
-              <Pressable key={thread.thread_id} onPress={() => openThread(thread)} className="active:opacity-80">
-                <Card tone="sticker" className="flex-row items-center gap-3">
-                  <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
-                    <Icon name={threadAgentIcon(thread)} size={26} color={palette.frosting[600]} />
-                  </View>
-                  <View className="flex-1 gap-1">
-                    <View className="flex-row items-center gap-2">
-                      <Text variant="heading" className="flex-shrink">{agentTitleForThread(thread)}</Text>
-                      <StatusBadge status={thread.status} />
-                    </View>
-                    {descriptor ? (
-                      <Text variant="body" className="text-sm" numberOfLines={1}>
-                        {descriptor}
-                      </Text>
-                    ) : null}
-                    <Text variant="muted" className="text-xs">{relativeTime(thread.created_at)}</Text>
-                  </View>
-                  <Icon name="chevron-right" size={20} color={palette.frosting[300]} weight="bold" />
-                </Card>
-              </Pressable>
-            );
-          })
-        )}
-      </View>
+  const empty = isLoading ? (
+    /* Skeleton rows in the shape of the loaded call cards. */
+    <View className="gap-3">
+      {[0, 1, 2].map((i) => (
+        <Card key={i} tone="sticker" className="flex-row items-center gap-3">
+          <Skeleton className="h-12 w-12 rounded-crumb" />
+          <View className="flex-1 gap-1.5">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-3 w-24" />
+          </View>
+          <Skeleton className="h-5 w-12 rounded-pill" />
+        </Card>
+      ))}
+    </View>
+  ) : isError ? (
+    <Card tone="outline">
+      <Text variant="heading">Couldn’t load calls</Text>
+      <Text variant="muted">
+        {error instanceof Error ? error.message : 'Check the API URL and key in Settings.'}
+      </Text>
+    </Card>
+  ) : !threads || threads.length === 0 ? (
+    <Card tone="muted">
+      <Text variant="heading">No past calls yet</Text>
+      <Text variant="muted">Run an agent and it’ll show up here.</Text>
+    </Card>
+  ) : (
+    <Card tone="muted">
+      <Text variant="muted">No calls for this filter.</Text>
+    </Card>
+  );
+
+  return (
+    <Screen scroll={false} plaid contentClassName="pb-0">
+      {/* Virtualized — the list can hold up to 50 rich cards (searchThreads limit). */}
+      <FlashList
+        data={visible}
+        keyExtractor={(t) => t.thread_id}
+        renderItem={({ item }) => <CallCard thread={item} onOpen={openThread} />}
+        ItemSeparatorComponent={Separator}
+        ListHeaderComponent={header}
+        ListEmptyComponent={empty}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 96 }}
+      />
     </Screen>
   );
 }

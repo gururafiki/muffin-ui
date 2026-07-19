@@ -15,11 +15,12 @@ const COLORS = ['#875DAE', '#A47EC6', '#6E63A6', '#E9A94D', '#C2A4DC', '#6F4A93'
 
 function Row({ slice, total, color, currency }: { slice: AllocationSlice; total: number; color: string; currency: string }) {
   const frac = total ? slice.value / total : 0;
-  const w = useSharedValue(0);
+  const scale = useSharedValue(0);
   useEffect(() => {
-    w.value = withTiming(frac, { duration: 500 });
-  }, [frac, w]);
-  const barStyle = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
+    scale.value = withTiming(frac, { duration: 500 });
+  }, [frac, scale]);
+  // scaleX, not width — transforms animate off the layout pass.
+  const barStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: scale.value }] }));
 
   return (
     <View className="gap-1">
@@ -33,7 +34,7 @@ function Row({ slice, total, color, currency }: { slice: AllocationSlice; total:
         </Text>
       </View>
       <View className="h-2 overflow-hidden rounded-pill bg-crust dark:bg-night-surface-muted">
-        <Animated.View style={[{ height: '100%', backgroundColor: color }, barStyle]} />
+        <Animated.View style={[{ height: '100%', width: '100%', backgroundColor: color, transformOrigin: 'left' }, barStyle]} />
       </View>
     </View>
   );

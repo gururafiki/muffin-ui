@@ -17,6 +17,9 @@ function Segment({ frac, color }: { frac: number; color: string }) {
   useEffect(() => {
     w.value = withTiming(frac, { duration: 500 });
   }, [frac, w]);
+  // Width (not scaleX) is intentional here: the three segments sit in one
+  // flex-row and each one's LAYOUT width is what stacks them left-to-right.
+  // It animates only when a vote lands, so the layout cost is negligible.
   const style = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
   return <Animated.View style={[{ backgroundColor: color, height: '100%' }, style]} />;
 }

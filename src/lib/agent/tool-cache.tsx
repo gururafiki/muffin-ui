@@ -87,7 +87,10 @@ export function ToolCacheProvider({
   children: ReactNode;
 }) {
   const query = useQuery({
-    queryKey: ['tool-cache', thread ?? 'none'],
+    // ONE global key: `fetchCache` pulls the whole cache namespace regardless
+    // of thread (rows join per-run by args_hash), so per-thread keys would
+    // just duplicate the same payload per screen.
+    queryKey: ['tool-cache'],
     queryFn: fetchCache,
     enabled: !!thread,
     refetchInterval: busy ? 10_000 : false,

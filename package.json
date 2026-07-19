@@ -8,6 +8,7 @@
     "@langchain/core": "^1.2.2",
     "@langchain/langgraph-sdk": "^1.9.25",
     "@langchain/react": "^1.0.26",
+    "@shopify/flash-list": "2.0.2",
     "@supabase/supabase-js": "^2.110.0",
     "@tanstack/react-query": "^5.101.1",
     "clsx": "^2.1.1",

@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { View } from 'react-native';
+import { useShallow } from 'zustand/react/shallow';
 
 import { Button, Screen, Text } from '@/components/ui';
 import { AccountCard } from '@/features/wealth/account-card';
@@ -10,7 +11,9 @@ import { useWealth } from '@/features/wealth/store';
 
 export default function PortfolioScreen() {
   const router = useRouter();
-  const { accounts, goals, baseCurrency } = useWealth();
+  const { accounts, goals, baseCurrency } = useWealth(
+    useShallow(({ accounts, goals, baseCurrency }) => ({ accounts, goals, baseCurrency })),
+  );
 
   return (
     <Screen>

@@ -24,11 +24,12 @@ export function GoalCard({
   onPress?: () => void;
 }) {
   const progress = goalProgress(goal);
-  const w = useSharedValue(0);
+  const scale = useSharedValue(0);
   useEffect(() => {
-    w.value = withTiming(progress, { duration: 700 });
-  }, [progress, w]);
-  const barStyle = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
+    scale.value = withTiming(progress, { duration: 700 });
+  }, [progress, scale]);
+  // scaleX, not width — transforms animate off the layout pass.
+  const barStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: scale.value }] }));
   const date = fmtDate(goal.targetDate);
 
   return (
@@ -44,7 +45,7 @@ export function GoalCard({
           </Text>
         </View>
         <View className="h-3 overflow-hidden rounded-pill bg-crust dark:bg-night-surface-muted">
-          <Animated.View style={[{ height: '100%', backgroundColor: palette.frosting[500] }, barStyle]} />
+          <Animated.View style={[{ height: '100%', width: '100%', backgroundColor: palette.frosting[500], transformOrigin: 'left' }, barStyle]} />
         </View>
         <View className="flex-row items-center justify-between">
           <Text variant="muted">

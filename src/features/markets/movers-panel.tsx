@@ -23,11 +23,12 @@ function MoverRow({
   onPress?: () => void;
 }) {
   const color = toneColor[changeTone(item.changePct)];
-  const w = useSharedValue(0);
+  const scale = useSharedValue(0);
   useEffect(() => {
-    w.value = withTiming(maxAbs ? Math.abs(item.changePct) / maxAbs : 0, { duration: 500 });
-  }, [item.changePct, maxAbs, w]);
-  const barStyle = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
+    scale.value = withTiming(maxAbs ? Math.abs(item.changePct) / maxAbs : 0, { duration: 500 });
+  }, [item.changePct, maxAbs, scale]);
+  // scaleX, not width — transforms animate off the layout pass.
+  const barStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: scale.value }] }));
 
   return (
     <Pressable onPress={onPress} disabled={!onPress} className="gap-1 active:opacity-80">
@@ -44,7 +45,7 @@ function MoverRow({
         </Text>
       </View>
       <View className="h-2 overflow-hidden rounded-pill bg-crust dark:bg-night-surface-muted">
-        <Animated.View style={[{ height: '100%', backgroundColor: color }, barStyle]} />
+        <Animated.View style={[{ height: '100%', width: '100%', backgroundColor: color, transformOrigin: 'left' }, barStyle]} />
       </View>
     </Pressable>
   );
