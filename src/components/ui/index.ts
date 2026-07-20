@@ -7,6 +7,7 @@ export { Collapsible } from './collapsible';
 export { Field } from './field';
 export { MuffinLogo } from './logo';
 export { PlaidBackground } from './plaid-background';
+export { ProgressBar } from './progress-bar';
 export { ScallopDivider } from './scallop-divider';
 export { Screen } from './screen';
 export { Skeleton } from './skeleton';

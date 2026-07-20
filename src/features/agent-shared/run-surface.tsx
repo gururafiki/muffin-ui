@@ -6,12 +6,14 @@
  */
 import type { ReactNode } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 
-import { Badge, Card, Text } from '@/components/ui';
+import { Badge, Card, ProgressBar, Text } from '@/components/ui';
 import { RunStreamProvider } from '@/lib/agent/stream-context';
 import type { RunStream } from '@/lib/agent/stream-types';
 import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { palette } from '@/theme/colors';
+import { useEstimatedProgress } from './use-estimated-progress';
 
 /**
  * Mount once per live run screen. Provides the tool cache (joined by
@@ -47,16 +49,23 @@ export function RunErrorCard({ error }: { error: unknown }) {
 
 /**
  * Hydration-notice wrapper for reopened threads (`stream.isThreadLoading` —
- * one `getState` that can take a while on the deployed backend): a spinner +
- * label row above screen-specific skeleton content.
+ * one `getState` that can take 28–70s on the deployed backend): a spinner +
+ * label row and an eased progress bar with an estimated "time left", above
+ * screen-specific skeleton content. The backend gives no real percent-complete
+ * for the read, so the bar is a time heuristic (see `useEstimatedProgress`) —
+ * it holds near the top until the state lands, then this card unmounts.
  */
 export function HydrationCard({ label, children }: { label: string; children?: ReactNode }) {
+  const reduceMotion = useReducedMotion();
+  const { value, remainingLabel } = useEstimatedProgress({ estimateMs: 45_000 });
   return (
     <Card tone="muted" className="gap-3">
       <View className="flex-row items-center gap-2.5">
         <ActivityIndicator size="small" color={palette.frosting[400]} />
         <Text variant="muted" className="flex-1 text-sm">{label}</Text>
+        <Text variant="muted" className="text-xs">{remainingLabel}</Text>
       </View>
+      <ProgressBar value={value} animate={!reduceMotion} accessibilityLabel={label} />
       {children}
     </Card>
   );

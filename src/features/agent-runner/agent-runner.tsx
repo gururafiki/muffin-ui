@@ -146,7 +146,13 @@ export function AgentRunner({
     <Screen>
       <RunSurface stream={stream} threadId={liveThreadId}>
         <View className="gap-4">
-          <RunRecap agent={agent} values={savedInputs} busy={busy} onStop={() => stream.stop()} />
+          <RunRecap
+            agent={agent}
+            values={savedInputs}
+            busy={busy}
+            loading={stream.isThreadLoading}
+            onStop={() => stream.stop()}
+          />
 
           <RunErrorCard error={stream.error} />
 

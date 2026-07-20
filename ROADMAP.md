@@ -393,6 +393,35 @@ stock_evaluation chat hero. **Deferred:** verifying `RunRecap`/subagent-panel/to
 rendering against real backend data needs a running `langgraph dev` stack or the deployed
 backend — not exercised live in this pass; do a quick manual pass after deploying.
 
+## ✅ Milestone 20 — Run-page identity banner + hydration ETA bar (2026-07)
+Two run-page complaints: the top "inputs to the agent" block looked plain/joyless, and the
+28–70s reopen load gave no sense of how long it would take.
+- **Identity banner replaces the plain recap.** `agent-shared/run-recap.tsx` (shared by the
+  generic runner *and* council) was a flat `outline` card — title, uppercase input rows, buttons.
+  Reworked into an identity banner that reuses the fresh-run hero's language for continuity: the
+  agent's icon tile + title + `tagline`, a live **status pill** (pulsing amber "Running"/"Loading"
+  → calm leaf-green "Completed"), and the submitted inputs as soft `rounded-crumb` chips, faded in
+  on mount (`FadeInDown`). `useReducedMotion` drops the entrance + pulse. Both call sites now pass
+  `loading={stream.isThreadLoading}` so the pill reads "Loading" during reopen hydration instead of
+  a premature "Completed".
+- **Honest hydration ETA bar.** The reopen `getState` reports no percent-complete (opaque
+  checkpoint read; see M14), so `useEstimatedProgress` (new, `agent-shared/`) turns *elapsed time*
+  into an eased 0→~0.95 value that decelerates toward a ~45s estimate and holds near the top until
+  the state actually lands — never a false 100% — plus a friendly "~Ns left" → "Almost there…"
+  label. Rendered by a new `ui/ProgressBar` primitive (determinate; `scaleX` + `transformOrigin`
+  off the layout pass — same idiom as the wealth bars) inside the shared `HydrationCard`, so the
+  generic runner **and** council reopen-loads get it for free. Scope was deliberately reopen-only
+  (not fresh-run warm-up).
+- Verified: tsc + eslint + web export clean; headless smoke of a reopened `research` thread through
+  a local dist server + stubbed `/api` state fetch — the **Completed** banner (icon/title/tagline,
+  green pill, `QUESTION` input chip) and, with a delayed state fetch, the **Loading** pill + eased
+  bar reading "~33s left" over the real registry stage labels; only the pre-existing React #418
+  SSG-hydration error, zero Reanimated/worklet errors.
+- **Deferred / follow-up:** the ETA estimate is a fixed 45s constant — learning it from recent
+  on-device load durations (per-agent, since checkpoint size drives the read time) would tighten it;
+  noted, not built. The 28–70s latency itself remains a backend concern (langgraph-api checkpoint
+  reads on the A1 node) — the bar sets expectations, it doesn't cure the wait.
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
@@ -502,6 +531,10 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 ---
 
 ## Cross-cutting backlog (from completed milestones)
+- **M20 follow-up:**
+  - **Adaptive hydration estimate** — `useEstimatedProgress` uses a fixed 45s constant; persist
+    recent reopen durations on-device (per-agent, since checkpoint size drives the read time) and
+    feed the rolling estimate in, so the ETA tightens per user/graph instead of one global guess.
 - **M18 follow-ups:**
   - **Transcript windowing** — `Conversation` renders every turn; very long runs deserve a
     "show earlier turns" expander (buildTurns is memoized, but the render itself is unbounded).

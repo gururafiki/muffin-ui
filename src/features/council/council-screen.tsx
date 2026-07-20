@@ -225,6 +225,7 @@ export function CouncilScreen({
         agent={agent}
         values={{ ticker: savedTicker, query: savedQuery }}
         busy={busy}
+        loading={stream.isThreadLoading}
         onStop={() => stream.stop()}
       />
 

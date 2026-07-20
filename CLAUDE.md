@@ -261,16 +261,22 @@ thread exists), the same way `ChatScreen` already split hero vs. transcript.
 
 ### Features — `src/features/`
 - **`agent-shared/`** — the streaming primitives EVERY run surface uses: `use-run-stream.ts`,
-  `run-projections.ts`, `run-progress.tsx`, `subgraph-detail.tsx`, `run-surface.tsx`, and the
+  `run-projections.ts`, `run-progress.tsx`, `subgraph-detail.tsx`, `run-surface.tsx`,
+  `use-estimated-progress.ts`, and the
   transcript cluster (`conversation.tsx` — the mutually-recursive Conversation/StepTimeline pair;
   `conversation-turns.ts` — pure fold logic + types, `coerceMessages` accepts `BaseMessage`
   instances via the SDK's `toMessageDict`; `message-bubbles.tsx`; `subagent-activity.tsx`). Also
   (M19) **`agent-hero.tsx`** — the shared animated "fresh run" landing screen (identity block +
   caller-supplied composer/fields + example chips), generalised from `ChatScreen`'s original hero —
-  and **`run-recap.tsx`** — the read-only, post-submit recap of a run's inputs (`agent.inputs` →
-  labelled values + a "Start a new run" button), replacing the deleted `agent-runner/run-input-form.tsx`
-  for every agent that doesn't support real follow-up. Council / agent-runner / calls import from
-  here — never sideways from `agent-chat`.
+  and **`run-recap.tsx`** — the run-page **identity banner** (M20): the agent's icon tile + title +
+  `tagline`, a live status pill (pulsing "Running"/"Loading" → green "Completed"), the submitted
+  inputs as read-only chips, and a "Start a new run" button (it's a recap, not a form — none of the
+  non-chat graphs support real follow-up). Callers pass `loading={stream.isThreadLoading}` so the
+  pill distinguishes reopen-hydration from a finished run. **`use-estimated-progress.ts`** (M20) is
+  the *honest* ETA heuristic for the opaque 28–70s reopen `getState` (no server percent-complete):
+  elapsed time → an eased 0→~0.95 value that holds near the top until the state lands + a "~Ns left"
+  label; the shared `HydrationCard` (in `run-surface.tsx`) renders it as a `ui/ProgressBar`.
+  Council / agent-runner / calls import from here — never sideways from `agent-chat`.
 - **`agent-chat/`** — just the conversational feature now: `chat-screen.tsx` + `interrupt.tsx`.
 - **`agent-runner/`** — the generic single-shot run screen, decomposed: `agent-runner.tsx`
   (orchestration — renders `agent-shared/agent-hero.tsx` for a fresh run, `agent-shared/run-recap.tsx`
@@ -283,7 +289,9 @@ thread exists), the same way `ChatScreen` already split hero vs. transcript.
 
 ### Design system — `src/components/`
 - **`ui/`** — bakery primitives styled with NativeWind v4 `className` (incl. `Skeleton`, the
-  pulsing loading placeholder used by the hydration/loading states).
+  pulsing loading placeholder used by the hydration/loading states, and `ProgressBar`, the
+  determinate `scaleX`+`transformOrigin` bar used by the hydration ETA — off the layout pass, same
+  idiom as the wealth bars).
 - **Design tokens** live in `tailwind.config.js` (the `frosting`/`blueberry`/`butter`/`leaf`
   palette, the **`ink` text ramp** — `ink`/`ink-muted`/`ink-soft`/`ink-faint` for body → muted →
   done/disabled → placeholder text on light; never inline an arbitrary `text-[#hex]` —
