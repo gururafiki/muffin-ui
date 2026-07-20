@@ -11,6 +11,8 @@ export type AnyMessage = {
   content?: unknown;
   name?: string;
   tool_calls?: { name?: string; args?: unknown; id?: string }[];
+  status?: string;
+  additional_kwargs?: Record<string, unknown>;
 };
 
 /** Flatten message content (string or content-blocks) to plain text. */
@@ -48,9 +50,11 @@ export function MessageBubble({ message }: { message: AnyMessage }) {
   const toolCalls = message.tool_calls ?? [];
 
   if (kind === 'tool') {
+    const isError = message.status === 'error';
+    const label = `tool · ${message.name ?? 'result'}${isError ? ' · error' : ''}`;
     return (
       <Card tone="muted" className="gap-1">
-        <Badge label={`tool · ${message.name ?? 'result'}`} tone="info" />
+        <Badge label={label} tone={isError ? 'bearish' : 'info'} />
         {body ? <Text variant="mono" className="text-xs">{body.slice(0, 1200)}</Text> : null}
       </Card>
     );

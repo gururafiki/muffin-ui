@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Icon } from '@/components/icons';
+import { Icon, type IconName } from '@/components/icons';
 import { Badge, Card, Collapsible, Text } from '@/components/ui';
 import type { Signal } from '@/components/ui/badge';
 import { relativeTime } from '@/features/agent-calls/threads';
@@ -204,50 +204,82 @@ function ToolStatRow({ stat }: { stat: ToolStat }) {
 }
 
 /**
- * Run-level tool-execution summary: total success/fail per tool (tap a tool to
- * see its individual runs with inputs/outputs/errors) plus a failures roll-up.
- * Collapsed by default; with no records it renders nothing — unless the caller
- * passes `emptyMessage` (a hint for finished runs that predate capture).
+ * Shared tool-activity panel — a single `Card`+`Collapsible` envelope around
+ * either a flat run list (`mode="flat"` — one row per call, used per-subagent
+ * or per-criterion) or a per-tool grouped summary with ok/failed/cached
+ * stats (`mode="grouped"` — used for the whole-run "Tool execution" view).
+ * Both modes bottom out in the same `ToolRunRow`; only the container and
+ * grouping differ, which is what previously diverged by accident across 4
+ * near-identical call sites ("Tool calls" / "Tool execution" / "Data
+ * collection" / "Data collected"). Collapsed by default; with no records it
+ * renders nothing — unless the caller passes `emptyMessage` (a hint for
+ * finished runs that predate capture).
  */
-export function ToolRunsSummary({ runs, emptyMessage }: { runs?: ToolRun[]; emptyMessage?: string }) {
+export function ToolRunsPanel({
+  title,
+  runs,
+  mode = 'flat',
+  emptyMessage,
+  icon = 'tools',
+  defaultOpen = false,
+}: {
+  title: string;
+  runs?: ToolRun[];
+  mode?: 'flat' | 'grouped';
+  emptyMessage?: string;
+  icon?: IconName;
+  defaultOpen?: boolean;
+}) {
   if (!runs?.length) {
     if (!emptyMessage) return null;
     return (
       <Card tone="muted">
         <View className="flex-row items-center gap-2">
-          <Icon name="tools" size={16} color={palette.frosting[400]} />
+          <Icon name={icon} size={16} color={palette.frosting[400]} />
           <Text variant="muted" className="flex-1 text-xs">{emptyMessage}</Text>
         </View>
       </Card>
     );
   }
-  const { stats, failures } = summarise(runs);
+
   const total = runs.length;
-  const failed = failures.length;
+
+  if (mode === 'grouped') {
+    const { stats, failures } = summarise(runs);
+    const failed = failures.length;
+    return (
+      <Card tone="muted" className="gap-2">
+        <Collapsible
+          title={title}
+          icon={icon}
+          defaultOpen={defaultOpen}
+          meta={`${total} call${total === 1 ? '' : 's'}${failed ? ` · ${failed} failed` : ''}`}
+        >
+          <View className="gap-1 pt-1">
+            {stats.map((s) => (
+              <ToolStatRow key={s.tool} stat={s} />
+            ))}
+
+            {failures.length > 0 ? (
+              <View className="gap-1 pt-2">
+                <Text variant="label">Failures</Text>
+                {failures.map((f, i) => (
+                  <Text key={i} variant="muted" className="text-xs">
+                    • {f.tool}: {f.error ?? f.status}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        </Collapsible>
+      </Card>
+    );
+  }
 
   return (
     <Card tone="muted" className="gap-2">
-      <Collapsible
-        title="Tool execution"
-        icon="tools"
-        meta={`${total} call${total === 1 ? '' : 's'}${failed ? ` · ${failed} failed` : ''}`}
-      >
-        <View className="gap-1 pt-1">
-          {stats.map((s) => (
-            <ToolStatRow key={s.tool} stat={s} />
-          ))}
-
-          {failures.length > 0 ? (
-            <View className="gap-1 pt-2">
-              <Text variant="label">Failures</Text>
-              {failures.map((f, i) => (
-                <Text key={i} variant="muted" className="text-xs">
-                  • {f.tool}: {f.error ?? f.status}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-        </View>
+      <Collapsible title={title} icon={icon} defaultOpen={defaultOpen} meta={`${total} call${total === 1 ? '' : 's'}`}>
+        <ToolRunList runs={runs} />
       </Collapsible>
     </Card>
   );

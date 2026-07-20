@@ -16,6 +16,20 @@ export const tradingDecision: AgentDef = {
     ...(v.query ? { query: v.query } : {}),
     ...(v.narrative ? { narrative: v.narrative } : {}),
   }),
+  exampleConfigs: [
+    { label: 'AAPL', values: { ticker: 'AAPL', query: 'Entry on a pullback?' } },
+    {
+      label: 'NVDA',
+      values: { ticker: 'NVDA', query: 'Is the AI trade still momentum-driven or due a correction?' },
+    },
+    {
+      label: 'TSLA',
+      values: {
+        ticker: 'TSLA',
+        narrative: 'I hold a small starter position and am deciding whether to add.',
+      },
+    },
+  ],
   // No `resultKey`: the trading widget renders the whole state (reports,
   // debate, judge, portfolio decision), not just one field.
   resultRenderer: 'trading',

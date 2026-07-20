@@ -8,15 +8,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { AdvancedOptions } from '@/components/advanced-options';
+import { Button, Field, Screen } from '@/components/ui';
 import { useSignInRequiredToRun } from '@/features/account/run-gate';
+import { AgentHero } from '@/features/agent-shared/agent-hero';
 import { type SubagentRun, type SubagentRuns } from '@/features/agent-shared/conversation';
 import { mergeLiveEvaluations, useCriterionEvents, useSubgraphRows } from '@/features/agent-shared/run-projections';
+import { RunRecap } from '@/features/agent-shared/run-recap';
 import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
-import { RunInputForm } from './run-input-form';
 import { HydrationSkeleton, RunResults } from './run-results';
 import { SavePresetCard } from './save-preset-card';
 
@@ -46,7 +49,9 @@ export function AgentRunner({
   // `liveThreadId` follows the run: useRunStream updates it via onThreadId when
   // a new thread is created, so per-thread data hooks below follow the live run.
   const { stream, submitRun, threadId: liveThreadId } = useRunStream(agent, { assistantId, threadId });
-  const [edits, setEdits] = useState<Record<string, string>>(initialValues ?? {});
+  // Pre-submit draft only — never merged with the reopened run's saved inputs.
+  // A reopened/finished run shows those via the read-only `RunRecap` instead.
+  const [draft, setDraft] = useState<Record<string, string>>(initialValues ?? {});
   const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
 
   const busy = stream.isLoading;
@@ -57,19 +62,18 @@ export function AgentRunner({
   const result = agent.resultKey ? view?.[agent.resultKey] : view;
   const hasResult = isNonEmpty(result);
 
-  // Effective form values: the reopened run's inputs (from streamed state),
-  // overridden by anything the user types.
+  // The reopened/submitted run's actual inputs, straight from streamed state —
+  // shown read-only via `RunRecap`, never merged with the pre-submit draft.
   const savedInputs = useMemo(() => {
     const out: Record<string, string> = {};
     for (const f of agent.inputs) if (typeof view?.[f.key] === 'string') out[f.key] = view[f.key] as string;
     return out;
   }, [view, agent.inputs]);
-  const values = useMemo(() => ({ ...savedInputs, ...edits }), [savedInputs, edits]);
 
   const signInRequired = useSignInRequiredToRun();
   const canRun = useMemo(
-    () => agent.inputs.every((f) => !f.required || (values[f.key]?.trim()?.length ?? 0) > 0),
-    [agent.inputs, values],
+    () => agent.inputs.every((f) => !f.required || (draft[f.key]?.trim()?.length ?? 0) > 0),
+    [agent.inputs, draft],
   );
 
   // Sub-agent rows: captured deep-agent transcripts (persisted state channel)
@@ -86,7 +90,7 @@ export function AgentRunner({
     })),
   ];
 
-  const run = () => submitRun(agent.buildInput(values), { overrides: buildOverrides(agent.advanced, advanced) });
+  const run = () => submitRun(agent.buildInput(draft), { overrides: buildOverrides(agent.advanced, advanced) });
 
   // Deep-link autostart ("Analyse" from a stock) — only for a fresh thread and
   // never when sign-in is required (the guard below prompts instead).
@@ -99,43 +103,69 @@ export function AgentRunner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, canRun, threadId, signInRequired]);
 
+  // Nothing to show yet but the landing hero: no thread pinned, not busy, no
+  // result, and (for a reopened thread) not still hydrating.
+  const isFreshRun = !threadId && !busy && !hasResult && !stream.isThreadLoading;
+
+  if (isFreshRun) {
+    return (
+      <AgentHero
+        agent={agent}
+        signInRequired={signInRequired}
+        examples={agent.exampleConfigs?.map((cfg) => ({
+          label: cfg.label,
+          onPress: () => setDraft(cfg.values),
+        }))}>
+        <View className="gap-3">
+          {agent.inputs.map((f) => (
+            <Field
+              key={f.key}
+              label={f.label}
+              placeholder={f.placeholder}
+              autoCapitalize={f.autoCapitalize}
+              autoCorrect={false}
+              value={draft[f.key] ?? ''}
+              onChangeText={(v) => setDraft((s) => ({ ...s, [f.key]: v }))}
+            />
+          ))}
+          {agent.advanced?.length ? (
+            <AdvancedOptions
+              fields={agent.advanced}
+              values={advanced}
+              onChange={(k, v) => setAdvanced((s) => ({ ...s, [k]: v }))}
+            />
+          ) : null}
+          <Button title="Run agent" disabled={!canRun} onPress={run} />
+          <SavePresetCard agent={agent} advanced={advanced} />
+        </View>
+      </AgentHero>
+    );
+  }
+
   return (
-    <RunSurface stream={stream} threadId={liveThreadId}>
-      <View className="gap-4">
-        <RunInputForm
-          agent={agent}
-          values={values}
-          onChangeField={(k, v) => setEdits((s) => ({ ...s, [k]: v }))}
-          advanced={advanced}
-          onChangeAdvanced={(k, v) => setAdvanced((s) => ({ ...s, [k]: v }))}
-          hasResult={hasResult}
-          busy={busy}
-          hydrating={stream.isThreadLoading}
-          signInRequired={signInRequired}
-          canRun={canRun}
-          onRun={run}
-          onStop={() => stream.stop()}
-        />
+    <Screen>
+      <RunSurface stream={stream} threadId={liveThreadId}>
+        <View className="gap-4">
+          <RunRecap agent={agent} values={savedInputs} busy={busy} onStop={() => stream.stop()} />
 
-        <SavePresetCard agent={agent} advanced={advanced} />
+          <RunErrorCard error={stream.error} />
 
-        <RunErrorCard error={stream.error} />
-
-        {stream.isThreadLoading ? (
-          /* Reopened thread, state fetch in flight — hold the layout's shape. */
-          <HydrationSkeleton agent={agent} />
-        ) : (
-          <RunResults
-            agent={agent}
-            view={view}
-            result={result}
-            hasResult={hasResult}
-            busy={busy}
-            byNode={stream.subgraphsByNode}
-            subagentRuns={subagentRuns}
-          />
-        )}
-      </View>
-    </RunSurface>
+          {stream.isThreadLoading ? (
+            /* Reopened thread, state fetch in flight — hold the layout's shape. */
+            <HydrationSkeleton agent={agent} />
+          ) : (
+            <RunResults
+              agent={agent}
+              view={view}
+              result={result}
+              hasResult={hasResult}
+              busy={busy}
+              byNode={stream.subgraphsByNode}
+              subagentRuns={subagentRuns}
+            />
+          )}
+        </View>
+      </RunSurface>
+    </Screen>
   );
 }

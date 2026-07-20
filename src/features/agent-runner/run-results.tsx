@@ -18,7 +18,7 @@ import {
   CriteriaResult,
   ResearchResult,
   StructuredOutput,
-  ToolRunsSummary,
+  ToolRunsPanel,
   TradingResult,
   type Todo,
 } from '@/lib/agent/renderers';
@@ -123,7 +123,9 @@ export function RunResults({
           cache (RunSurface's ToolCacheProvider) to show the full gathered
           payload + size + timestamp on expand. Grows live for criteria — the
           merged view's evaluations carry each worker's tool_runs. */}
-      <ToolRunsSummary
+      <ToolRunsPanel
+        title="Tool execution"
+        mode="grouped"
         runs={collectToolRuns(view)}
         emptyMessage={
           !busy

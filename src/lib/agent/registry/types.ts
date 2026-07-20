@@ -122,6 +122,13 @@ export interface AgentDef {
   chat?: boolean;
   /** Example prompts offered on the chat hero screen. */
   examples?: string[];
+  /**
+   * Example configs offered on the landing hero for field-based agents
+   * (trading_decision, research, criteria_analysis, council) — distinct from
+   * `examples`, which are freeform chat prompt strings. `values` keys match
+   * this agent's `inputs` field keys.
+   */
+  exampleConfigs?: { label: string; values: Record<string, string> }[];
   /** Execution recipe for graph agents (deep agents use `todos` instead). */
   stages?: StageDef[];
 }

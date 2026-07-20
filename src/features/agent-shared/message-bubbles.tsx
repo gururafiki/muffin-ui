@@ -73,7 +73,7 @@ export function HumanBubble({ message, actions }: { message: AnyMessage; actions
 
   return (
     <Card tone="outline" className="gap-1 self-end" style={{ maxWidth: '90%' }}>
-      <Text variant="body">{body}</Text>
+      <Markdown value={body} />
       {actions ? (
         <View className="flex-row items-center justify-end gap-0.5 pt-1">
           <BranchControls message={message} actions={actions} />

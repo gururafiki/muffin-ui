@@ -11,7 +11,7 @@ import { parseArray, zCriterionEvaluation, type CriterionEvaluation } from '@/li
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
 import { Markdown } from './markdown';
-import { ToolRunList } from './tool-runs';
+import { ToolRunsPanel } from './tool-runs';
 import { ConfidenceBar, ReportSection, ScoreBar, TagRow, toneColor, Verdict, toneForSignal } from './widgets';
 
 type Dict = Record<string, unknown>;
@@ -171,15 +171,7 @@ export function CriterionDetails({
             </DetailBlock>
           ) : null}
 
-          {c.tool_runs?.length ? (
-            <Collapsible
-              title="Data collection"
-              icon="tools"
-              meta={`${c.tool_runs.length} tool call${c.tool_runs.length === 1 ? '' : 's'}`}
-            >
-              <ToolRunList runs={c.tool_runs} />
-            </Collapsible>
-          ) : null}
+          <ToolRunsPanel title="Data collection" runs={c.tool_runs} mode="flat" />
 
           {transcript?.messages?.length && renderTranscript ? (
             <Collapsible title="How this was evaluated" icon="agents">

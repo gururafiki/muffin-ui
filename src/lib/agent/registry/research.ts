@@ -10,6 +10,17 @@ export const research: AgentDef = {
     { key: 'query', label: 'Question', placeholder: 'What is driving NVDA revenue growth?', required: true },
   ],
   buildInput: (v) => ({ query: v.query }),
+  exampleConfigs: [
+    { label: 'What is driving NVDA revenue growth?', values: { query: 'What is driving NVDA revenue growth?' } },
+    {
+      label: 'What is the current market consensus on Fed rate cuts this year?',
+      values: { query: 'What is the current market consensus on Fed rate cuts this year?' },
+    },
+    {
+      label: 'How is the EV price war affecting automaker margins?',
+      values: { query: 'How is the EV price war affecting automaker margins?' },
+    },
+  ],
   resultKey: 'output',
   resultRenderer: 'research',
   advanced: [
