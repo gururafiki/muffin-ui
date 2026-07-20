@@ -5,21 +5,21 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
 
 import { AdvancedOptions } from '@/components/advanced-options';
-import { Icon } from '@/components/icons';
-import { Button, Card, Field, Skeleton, Text } from '@/components/ui';
-import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
+import { Button, Card, Field, Screen, Skeleton } from '@/components/ui';
+import { useSignInRequiredToRun } from '@/features/account/run-gate';
 import { useCall } from '@/features/agent-calls/use-calls';
+import { AgentHero } from '@/features/agent-shared/agent-hero';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { useSubgraphRows } from '@/features/agent-shared/run-projections';
+import { RunRecap } from '@/features/agent-shared/run-recap';
 import { HydrationCard, RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
 import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
-import { palette } from '@/theme/colors';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { parseArray, zPersonaSignal } from '@/lib/agent/schemas';
-import { collectToolRuns, ToolRunsSummary } from '@/lib/agent/renderers';
+import { collectToolRuns, ToolRunsPanel } from '@/lib/agent/renderers';
 import { CouncilArena } from './council-arena';
 import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
@@ -112,8 +112,11 @@ export function CouncilScreen({
   agent: AgentDef;
   threadId?: string;
 }) {
-  const [tickerEdit, setTicker] = useState<string | null>(null);
-  const [queryEdit, setQuery] = useState<string | null>(null);
+  // Pre-submit draft only — never merged with the reopened run's saved
+  // ticker/query. A reopened/finished session shows those via the read-only
+  // `RunRecap` instead.
+  const [tickerDraft, setTickerDraft] = useState('');
+  const [queryDraft, setQueryDraft] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
 
@@ -124,15 +127,15 @@ export function CouncilScreen({
   const busy = stream.isLoading;
   const signInRequired = useSignInRequiredToRun();
 
-  // Prefill inputs from persisted/streamed state (Calls reopen). The run input
-  // (ticker/query) lands in the graph state, so no client-tagged metadata is
-  // needed — `stream.values` hydrates on reopen; `savedThread.values` is the
-  // fallback until it does.
+  // The reopened/submitted session's actual ticker/query, straight from
+  // streamed state — shown read-only via `RunRecap`. The run input lands in
+  // the graph state, so no client-tagged metadata is needed — `stream.values`
+  // hydrates on reopen; `savedThread.values` is the fallback until it does.
   const { data: savedThread } = useCall(liveThreadId);
   const savedValues = savedThread?.values as Record<string, unknown> | undefined;
   const asStr = (v: unknown) => (typeof v === 'string' ? v : undefined);
-  const ticker = tickerEdit ?? asStr(values?.ticker) ?? asStr(savedValues?.ticker) ?? '';
-  const query = queryEdit ?? asStr(values?.query) ?? asStr(savedValues?.query) ?? '';
+  const savedTicker = asStr(values?.ticker) ?? asStr(savedValues?.ticker) ?? '';
+  const savedQuery = asStr(values?.query) ?? asStr(savedValues?.query) ?? '';
 
   const live = useCouncilLive(stream);
   const wantSpecialists = Boolean(advanced.include_specialists);
@@ -165,63 +168,65 @@ export function CouncilScreen({
 
   const convene = () => {
     setSelected(null);
-    submitRun(agent.buildInput({ ticker, query }), {
+    submitRun(agent.buildInput({ ticker: tickerDraft, query: queryDraft }), {
       overrides: buildOverrides(agent.advanced, advanced),
     });
   };
 
+  // Nothing to show yet but the landing hero: no thread pinned, not busy, no
+  // votes in, and (for a reopened session) not still hydrating.
+  const isFreshRun = !threadId && !busy && totalVotes === 0 && !stream.isThreadLoading;
+
+  if (isFreshRun) {
+    return (
+      <AgentHero
+        agent={agent}
+        signInRequired={signInRequired}
+        examples={agent.exampleConfigs?.map((cfg) => ({
+          label: cfg.label,
+          onPress: () => {
+            setTickerDraft(cfg.values.ticker ?? '');
+            setQueryDraft(cfg.values.query ?? '');
+          },
+        }))}>
+        <View className="gap-3">
+          <Field
+            label="Ticker"
+            placeholder="AAPL"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            value={tickerDraft}
+            onChangeText={setTickerDraft}
+          />
+          <Field
+            label="Focus (optional)"
+            placeholder="Is the moat durable?"
+            value={queryDraft}
+            onChangeText={setQueryDraft}
+          />
+          {agent.advanced?.length ? (
+            <AdvancedOptions
+              fields={agent.advanced}
+              values={advanced}
+              onChange={(k, v) => setAdvanced((s) => ({ ...s, [k]: v }))}
+            />
+          ) : null}
+          <Button title="Convene the council" disabled={!tickerDraft.trim()} onPress={convene} />
+        </View>
+      </AgentHero>
+    );
+  }
+
   return (
+    <Screen>
     <RunSurface stream={stream} threadId={liveThreadId}>
     <View className="gap-4">
-      <Card tone="sticker" className="gap-3">
-        <View className="flex-row items-center gap-3">
-          <View className="h-12 w-12 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
-            <Icon name="council" size={26} color={palette.frosting[600]} />
-          </View>
-          <View className="flex-1">
-            <Text variant="heading">Investor Council</Text>
-            <Text variant="muted">
-              {members.length > COUNCIL_PERSONAS.length
-                ? '13 legends + 6 specialists debate, a judge decides.'
-                : '13 legends debate, a judge decides.'}
-            </Text>
-          </View>
-        </View>
-        <Field
-          label="Ticker"
-          placeholder="AAPL"
-          autoCapitalize="characters"
-          autoCorrect={false}
-          value={ticker}
-          onChangeText={setTicker}
-        />
-        <Field
-          label="Focus (optional)"
-          placeholder="Is the moat durable?"
-          value={query}
-          onChangeText={setQuery}
-        />
-        {agent.advanced?.length ? (
-          <AdvancedOptions
-            fields={agent.advanced}
-            values={advanced}
-            onChange={(k, v) => setAdvanced((s) => ({ ...s, [k]: v }))}
-          />
-        ) : null}
-        {signInRequired ? (
-          <SignInToRunNotice />
-        ) : (
-          <>
-            <Button
-              title={busy ? 'In session…' : 'Convene the council'}
-              loading={busy}
-              disabled={!ticker.trim() || busy}
-              onPress={convene}
-            />
-            {busy ? <Button title="Stop" variant="ghost" onPress={() => stream.stop()} /> : null}
-          </>
-        )}
-      </Card>
+      <RunRecap
+        agent={agent}
+        values={{ ticker: savedTicker, query: savedQuery }}
+        busy={busy}
+        onStop={() => stream.stop()}
+      />
 
       <RunErrorCard error={stream.error} />
 
@@ -275,7 +280,9 @@ export function CouncilScreen({
       {/* Tool execution across every member (each row's `agent` field carries
           the member's collect_data agent name). Rows join the provider-call
           cache on expand. Older runs predate capture — say so. */}
-      <ToolRunsSummary
+      <ToolRunsPanel
+        title="Tool execution"
+        mode="grouped"
         runs={collectToolRuns(values)}
         emptyMessage={
           !busy && totalVotes > 0
@@ -291,5 +298,6 @@ export function CouncilScreen({
       ) : null}
     </View>
     </RunSurface>
+    </Screen>
   );
 }

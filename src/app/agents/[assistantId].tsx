@@ -54,8 +54,10 @@ export default function AgentRunnerRoute() {
     );
   }
 
+  // AgentRunner / CouncilScreen own their layout (a centred hero pre-run, a
+  // scrolling Screen once a thread exists) — same pattern as ChatScreen above.
   return (
-    <Screen>
+    <>
       <Stack.Screen options={{ title: agent.title }} />
       {agent.custom === 'council' ? (
         <CouncilScreen agent={agent} threadId={threadId} />
@@ -68,6 +70,6 @@ export default function AgentRunnerRoute() {
           autoStart={autoStart}
         />
       )}
-    </Screen>
+    </>
   );
 }

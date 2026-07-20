@@ -149,9 +149,13 @@ The whole app is organised around **"one graph → one screen"**:
 - **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
   json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
   `tool-runs.tsx` renders backend `AgentCaptureMiddleware` output: `collectToolRuns(values)` gathers
-  top-level `tool_runs` + each `criterion_evaluations[i].tool_runs`; `ToolRunList` (collapsed rows →
-  args/output/error) and `ToolRunsSummary` (per-tool ok/failed/cached counts) read the values view,
-  so live and post-refresh render identically. Capture is unconditional backend-side — a graph opts
+  top-level `tool_runs` + each `criterion_evaluations[i].tool_runs`, read off the values view so live
+  and post-refresh render identically. The shared **`ToolRunsPanel`** (M19 — replaces the former
+  `ToolRunList`/`ToolRunsSummary` split, which had drifted apart in styling across four
+  near-identical call sites by accident, not design) is one `Card`+`Collapsible` envelope over the
+  same `ToolRunRow`s: `mode="flat"` (one row per call — "Tool calls" per subagent, "Data collection"
+  per criterion, "Data collected" per council member) or `mode="grouped"` (per-tool ok/failed/cached
+  stats — "Tool execution", once per run) is the only difference. Capture is unconditional backend-side — a graph opts
   in by declaring the `tool_runs` state channel. `criteria-result.tsx` badges evaluations whose
   backend truthing flag says no tools ran (`data_collected: false` → "no live data").
   **Cache join (folds in the former "Data gathered" panel):** `tool-runs.tsx` rows expand to the FULL
@@ -171,7 +175,8 @@ The whole app is organised around **"one graph → one screen"**:
   **`<RunSurface stream threadId>`** (`features/agent-shared/run-surface.tsx`) — it owns the
   cross-cutting wiring (`ToolCacheProvider` + `RunStreamProvider`), with `RunErrorCard` /
   `HydrationCard` for the shared error/hydration markup; each surface then renders
-  `<ToolRunsSummary runs={collectToolRuns(values)} />` where its layout wants it.
+  `<ToolRunsPanel title="Tool execution" mode="grouped" runs={collectToolRuns(values)} />` where its
+  layout wants it.
   `app/calls/[threadId].tsx` (history — no live stream, `busy={false}`, one cache fetch) mounts
   the `ToolCacheProvider` sub-slice directly. The panel populates
   only for graphs that surface `tool_runs` (criteria_analysis / trading_decision / research /
@@ -183,6 +188,12 @@ The whole app is organised around **"one graph → one screen"**:
   and `useSubgraphRows` accepts the suffixed form too. The council screen itself is member-unified
   (M15): `COUNCIL_MEMBERS` = 13 personas + 6 optional specialists in one arena grid, one
   `MemberDetail` card for both kinds.
+  **Stage envelope convention (M19):** every pipeline "stage" body wraps in `Card tone="muted"` +
+  `Collapsible` — `ReportSection` (`widgets.tsx`) and the unified `ToolRunsPanel` both follow this;
+  `DebateView` keeps its chat-bubble turn styling but takes a `bare` prop to skip its own
+  Card/Collapsible when the caller (`DebateDetail`, inside an already-expanded `SubAgentRunRow`)
+  already owns the expand/collapse affordance — new stage/detail renderers should follow the same
+  pattern rather than reaching for a bare `Collapsible`.
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —
@@ -243,18 +254,27 @@ File-based routes. `(tabs)/` = Globe (`index`), Markets, Portfolio, Agents, Sett
 `region/[regionId]`, `group/[groupId]`, `account/[accountId]`, `goal/[goalId]`. The root `_layout`
 loads fonts (Baloo2 + Nunito), wraps `QueryClientProvider` / `GestureHandlerRootView` /
 `SafeAreaProvider`. `agents/[assistantId]` seeds the runner from field-shaped deep-link params
-(e.g. an "Analyse" link passing `ticker`/`sector`/`market` + `autostart=1`).
+(e.g. an "Analyse" link passing `ticker`/`sector`/`market` + `autostart=1`). It does **not** wrap
+`ChatScreen`/`CouncilScreen`/`AgentRunner` in a `Screen` (M19) — each owns its own layout, switching
+internally between the centred `AgentHero` (fresh run) and a normal scrolling `Screen` (once a
+thread exists), the same way `ChatScreen` already split hero vs. transcript.
 
 ### Features — `src/features/`
 - **`agent-shared/`** — the streaming primitives EVERY run surface uses: `use-run-stream.ts`,
   `run-projections.ts`, `run-progress.tsx`, `subgraph-detail.tsx`, `run-surface.tsx`, and the
   transcript cluster (`conversation.tsx` — the mutually-recursive Conversation/StepTimeline pair;
   `conversation-turns.ts` — pure fold logic + types, `coerceMessages` accepts `BaseMessage`
-  instances via the SDK's `toMessageDict`; `message-bubbles.tsx`; `subagent-activity.tsx`).
-  Council / agent-runner / calls import from here — never sideways from `agent-chat`.
+  instances via the SDK's `toMessageDict`; `message-bubbles.tsx`; `subagent-activity.tsx`). Also
+  (M19) **`agent-hero.tsx`** — the shared animated "fresh run" landing screen (identity block +
+  caller-supplied composer/fields + example chips), generalised from `ChatScreen`'s original hero —
+  and **`run-recap.tsx`** — the read-only, post-submit recap of a run's inputs (`agent.inputs` →
+  labelled values + a "Start a new run" button), replacing the deleted `agent-runner/run-input-form.tsx`
+  for every agent that doesn't support real follow-up. Council / agent-runner / calls import from
+  here — never sideways from `agent-chat`.
 - **`agent-chat/`** — just the conversational feature now: `chat-screen.tsx` + `interrupt.tsx`.
 - **`agent-runner/`** — the generic single-shot run screen, decomposed: `agent-runner.tsx`
-  (orchestration), `run-input-form.tsx`, `save-preset-card.tsx` (self-contained mutation),
+  (orchestration — renders `agent-shared/agent-hero.tsx` for a fresh run, `agent-shared/run-recap.tsx`
+  once a thread exists), `save-preset-card.tsx` (self-contained mutation, fresh-run only),
   `run-results.tsx` (result renderers + hydration skeleton).
 - **`council/`** — bespoke 13-persona screen (arena, member detail, live persona fold).
 - **`markets/`** — the configurable globe (`classification.ts` defines MSCI/FTSE/World-Bank

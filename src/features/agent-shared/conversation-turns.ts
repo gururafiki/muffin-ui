@@ -26,8 +26,22 @@ export type MessageActions = {
 export type ToolCall = { name?: string; args?: Record<string, unknown>; id?: string };
 export type Step =
   | { kind: 'think'; id: string; text: string }
-  | { kind: 'tool'; id: string; call: ToolCall; result?: AnyMessage; error?: boolean };
+  | { kind: 'tool'; id: string; call: ToolCall; result?: AnyMessage; error?: boolean }
+  | { kind: 'nudge'; id: string; text: string };
 export type Turn = { human?: AnyMessage; steps: Step[]; answer?: AnyMessage };
+
+/**
+ * The backend's `_StructuredOutputRetryMiddleware` injects a `HumanMessage`
+ * reminder ("Call the `X` tool now...") tagged with this `additional_kwargs`
+ * marker — keep in sync with `_NUDGE_MARKER` in
+ * `_structured_output_retry_middleware.py`.
+ */
+const RETRY_NUDGE_KEY = 'structured_output_retry_nudge';
+
+/** True for an injected retry-reminder message, not a genuine user turn. */
+export function isRetryNudge(m: AnyMessage): boolean {
+  return m.additional_kwargs?.[RETRY_NUDGE_KEY] === true;
+}
 
 /** One sub-agent run row: a captured transcript (backend `subagent_runs`
  * state channel) and/or a protocol-v2 discovered subgraph invocation. */
@@ -84,6 +98,16 @@ export function buildTurns(messages: AnyMessage[]): Turn[] {
   for (const m of messages) {
     const kind = messageKind(m);
     if (kind === 'human' || kind === 'user') {
+      if (isRetryNudge(m)) {
+        // An injected reminder, not a new user turn — keep it inline with the
+        // turn's AI activity so it lands in its actual chronological spot.
+        if (!cur) {
+          cur = { steps: [] };
+          turns.push(cur);
+        }
+        aiSeq.push({ turn: cur, m });
+        continue;
+      }
       cur = { steps: [] };
       cur.human = m;
       turns.push(cur);
@@ -102,6 +126,10 @@ export function buildTurns(messages: AnyMessage[]): Turn[] {
   for (const t of turns) {
     const ais = aiSeq.filter((x) => x.turn === t).map((x) => x.m);
     ais.forEach((m, i) => {
+      if (isRetryNudge(m)) {
+        t.steps.push({ kind: 'nudge', id: m.id ?? `nudge-${i}`, text: messageText(m.content).trim() });
+        return;
+      }
       const text = messageText(m.content).trim();
       const calls = (m.tool_calls ?? []) as ToolCall[];
       const isLast = i === ais.length - 1;
@@ -154,12 +182,16 @@ export function groupTimeline(steps: Step[]): { nodes: TimelineNode[]; subCount:
   return { nodes, subCount: subByName.size };
 }
 
-/** In summary view, keep only high-signal steps (sub-agents + to-do updates);
- * hide the orchestrator's plumbing (caching, file reads, schema, thinking). */
+/** In summary view, keep only high-signal steps (sub-agents, final structured
+ * output + to-do updates); hide the orchestrator's plumbing (caching, file
+ * reads, schema, thinking). */
 export function isSignificant(step: Step): boolean {
-  if (step.kind === 'think') return false;
-  const name = (step.call.name ?? '').toLowerCase();
-  return toolStepMeta(name, step.call.args ?? {}).isSubagent || /write_todos|todo/.test(name);
+  if (step.kind === 'think' || step.kind === 'nudge') return false;
+  // `toolStepMeta` needs the tool's original casing — the structured-output
+  // discriminator is case-sensitive (PascalCase vs. snake_case).
+  const name = step.call.name ?? '';
+  const meta = toolStepMeta(name, step.call.args ?? {});
+  return meta.isSubagent || !!meta.isFinalOutput || /write_todos|todo/.test(name.toLowerCase());
 }
 
 /** Parse a whole body as JSON when it looks like one (mirrors ToolResult). */

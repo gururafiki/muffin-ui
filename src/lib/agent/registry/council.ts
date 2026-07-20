@@ -8,6 +8,11 @@ export const council: AgentDef = {
   tagline: '13 famous-investor personas debate, then a judge synthesises.',
   inputs: [tickerField, { key: 'query', label: 'Focus (optional)', placeholder: 'Is the moat durable?' }],
   buildInput: (v) => ({ ticker: v.ticker?.toUpperCase(), ...(v.query ? { query: v.query } : {}) }),
+  exampleConfigs: [
+    { label: 'AAPL', values: { ticker: 'AAPL', query: 'Is the moat durable?' } },
+    { label: 'MSFT', values: { ticker: 'MSFT' } },
+    { label: 'AMZN', values: { ticker: 'AMZN', query: 'Where do the legends disagree most?' } },
+  ],
   resultKey: 'council_synthesis',
   advanced: [
     {

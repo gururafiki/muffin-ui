@@ -15,7 +15,7 @@ import { palette } from '@/theme/colors';
 
 /**
  * Mount once per live run screen. Provides the tool cache (joined by
- * `ToolRunsSummary` rows on expand) and the stream handle (read by
+ * `ToolRunsPanel` rows on expand) and the stream handle (read by
  * `SubgraphDetail` / `MemberDetail` via `useRunStreamContext`).
  */
 export function RunSurface({

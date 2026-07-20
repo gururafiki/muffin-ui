@@ -15,6 +15,11 @@ export const criteriaAnalysis: AgentDef = {
     ...(v.sector ? { sector: v.sector } : {}),
     ...(v.market ? { market: v.market } : {}),
   }),
+  exampleConfigs: [
+    { label: 'AAPL', values: { ticker: 'AAPL', query: 'Buy at current price?' } },
+    { label: 'KO', values: { ticker: 'KO', query: 'Is this a durable dividend compounder?' } },
+    { label: 'PLTR', values: { ticker: 'PLTR', query: 'Does growth justify the premium multiple?' } },
+  ],
   resultRenderer: 'criteria',
   advanced: [
     // NB: tool-execution capture is unconditional backend-side (the graph

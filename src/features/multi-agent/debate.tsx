@@ -58,9 +58,30 @@ function TurnBubble({ debater, text }: { debater: Debater; text: string }) {
 }
 
 /**
+ * Just the debate's turn bubbles — no Card/Collapsible chrome. Use directly
+ * when the caller already owns an expand/collapse header (e.g. a subagent row
+ * that's already expanded), so a debate never gets a redundant second
+ * collapsible nested inside the first.
+ */
+export function DebateTurns({ debaters, turns }: { debaters: Debater[]; turns: DebateTurn[] }) {
+  if (turns.length === 0) return null;
+  const byId = new Map(debaters.map((d) => [d.id, d]));
+  return (
+    <View className="gap-3">
+      {turns.map((t, i) => {
+        const d = byId.get(t.speaker);
+        if (!d) return null;
+        return <TurnBubble key={i} debater={d} text={t.text} />;
+      })}
+    </View>
+  );
+}
+
+/**
  * A multi-agent debate as an actual conversation — opposing voices face each
- * other as chat bubbles. Collapsed by default (standard `Collapsible`, same
- * pattern as the "Tool execution" panel); expanding reveals every turn.
+ * other as chat bubbles, wrapped in a collapsible card (same envelope as the
+ * "Tool execution" panel). For a debate shown directly on a result page; the
+ * bare `DebateTurns` above is the variant for already-expanded contexts.
  * Generic over muffin's multi_agent debates (bull vs bear, risk debators, …).
  */
 export function DebateView({
@@ -77,8 +98,6 @@ export function DebateView({
   defaultOpen?: boolean;
 }) {
   if (turns.length === 0) return null;
-  const byId = new Map(debaters.map((d) => [d.id, d]));
-
   return (
     <Card tone="muted" className="gap-2">
       <Collapsible
@@ -87,12 +106,8 @@ export function DebateView({
         meta={`${turns.length} turn${turns.length === 1 ? '' : 's'}`}
         defaultOpen={defaultOpen}
       >
-        <View className="gap-3 pt-1">
-          {turns.map((t, i) => {
-            const d = byId.get(t.speaker);
-            if (!d) return null;
-            return <TurnBubble key={i} debater={d} text={t.text} />;
-          })}
+        <View className="pt-1">
+          <DebateTurns debaters={debaters} turns={turns} />
         </View>
       </Collapsible>
     </Card>

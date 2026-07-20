@@ -5,7 +5,7 @@ import { Badge, Card, Collapsible, Text } from '@/components/ui';
 import type { SubgraphRow } from '@/features/agent-shared/run-projections';
 import { SubagentStateDigest } from '@/features/agent-shared/subagent-activity';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
-import { Markdown, StructuredOutput, ToolRunList, type ToolRun } from '@/lib/agent/renderers';
+import { Markdown, StructuredOutput, ToolRunsPanel, type ToolRun } from '@/lib/agent/renderers';
 import { palette } from '@/theme/colors';
 import type { MemberStep, PersonaMeta } from './personas';
 import { signalTone, type PersonaSignal, type PersonaStage } from './types';
@@ -134,11 +134,7 @@ export function MemberDetail({
         </Collapsible>
       ) : null}
 
-      {toolRuns.length > 0 ? (
-        <Collapsible title="Data collected" icon="tools" meta={`${toolRuns.length}`}>
-          <ToolRunList runs={toolRuns} />
-        </Collapsible>
-      ) : null}
+      <ToolRunsPanel title="Data collected" runs={toolRuns} mode="flat" />
 
       <SubagentStateDigest values={digestValues} />
 

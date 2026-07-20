@@ -10,17 +10,17 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
 import { Card, Chip, Screen, Skeleton, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
+import { AgentHero } from '@/features/agent-shared/agent-hero';
 import { Conversation, type MessageActions, type SubagentRuns, type ViewMode } from '@/features/agent-shared/conversation';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import type { AgentDef } from '@/lib/agent/registry';
-import { collectToolRuns, ToolRunsSummary, type Todo } from '@/lib/agent/renderers';
+import { collectToolRuns, ToolRunsPanel, type Todo } from '@/lib/agent/renderers';
 import { palette } from '@/theme/colors';
 import { InterruptCard } from './interrupt';
 
@@ -132,60 +132,19 @@ export function ChatScreen({
   // ── Hero: no conversation yet ─────────────────────────────────────────
   if (!chatStarted) {
     return (
-      <Screen scroll={false}>
-        <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingVertical: 24 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            {/* NativeWind classes don't reach Animated.View — style inner Views. */}
-            <Animated.View entering={FadeInDown.duration(350)}>
-              <View className="items-center gap-2 pb-6">
-                <View className="h-20 w-20 items-center justify-center rounded-bun border-2 border-frosting-200 bg-frosting-100 dark:border-night-border dark:bg-night-surface-muted">
-                  <Icon name={agent.icon} size={40} color={palette.frosting[600]} />
-                </View>
-                <Text variant="title" className="pt-2 text-center">
-                  {agent.title}
-                </Text>
-                <Text variant="muted" className="px-6 text-center">
-                  {agent.tagline}
-                </Text>
-              </View>
-            </Animated.View>
-
-            <Animated.View entering={FadeInDown.duration(350).delay(80)}>
-              {signInRequired ? (
-                <SignInToRunNotice />
-              ) : (
-                <View className="gap-3">
-                  <Composer
-                    draft={draft}
-                    setDraft={setDraft}
-                    busy={busy}
-                    onSend={send}
-                    onStop={() => stream.stop()}
-                    placeholder="What should we dig into?"
-                  />
-                  {agent.examples?.length ? (
-                    <View className="gap-2 pt-1">
-                      {agent.examples.map((ex) => (
-                        <Pressable
-                          key={ex}
-                          onPress={() => sendText(ex)}
-                          className="self-center rounded-pill border border-frosting-200 bg-white/70 px-4 py-2 active:opacity-70 dark:border-night-border dark:bg-night-surface">
-                          <Text variant="muted" className="text-center text-xs">
-                            {ex}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  ) : null}
-                </View>
-              )}
-            </Animated.View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Screen>
+      <AgentHero
+        agent={agent}
+        signInRequired={signInRequired}
+        examples={agent.examples?.map((ex) => ({ label: ex, onPress: () => sendText(ex) }))}>
+        <Composer
+          draft={draft}
+          setDraft={setDraft}
+          busy={busy}
+          onSend={send}
+          onStop={() => stream.stop()}
+          placeholder="What should we dig into?"
+        />
+      </AgentHero>
     );
   }
 
@@ -242,7 +201,7 @@ export function ChatScreen({
           />
 
           {/* Tool execution — rows join the provider-call cache on expand. */}
-          <ToolRunsSummary runs={collectToolRuns(values)} />
+          <ToolRunsPanel title="Tool execution" mode="grouped" runs={collectToolRuns(values)} />
 
           {stream.interrupt ? <InterruptCard value={stream.interrupt.value} busy={busy} onResume={resume} /> : null}
 

@@ -10,7 +10,7 @@ import {
 import { useCall } from '@/features/agent-calls/use-calls';
 import { Conversation, type SubagentRun, type SubagentRuns } from '@/features/agent-shared/conversation';
 import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
-import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsSummary, type Todo } from '@/lib/agent/renderers';
+import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsPanel, type Todo } from '@/lib/agent/renderers';
 import { parseArray, zCriterionEvaluation } from '@/lib/agent/schemas';
 import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 
@@ -119,7 +119,7 @@ export default function CallDetailRoute() {
 
           {/* Tool execution from persisted state — rows join the provider-call
               cache on expand for the full gathered payload. */}
-          <ToolRunsSummary runs={collectToolRuns(thread.values)} />
+          <ToolRunsPanel title="Tool execution" mode="grouped" runs={collectToolRuns(thread.values)} />
         </View>
         </ToolCacheProvider>
       )}

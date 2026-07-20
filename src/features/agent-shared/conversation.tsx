@@ -17,6 +17,7 @@ import {
   Markdown,
   messageText,
   parseTimeSeries,
+  StructuredOutput,
   TimeSeriesChart,
   TodoList,
   isTodoList,
@@ -90,12 +91,13 @@ function RailNode({ icon, error, last }: { icon: IconName; error?: boolean; last
 }
 
 function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defaultOpen: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-
   const meta =
     step.kind === 'think'
-      ? { label: 'Thinking', icon: 'thinking' as IconName, sublabel: undefined, isSubagent: false }
-      : toolStepMeta(step.call.name ?? 'tool', step.call.args ?? {});
+      ? { label: 'Thinking', icon: 'thinking' as IconName, sublabel: undefined, isSubagent: false, isFinalOutput: false }
+      : step.kind === 'nudge'
+        ? { label: 'System: retry nudge', icon: 'warning' as IconName, sublabel: undefined, isSubagent: false, isFinalOutput: false }
+        : toolStepMeta(step.call.name ?? 'tool', step.call.args ?? {});
+  const [open, setOpen] = useState(defaultOpen || !!meta.isFinalOutput);
   const error = step.kind === 'tool' && step.error;
 
   return (
@@ -103,7 +105,9 @@ function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defau
       <RailNode icon={meta.icon} error={error} last={last} />
       <Pressable onPress={() => setOpen((o) => !o)} className="flex-1 pb-3 active:opacity-70">
         <View className="flex-row items-center gap-2">
-          <Text variant="body" className={cn('flex-1 text-sm', meta.isSubagent && 'font-heading')}>
+          <Text
+            variant={step.kind === 'nudge' ? 'muted' : 'body'}
+            className={cn('flex-1 text-sm', meta.isSubagent && 'font-heading')}>
             {meta.label}
           </Text>
           {meta.isSubagent ? <Badge label="sub-agent" tone="info" /> : null}
@@ -116,8 +120,10 @@ function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defau
         ) : null}
         {open ? (
           <View className="mt-2 gap-2">
-            {step.kind === 'think' ? (
+            {step.kind === 'think' || step.kind === 'nudge' ? (
               <Markdown value={step.text} />
+            ) : meta.isFinalOutput ? (
+              <StructuredOutput value={step.call.args} />
             ) : (
               <>
                 {step.call.args && Object.keys(step.call.args).length > 0 && !meta.isSubagent ? (

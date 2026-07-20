@@ -336,6 +336,63 @@ Verified: tsc + eslint clean per phase; web export; **20/20 headless smoke check
 runner/council/chat surfaces, legacy-payload migration, debounced persistence surviving reload,
 FlashList data path with 20 stubbed threads, zero Reanimated/worklet errors).
 
+## ✅ Milestone 19 — Standardized input blocks, joyful landing hero, subagent-panel polish (2026-07)
+A batch of user feedback on the trading_decision call page (and the same patterns on
+research/criteria_analysis/council). Paired with a `muffin-agent` backend fix.
+- **Shared landing hero.** `features/agent-shared/agent-hero.tsx` generalises `ChatScreen`'s
+  animated, centred hero (icon, title, tagline, staggered fade-in) to any input shape — a chat
+  composer or a `Field` list + Run button. `AgentRunner` and `CouncilScreen` now render it for a
+  genuinely fresh run instead of a plain, unanimated `Collapsible` form (`AgentRunner`) or a
+  static "sticker" card (`CouncilScreen`); `ChatScreen`'s own hero is a thin wrapper over the same
+  component. Registry gains `AgentDef.exampleConfigs` (structured field values, vs. `examples`'
+  freeform chat strings) — authored for trading_decision/research/criteria_analysis/council.
+  **Deliberately did not add a parallel `inputMode` flag** — the hero branches on the existing
+  `agent.chat` boolean, which was already in lockstep with it; a second flag would just be a second
+  source of truth.
+- **Read-only recap replaces the always-editable form.** The old `RunInputForm` pre-filled a fully
+  editable form from the reopened run's saved state (`values = {...savedInputs, ...edits}`) even
+  though none of these graphs support real follow-up — it just looked like live amendment. Deleted;
+  `AgentRunner`/`CouncilScreen` now hold a pre-submit-only `draft`, and once a thread exists, render
+  `agent-shared/run-recap.tsx` (read-only labelled values) with an explicit "Start a new run" button
+  (`router.push` with no `threadId` — mounts a fresh screen instance, same idiom as the Calls tab)
+  instead of amending in place. Real interrupt-based follow-up (today only `stock_evaluation`'s chat
+  graph has it) is **out of scope** — this milestone only fixes the misleading editable-recap UI.
+- **Stage/debate envelope consistency.** `ReportSection` (bare `Collapsible`) now wraps in
+  `Card tone="muted"`, matching `DebateView`'s existing envelope — one container convention for
+  every pipeline stage. The debate turn bubbles were extracted into a standalone `DebateTurns`
+  component (`DebateView` = `Card`+`Collapsible` over `DebateTurns`); `DebateDetail` renders
+  `DebateTurns` directly instead of nesting a second, already-expanded collapsible inside the
+  sub-agent row's own collapsible (explicit variant rather than a boolean `bare` prop, per
+  `composition-patterns`).
+- **Unified tool-run display.** "Tool calls" (per-subagent), "Tool execution" (per-run, grouped
+  with ok/failed/cached stats), "Data collection" (per-criterion), "Data collected" (per-member)
+  were four near-identical, accidentally-diverged components over the same `ToolRunRow`. Replaced
+  with one `ToolRunsPanel` (`mode: 'flat' | 'grouped'`) — same Card+Collapsible envelope everywhere,
+  same rows, different scope/grouping only.
+- **Subagent panel polish.** A terminal structured-output tool call (name is PascalCase — the
+  Pydantic schema name — vs. every real tool's snake_case, a reliable agent-agnostic discriminator)
+  now renders immediately via `StructuredOutput` instead of a raw `JsonBlock` dump, both eliminating
+  the "plain JSON, then re-renders nicely" flash (live scoped messages vs. persisted `row.output`
+  racing) and giving the subagent's final answer a distinct "Final result" step instead of an
+  anonymous flat tool call. Added a pulsing `Skeleton` for the genuinely indeterminate
+  `SubgraphDetail` loading window. Subagent input (`HumanBubble`) now renders through `Markdown`
+  instead of plain `Text`. The backend's structured-output retry nudge (an injected `HumanMessage`)
+  no longer renders as a fake user turn — it's detected via its `additional_kwargs` marker and shown
+  as a muted "System: retry nudge" step.
+- **Backend companion (`muffin-agent`):** `ToolResultCacheMiddleware`/`ToolKnowledgeMiddleware` were
+  silently reconstructing `ToolMessage`s without forwarding `status`, so a failed tool call (e.g.
+  `ToolRetryMiddleware`'s exhausted-retry message, which doesn't start with the literal word
+  "error") could get cached and displayed as a success. Fixed by checking `status` first
+  (authoritative) rather than relying solely on the `is_error_content()` string-prefix heuristic,
+  and explicitly setting `status="error"` on every constructed error message. `messages.tsx`'s raw
+  tool-message badge now also reads `status` (previously always neutral).
+Verified: `pytest`/`ruff`/`mypy` (backend, new status-propagation tests); tsc + eslint + web export
+clean; headless smoke of all four field-based agents' fresh hero (identity block, fields, Advanced
+options, example chips filling the draft and enabling Run, Save-as-preset) plus the unchanged
+stock_evaluation chat hero. **Deferred:** verifying `RunRecap`/subagent-panel/tool-status-badge
+rendering against real backend data needs a running `langgraph dev` stack or the deployed
+backend — not exercised live in this pass; do a quick manual pass after deploying.
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

@@ -98,9 +98,11 @@ export function ReportSection({
 }) {
   if (!markdown || !markdown.trim()) return null;
   return (
-    <Collapsible title={title} icon={icon} defaultOpen={defaultOpen}>
-      <Markdown value={markdown} />
-    </Collapsible>
+    <Card tone="muted">
+      <Collapsible title={title} icon={icon} defaultOpen={defaultOpen}>
+        <Markdown value={markdown} />
+      </Collapsible>
+    </Card>
   );
 }
 

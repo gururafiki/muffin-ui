@@ -60,6 +60,18 @@ export interface ToolStep extends StepInfo {
   sublabel?: string;
   /** A sub-agent delegation (`task`) — render as an emphasised section. */
   isSubagent: boolean;
+  /** A terminal structured-output tool call — an agent's final answer. */
+  isFinalOutput?: boolean;
+}
+
+/**
+ * A structured-output-via-tool-calling schema tool is named after its
+ * Pydantic model — PascalCase (`MarketAnalystOutput`, `BuffettSignal`, …).
+ * Every real, LLM-invocable tool in this codebase is `snake_case`, so this is
+ * a robust, agent-agnostic discriminator that needs no per-agent list.
+ */
+export function isStructuredOutputToolName(name: string): boolean {
+  return /^[A-Z][A-Za-z0-9]*$/.test(name);
 }
 
 /**
@@ -67,6 +79,10 @@ export interface ToolStep extends StepInfo {
  * arguments. Turns opaque deep-agent tool names into a readable timeline row.
  */
 export function toolStepMeta(name: string, args: Record<string, unknown> = {}): ToolStep {
+  if (isStructuredOutputToolName(name ?? '')) {
+    return { label: 'Final result', icon: 'check-circle', isSubagent: false, isFinalOutput: true };
+  }
+
   const n = (name ?? '').toLowerCase();
 
   if (n === 'task' || /sub_?agent|delegate/.test(n)) {

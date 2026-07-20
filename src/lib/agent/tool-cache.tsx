@@ -71,7 +71,7 @@ export function useToolCache(): ToolCacheLookup {
 
 /**
  * Fetches this run's provider-call cache once and exposes an exact
- * `(tool, args_hash) → CachedItem` lookup, so `ToolRunsSummary` rows can reveal
+ * `(tool, args_hash) → CachedItem` lookup, so `ToolRunsPanel` rows can reveal
  * the full payload / size / timestamp on expand. Polls every 10s while the run
  * is busy (new caches land mid-run), then stops. The cache is global — the join
  * is scoped to this run by matching each row's `args_hash`, so there is no

@@ -2,9 +2,9 @@ import { toMessageDict } from '@langchain/langgraph-sdk/ui';
 import { useMessages, useToolCalls } from '@langchain/react';
 import { View } from 'react-native';
 
-import { Collapsible, Text } from '@/components/ui';
+import { Skeleton, Text } from '@/components/ui';
 import {
-  DebateView,
+  DebateTurns,
   bullBearTurns,
   debatersForTurns,
   namedMessageTurns,
@@ -12,7 +12,7 @@ import {
 import {
   CriterionDetails,
   StructuredOutput,
-  ToolRunList,
+  ToolRunsPanel,
   type AnyMessage,
   type ToolRun,
 } from '@/lib/agent/renderers';
@@ -20,15 +20,19 @@ import { useRunStreamContext } from '@/lib/agent/stream-context';
 import { Conversation } from './conversation';
 import type { SubgraphRow } from './run-projections';
 
-/** Shape a stage's `detail: 'debate'` output into a `DebateView` conversation. */
-function DebateDetail({ output, label }: { output: unknown; label: string }) {
+/**
+ * Shape a stage's `detail: 'debate'` output into debate turn bubbles. This is
+ * always reached from an already-expanded `SubAgentRunRow`, so it renders the
+ * bare `DebateTurns` — not a second nested collapsible.
+ */
+function DebateDetail({ output }: { output: unknown }) {
   const turns = Array.isArray(output)
     ? namedMessageTurns(output)
     : bullBearTurns(
         (output as { bull?: unknown } | null)?.bull,
         (output as { bear?: unknown } | null)?.bear,
       );
-  return <DebateView title={label} debaters={debatersForTurns(turns)} turns={turns} defaultOpen />;
+  return <DebateTurns debaters={debatersForTurns(turns)} turns={turns} />;
 }
 
 /** Map protocol-v2 assembled tool calls onto the `ToolRunList` row shape. */
@@ -42,6 +46,19 @@ function toToolRuns(
     output_preview: c.output == null ? undefined : (typeof c.output === 'string' ? c.output : JSON.stringify(c.output)).slice(0, 400),
     error: c.error,
   }));
+}
+
+/** Placeholder for a row whose detail hasn't landed yet — pulses while the
+ * run is still busy, so an in-progress row doesn't look identical to one
+ * that genuinely recorded nothing. */
+function SubgraphDetailSkeleton() {
+  return (
+    <View className="gap-1.5">
+      <Skeleton className="h-3.5 w-2/3" />
+      <Skeleton className="h-3.5 w-full" />
+      <Skeleton className="h-3.5 w-1/2" />
+    </View>
+  );
 }
 
 /**
@@ -72,6 +89,9 @@ export function SubgraphDetail({ row }: { row: SubgraphRow }) {
   const hasBody = !!row.evaluation || output != null || messages.length > 0 || runs.length > 0;
 
   if (!hasBody) {
+    if (row.status !== 'error' && stream.isLoading) {
+      return <SubgraphDetailSkeleton />;
+    }
     return (
       <Text variant="muted" className="text-xs">
         {row.status === 'running' ? 'Working — details will appear as this specialist reports back.' : 'No detail was recorded for this step.'}
@@ -84,7 +104,10 @@ export function SubgraphDetail({ row }: { row: SubgraphRow }) {
       {row.evaluation ? <CriterionDetails c={row.evaluation} /> : null}
       {output != null ? (
         row.detail === 'debate' ? (
-          <DebateDetail output={output} label={row.label} />
+          <View className="gap-1">
+            <Text variant="label">Debate</Text>
+            <DebateDetail output={output} />
+          </View>
         ) : (
           <View className="gap-1">
             <Text variant="label">Result</Text>
@@ -92,11 +115,7 @@ export function SubgraphDetail({ row }: { row: SubgraphRow }) {
           </View>
         )
       ) : null}
-      {runs.length > 0 ? (
-        <Collapsible title="Tool calls" icon="tools" meta={`${runs.length}`}>
-          <ToolRunList runs={runs} />
-        </Collapsible>
-      ) : null}
+      <ToolRunsPanel title="Tool calls" runs={runs} mode="flat" />
       {messages.length > 0 ? <Conversation messages={messages} viewMode="verbose" /> : null}
     </View>
   );
