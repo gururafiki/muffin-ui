@@ -90,7 +90,18 @@ function SubgraphDetailSkeleton() {
  * structured output (registry `StageDef.output`), and the run-level `tool_runs`
  * records the backend attributed to this node.
  */
-export function SubgraphDetail({ row }: { row: SubgraphRow }) {
+export function SubgraphDetail({
+  row,
+  expectsTranscript = true,
+}: {
+  row: SubgraphRow;
+  /** Whether a scoped transcript will load lazily on expand (a
+   * `/history?checkpoint_ns` fetch) — true for graph agents whose subagent
+   * nodes are fetchable (trading analysts, criteria stages). Council members
+   * pass `false`: no per-subagent history is fetched for them, so there's
+   * nothing to wait on and the loading skeleton would spin forever. */
+  expectsTranscript?: boolean;
+}) {
   const stream = useRunStreamContext();
   const scopedMessages = useMessages(stream, row.namespace);
   const messages = scopedMessages.map((m) => toMessageDict(m)) as AnyMessage[];
@@ -104,16 +115,17 @@ export function SubgraphDetail({ row }: { row: SubgraphRow }) {
   // transcript arrives. A still-running specialist keeps the skeleton until its
   // first message; a completed one falls back to the persisted view after a
   // safety cap (a subagent that genuinely captured no transcript). Debates
-  // (`detail: 'debate'`) and criterion workers have no scoped transcript, so
-  // they render their body immediately.
-  const expectsTranscript = row.evaluation == null && row.detail !== 'debate' && row.status !== 'error';
+  // (`detail: 'debate'`), criterion workers, and callers passing
+  // `expectsTranscript={false}` have no scoped transcript, so they render their
+  // body immediately.
+  const wantsTranscript = expectsTranscript && row.evaluation == null && row.detail !== 'debate' && row.status !== 'error';
   const [transcriptTimedOut, setTranscriptTimedOut] = useState(false);
   useEffect(() => {
-    if (!expectsTranscript || row.status === 'running') return;
+    if (!wantsTranscript || row.status === 'running') return;
     const id = setTimeout(() => setTranscriptTimedOut(true), 12_000);
     return () => clearTimeout(id);
-  }, [expectsTranscript, row.status]);
-  if (expectsTranscript && messages.length === 0 && !transcriptTimedOut) {
+  }, [wantsTranscript, row.status]);
+  if (wantsTranscript && messages.length === 0 && !transcriptTimedOut) {
     return <SubgraphDetailSkeleton />;
   }
 

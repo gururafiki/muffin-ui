@@ -78,9 +78,11 @@ export function MemberDetail({
   // verdict carries typed evidence, drop the digest's copy of it.
   const digestValues =
     evidence && liveValues ? { ...liveValues, evidence: undefined } : liveValues;
-  // Live scoped channels only exist while streaming; on history the row adds
-  // nothing beyond what this card already renders — skip the empty shell.
-  const rowHasBody = !!row && (busy || row.evaluation != null || row.output != null || (row.toolRuns?.length ?? 0) > 0);
+  // The scoped transcript only exists while streaming; on history the row adds
+  // nothing beyond what this card already renders (evidence + Data collected),
+  // and there's no per-subagent `/history` fetch for council members — so only
+  // mount it live, and tell it not to wait on a transcript that never loads.
+  const rowHasBody = !!row && busy;
 
   return (
     <Card className="gap-3">
@@ -138,7 +140,7 @@ export function MemberDetail({
 
       <SubagentStateDigest values={digestValues} />
 
-      {rowHasBody ? <SubgraphDetail row={row!} /> : null}
+      {rowHasBody ? <SubgraphDetail row={row!} expectsTranscript={false} /> : null}
     </Card>
   );
 }
