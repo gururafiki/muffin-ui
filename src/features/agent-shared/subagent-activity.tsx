@@ -2,24 +2,56 @@
  * The "Sub-agents" panel and the per-member state digest — shared by the
  * generic runner, the council screen, and the Calls history detail.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
-import { Avatar, Badge, Card, Text } from '@/components/ui';
+import { Avatar, Badge, Card, Skeleton, Text } from '@/components/ui';
 import { StructuredOutput } from '@/lib/agent/renderers';
 import { titleCase } from '@/lib/format';
 import { palette } from '@/theme/colors';
 import { runPreview, type SubagentRun } from './conversation-turns';
 import { Conversation } from './conversation';
 
+/** Skeleton shaped like the "Sub-agents" panel (header + specialist rows).
+ * Shown while native sub-agents are still being discovered — a `/history` fetch
+ * that lags the run-level `getState` by a few seconds — and by the hydration
+ * skeleton. */
+export function SubagentPanelSkeleton() {
+  // `muted` (cream) so the frosting-100 placeholders read clearly as a loading
+  // state — on the real panel's white `sticker` card they'd be near-invisible.
+  return (
+    <Card tone="muted" className="gap-3">
+      <View className="flex-row items-center gap-2.5">
+        <Skeleton className="h-7 w-7 rounded-crumb" />
+        <View className="flex-1 gap-1.5">
+          <Skeleton className="h-3.5 w-24" />
+          <Skeleton className="h-3 w-44" />
+        </View>
+      </View>
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} className="flex-row items-center gap-3">
+          <Skeleton className="h-8 w-8 rounded-pill" />
+          <Skeleton className="h-3.5 w-32" />
+        </View>
+      ))}
+    </Card>
+  );
+}
+
 /**
  * "Sub-agents" — a soft, progressive panel of the specialists a run delegated to
  * (native sub-agents: trading analysts, council personas; or captured deep-agent
  * sub-agents). Each is an avatar row with a one-line preview; tapping reveals its
  * own nested timeline. Nothing is expanded until you ask for it.
+ *
+ * `loadingHint` (set by callers that expect native subagents, e.g. the trading /
+ * criteria runner): hold the panel skeleton while the discovery `/history` fetch
+ * is still in flight — otherwise the panel would pop in a few seconds after the
+ * rest of the page. Falls back to nothing after a short cap so a run that truly
+ * has no subagents doesn't skeleton forever.
  */
-export function SubagentActivity({ runs }: { runs?: SubagentRun[] }) {
+export function SubagentActivity({ runs, loadingHint }: { runs?: SubagentRun[]; loadingHint?: boolean }) {
   const list = (runs ?? []).filter(
     (r) =>
       (r.messages?.length ?? 0) > 0 ||
@@ -27,7 +59,17 @@ export function SubagentActivity({ runs }: { runs?: SubagentRun[] }) {
       r.renderDetail != null ||
       r.status != null,
   );
-  if (list.length === 0) return null;
+  const [capReached, setCapReached] = useState(false);
+  useEffect(() => {
+    if (!loadingHint || list.length > 0) return;
+    const id = setTimeout(() => setCapReached(true), 10_000);
+    return () => clearTimeout(id);
+  }, [loadingHint, list.length]);
+
+  if (list.length === 0) {
+    if (loadingHint && !capReached) return <SubagentPanelSkeleton />;
+    return null;
+  }
 
   return (
     <Card tone="sticker" className="gap-1">

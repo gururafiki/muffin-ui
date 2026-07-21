@@ -11,7 +11,7 @@ import { Badge, Card, Skeleton, Text } from '@/components/ui';
 import { Conversation, type SubagentRun } from '@/features/agent-shared/conversation';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { HydrationCard } from '@/features/agent-shared/run-surface';
-import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
+import { SubagentActivity, SubagentPanelSkeleton } from '@/features/agent-shared/subagent-activity';
 import type { AgentDef } from '@/lib/agent/registry';
 import {
   collectToolRuns,
@@ -85,22 +85,8 @@ export function HydrationSkeleton({ agent }: { agent: AgentDef }) {
         </Card>
       ))}
 
-      {/* Sub-agents panel (header + specialist rows with avatars). */}
-      <Card className="gap-3">
-        <View className="flex-row items-center gap-2.5">
-          <Skeleton className="h-9 w-9 rounded-pill" />
-          <View className="flex-1 gap-1.5">
-            <Skeleton className="h-3.5 w-24" />
-            <Skeleton className="h-3 w-40" />
-          </View>
-        </View>
-        {[0, 1, 2, 3].map((i) => (
-          <View key={i} className="flex-row items-center gap-2.5">
-            <Skeleton className="h-7 w-7 rounded-pill" />
-            <Skeleton className="h-3.5 w-32" />
-          </View>
-        ))}
-      </Card>
+      {/* Sub-agents panel — same skeleton the discovery gap uses. */}
+      <SubagentPanelSkeleton />
     </View>
   );
 }
@@ -162,8 +148,10 @@ export function RunResults({
         }
       />
 
-      {/* Sub-agent activity (deep agents like criteria) — captured transcripts. */}
-      <SubagentActivity runs={subagentRuns} />
+      {/* Sub-agent activity (deep agents like criteria) — captured transcripts.
+          `loadingHint` holds a panel skeleton through the discovery `/history`
+          gap for agents that surface native subagents (node-based stages). */}
+      <SubagentActivity runs={subagentRuns} loadingHint={agent.stages?.some((s) => !!s.node) ?? false} />
     </>
   );
 }

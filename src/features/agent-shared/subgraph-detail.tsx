@@ -1,5 +1,6 @@
 import { toMessageDict } from '@langchain/langgraph-sdk/ui';
 import { useMessages } from '@langchain/react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
@@ -92,8 +93,30 @@ function SubgraphDetailSkeleton() {
 export function SubgraphDetail({ row }: { row: SubgraphRow }) {
   const stream = useRunStreamContext();
   const scopedMessages = useMessages(stream, row.namespace);
-
   const messages = scopedMessages.map((m) => toMessageDict(m)) as AnyMessage[];
+
+  // The scoped transcript (Steps) loads lazily on expand — a
+  // `/history?checkpoint_ns=<node>` fetch that takes a few seconds on the
+  // deployed backend and is NOT reflected in `stream.isLoading`. Since the
+  // persisted `row.output` is already present (from the run-level `getState`),
+  // without this the row would flash that output and then flip to the Steps
+  // timeline once `/history` lands. Instead, show the skeleton until the
+  // transcript arrives. A still-running specialist keeps the skeleton until its
+  // first message; a completed one falls back to the persisted view after a
+  // safety cap (a subagent that genuinely captured no transcript). Debates
+  // (`detail: 'debate'`) and criterion workers have no scoped transcript, so
+  // they render their body immediately.
+  const expectsTranscript = row.evaluation == null && row.detail !== 'debate' && row.status !== 'error';
+  const [transcriptTimedOut, setTranscriptTimedOut] = useState(false);
+  useEffect(() => {
+    if (!expectsTranscript || row.status === 'running') return;
+    const id = setTimeout(() => setTranscriptTimedOut(true), 12_000);
+    return () => clearTimeout(id);
+  }, [expectsTranscript, row.status]);
+  if (expectsTranscript && messages.length === 0 && !transcriptTimedOut) {
+    return <SubgraphDetailSkeleton />;
+  }
+
   const output = row.evaluation == null && messages.length === 0 ? row.output : undefined;
   // Historical fall-back only: the persisted `tool_runs` records (authoritative
   // status). While live, the scoped `Conversation` (Steps) below already shows
@@ -103,9 +126,6 @@ export function SubgraphDetail({ row }: { row: SubgraphRow }) {
   const hasBody = !!row.evaluation || output != null || messages.length > 0 || persistedRuns.length > 0;
 
   if (!hasBody) {
-    if (row.status !== 'error' && stream.isLoading) {
-      return <SubgraphDetailSkeleton />;
-    }
     return (
       <Text variant="muted" className="text-xs">
         {row.status === 'running' ? 'Working — details will appear as this specialist reports back.' : 'No detail was recorded for this step.'}
