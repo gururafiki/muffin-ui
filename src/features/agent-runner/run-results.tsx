@@ -37,9 +37,10 @@ const RESULT_RENDERERS: Record<string, (value: unknown, runs?: SubagentRun[]) =>
 
 /**
  * Placeholder panels shown while a reopened thread hydrates (`isThreadLoading`
- * — one `getState` that can take a while on the deployed backend). The run
- * plan is predetermined by the registry, so its skeleton shows the real stage
- * labels; the result and sub-agent panels keep their shape as pulsing blocks.
+ * — one `getState` that can take a while on the deployed backend). Shaped to
+ * match the real result layout so nothing jumps when data lands: the run-plan
+ * checklist (real stage labels + an indeterminate loading bar), a headline
+ * verdict card, a few report-section rows, and the sub-agents panel.
  */
 export function HydrationSkeleton({ agent }: { agent: AgentDef }) {
   return (
@@ -60,18 +61,45 @@ export function HydrationSkeleton({ agent }: { agent: AgentDef }) {
           </View>
         ) : null}
       </HydrationCard>
-      {/* Headline result placeholder. */}
-      <Card className="gap-2">
-        <Skeleton className="h-5 w-28" />
+
+      {/* Headline verdict card (pill + conviction bar + summary lines). */}
+      <Card tone="sticker" className="gap-3">
+        <View className="flex-row items-center gap-3">
+          <Skeleton className="h-10 w-24 rounded-pill" />
+          <View className="flex-1 gap-1.5">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-2 w-full rounded-pill" />
+          </View>
+        </View>
         <Skeleton className="h-3.5 w-full" />
-        <Skeleton className="h-3.5 w-full" />
-        <Skeleton className="h-3.5 w-2/3" />
+        <Skeleton className="h-3.5 w-5/6" />
       </Card>
-      {/* Tool execution + sub-agents placeholder. */}
-      <Card tone="muted" className="gap-2">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-3.5 w-full" />
-        <Skeleton className="h-3.5 w-1/2" />
+
+      {/* Report-section rows (icon · label · chevron). */}
+      {[0, 1, 2].map((i) => (
+        <Card key={i} tone="muted" className="flex-row items-center gap-2.5">
+          <Skeleton className="h-4 w-4 rounded-crumb" />
+          <Skeleton className="h-3.5 w-40" />
+          <View className="flex-1" />
+          <Skeleton className="h-3.5 w-3.5" />
+        </Card>
+      ))}
+
+      {/* Sub-agents panel (header + specialist rows with avatars). */}
+      <Card className="gap-3">
+        <View className="flex-row items-center gap-2.5">
+          <Skeleton className="h-9 w-9 rounded-pill" />
+          <View className="flex-1 gap-1.5">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-3 w-40" />
+          </View>
+        </View>
+        {[0, 1, 2, 3].map((i) => (
+          <View key={i} className="flex-row items-center gap-2.5">
+            <Skeleton className="h-7 w-7 rounded-pill" />
+            <Skeleton className="h-3.5 w-32" />
+          </View>
+        ))}
       </Card>
     </View>
   );

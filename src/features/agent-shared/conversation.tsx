@@ -107,9 +107,10 @@ function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defau
         <View className="flex-row items-center gap-2">
           <Text
             variant={step.kind === 'nudge' ? 'muted' : 'body'}
-            className={cn('flex-1 text-sm', meta.isSubagent && 'font-heading')}>
+            className={cn('flex-1 text-sm', meta.isSubagent && 'font-heading', error && 'text-bearish')}>
             {meta.label}
           </Text>
+          {error ? <Badge label="failed" tone="bearish" /> : null}
           {meta.isSubagent ? <Badge label="sub-agent" tone="info" /> : null}
           <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
         </View>
