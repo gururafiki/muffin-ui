@@ -11,6 +11,10 @@ import { palette } from '@/theme/colors';
  * it stays smooth even when the value is nudged on a tick. Pass `animate={false}`
  * (e.g. under reduce-motion) to set the fill directly with no tween. Size/round
  * the track via `className`.
+ *
+ * For opaque waits with no real percent-complete (a `getState` / history fetch),
+ * pair this with `useEstimatedProgress` — an eased time heuristic that holds near
+ * the top until the wait ends — rather than inventing a value here.
  */
 export function ProgressBar({
   value,
