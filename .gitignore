@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Headless reopen-smoke screenshot artifact (scripts/smoke-reopen.mjs)
+/smoke-reopen.png
