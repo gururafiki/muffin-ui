@@ -422,6 +422,14 @@ Two run-page complaints: the top "inputs to the agent" block looked plain/joyles
   noted, not built. The 28–70s latency itself remains a backend concern (langgraph-api checkpoint
   reads on the A1 node) — the bar sets expectations, it doesn't cure the wait.
 
+## ✅ Milestone 21 — Reopen latency: hydrate from `thread.values`, not checkpoint `getState` (2026-07)
+- [x] Reopen latency: hydrate finished runs from `thread.values` not the checkpoint
+  `getState` (~240x faster reopen; `fast-hydration-transport.ts`). [app]
+- [ ] Backend: langgraph-postgres `getState`/`getHistory` (checkpointer) is a flat
+  ~27s regardless of state size (getState 1 ckpt ≈ getHistory 8 ckpts). Not
+  checkpoint bloat — points at checkpointer connection/pool/setup. Fixing it also
+  speeds live runs + resume. [backend-patch] — see docs/backend-notes/2026-07-23-getstate-latency.md
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

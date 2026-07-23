@@ -121,8 +121,15 @@ The whole app is organised around **"one graph → one screen"**:
     open one subscription per namespace — mount them lazily (expanded rows only), never one-per-seat.
   - **Live vs history doctrine: events for live, state for history.** Completed runs have NO
     replayable event stream (transient Redis buffer — verified; there is no durable event log to
-    replay). On load a finished thread makes only `GET /threads/{id}/state` (+ thread metadata + the
-    store cache search) — no event re-subscription, no `/state/checkpoint` walk. So the backend
+    replay). On load a finished thread now hydrates its `values` from the denormalized
+    `thread.values` (`GET /threads/{id}`, ~110ms) via a custom stream transport
+    (`fast-hydration-transport.ts`) — NOT the checkpoint `getState`
+    (`GET /threads/{id}/state`), which is a flat ~27s on the deployed Oracle node
+    regardless of state size (measured; see docs/backend-notes/2026-07-23-getstate-latency.md).
+    Only the one-time hydration read is redirected; live streaming/submit/resume are
+    unchanged. Consequence: the M20 hydration ETA bar (`use-estimated-progress.ts` +
+    `HydrationCard`) now resolves in ~110ms for finished reopens, so it only ever
+    flashes — kept for the residual busy/live-hydration case. So the backend
     capture channels (`subagent_runs`, `tool_runs`) are the **history substrate** — live rendering
     uses the native channels, historical rendering reads persisted state. Removing them would lose all
     historical sub-step detail. (`tool_runs` is compact; `subagent_runs` full transcripts are the
