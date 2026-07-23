@@ -149,10 +149,12 @@ The whole app is organised around **"one graph → one screen"**:
     subgraphs (muffin-agent #117) whose turns live in a non-default messages channel, so the scoped
     transcript is empty even live — they rely on `output` + `detail: 'debate'`. Live scoped channels
     always win when they have data.
-    **Hydration skeletons (M14):** `stream.isThreadLoading` (initial `getState` in flight — 28–70s
-    on the deployed backend today) drives skeleton panels: the runner shows the registry stage
-    labels under "Loading this run…", chat shows transcript-shaped blocks, council a session
-    placeholder, calls list/detail card-shaped blocks (`<Skeleton>` primitive in `ui/`).
+    **Hydration skeletons (M14):** `stream.isThreadLoading` (initial hydration read in flight)
+    drives skeleton panels: the runner shows the registry stage labels under "Loading this run…",
+    chat shows transcript-shaped blocks, council a session placeholder, calls list/detail card-shaped
+    blocks (`<Skeleton>` primitive in `ui/`). Since M21 a finished-thread reopen hydrates from
+    `thread.values` (~110ms, see the Live vs history doctrine above), so these skeletons now only
+    flash on reopen; the 28–70s wait remains only for the busy/live-hydration `getState` path.
 - **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
   json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
   `tool-runs.tsx` renders backend `AgentCaptureMiddleware` output: `collectToolRuns(values)` gathers

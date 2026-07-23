@@ -80,14 +80,16 @@ await page.goto(`${base}/agents/criteria_analysis?threadId=${TID}`, { waitUntil:
 // Wait for the hydrated content to actually paint the first criterion name
 // (the fast seed resolves ~110ms, but React commit + render follows). Bounded
 // so a genuine failure still fails within a few seconds rather than hanging.
-let contentPainted = true;
+// Readiness gate: wait (bounded) for the hydrated criterion name to paint
+// before we read the body. On timeout we fall through — the `hasCriterion`
+// assertion below then fails, which is the intended signal.
 try {
   await page.waitForFunction(
     (name) => (document.body.innerText || '').includes(name),
     { timeout: 8000 },
     criterionName,
   );
-} catch { contentPainted = false; }
+} catch { /* content never painted — hasCriterion assertion below will fail */ }
 const elapsed = Date.now() - t0;
 await page.screenshot({ path: 'smoke-reopen.png', fullPage: true });
 
@@ -103,7 +105,7 @@ await browser.close();
 server.close();
 
 console.log(`elapsed=${elapsed}ms  hitThreadValues=${hitValues}  hitCheckpoint=${hitCheckpoint}  hasCriterion=${hasCriterion}  isEmptyState=${isEmptyState}  reanimatedErrors=${realErrors.length}`);
-console.log(`  (asserted criterion="${criterionName}", synthesis.signal="${synthSignal ?? '(none)'}", contentPainted=${contentPainted})`);
+console.log(`  (asserted criterion="${criterionName}", synthesis.signal="${synthSignal ?? '(none)'}")`);
 if (!hitValues || hitCheckpoint || !hasCriterion || isEmptyState || realErrors.length) {
   console.error('SMOKE FAIL', { hitValues, hitCheckpoint, hasCriterion, isEmptyState, realErrors });
   process.exit(1);

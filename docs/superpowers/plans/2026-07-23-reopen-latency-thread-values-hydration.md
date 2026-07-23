@@ -30,6 +30,8 @@
 
 ## Task 1: Fast-hydration transport + wire into `useRunStream`
 
+> **CORRECTION (post-implementation):** the Step-1 code below was wrong to construct the adapter *unbound*. `StreamController` calls `getState()` from its constructor (before `setThreadId`), so an unbound adapter reads `adapter.threadId === ""` and hydrates nothing. The shipped fix constructs the adapter **bound** to the mount-time threadId: `makeReopenTransport(client, settings, initialThreadId)` passes `threadId: initialThreadId` to `new HttpAgentServerAdapter(...)`, and `use-run-stream.ts` captures it via `useRef(opts.threadId)` (memo on `[client]`). Path A was not needed. See the shipped `fast-hydration-transport.ts` and the reopen-latency spec for the authoritative version.
+
 **Files:**
 - Create: `src/features/agent-shared/fast-hydration-transport.ts`
 - Modify: `src/features/agent-shared/use-run-stream.ts` (the `client` memo + the `useStream({...})` call, ~lines 47–72)

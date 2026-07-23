@@ -27,11 +27,14 @@ import type { Settings } from '@/lib/settings/store';
  * the constructor-time `getState()` read an empty `adapter.threadId` and seed
  * nothing (the reopened thread renders an empty panel).
  *
- * A fresh run passes `undefined` (nothing to hydrate): `getState` short-
- * circuits to null, and after the first `submit()` the framework's
- * `setThreadId` updates `adapter.threadId` for streaming — hydrate never
- * re-runs (the controller only rebuilds on `[client, assistantId, transport]`,
- * none of which change), so the stock SSE submit/stream path is untouched.
+ * A fresh run passes `undefined` (nothing to hydrate): the controller skips
+ * `hydrate()` entirely while `threadId` is null, and after the first `submit()`
+ * the framework's `setThreadId` updates `adapter.threadId` for streaming. When
+ * `onThreadId` then re-renders with the new id the controller does call
+ * `hydrate()` again, but the SDK short-circuits it for threads it just created
+ * (`StreamController` tracks them in `#selfCreatedThreadIds`), so our `getState`
+ * override is never invoked mid-run and the stock SSE submit/stream path is
+ * untouched.
  *
  * Interrupted/busy threads: `thread.values` is a fine seed; the live event
  * subscription refines it, so interrupts still arrive over the stream.
