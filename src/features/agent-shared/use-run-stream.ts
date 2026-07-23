@@ -1,15 +1,16 @@
 import type { Client } from '@langchain/langgraph-sdk';
 import { useStream } from '@langchain/react';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { makeClient } from '@/lib/agent/client';
-import { streamingFetch } from '@/lib/agent/install-fetch';
 import type { AgentDef } from '@/lib/agent/registry';
 import type { AgentInput, AgentState } from '@/lib/agent/stream-types';
 import { queryClient } from '@/lib/query';
 import { buildConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
+
+import { makeReopenTransport } from './fast-hydration-transport';
 
 /**
  * Protocol-v2 stream engine for every agent screen (generic runner, council,
@@ -47,15 +48,36 @@ export function useRunStream(
   const client: Client = useMemo(() => makeClient(getSettings()), []);
   const [threadId, setThreadId] = useState<string | undefined>(opts.threadId);
 
+  // Custom transport whose hydration read (`getState`) comes from the fast
+  // denormalized `thread.values` (~110ms) instead of the checkpoint (~27s on
+  // the deployed node). The transport carries `fetch: streamingFetch()`
+  // internally — `expo/fetch` on native, browser fetch on web — so SSE still
+  // streams on iOS/Android (the protocol-v2 transport uses
+  // `options.fetch ?? globalThis.fetch`, not the SDK's fetch-override singleton).
+  //
+  // The MOUNT-TIME threadId (captured in a ref, NOT the reactive `opts.threadId`
+  // or the live `threadId` state) binds the adapter at construction, so the
+  // framework's constructor-time `getState()` — which runs before
+  // `setThreadId` — reads it (see `makeReopenTransport`). Using the mount-time
+  // value is deliberate: it prevents a spurious mid-run re-hydrate when a fresh
+  // run's `onThreadId` writes the new id into the URL. Memoized on `[client]`
+  // only: `client` is stable, so the transport (and the controller it backs)
+  // is built once — hydrate runs once, submit/stream are unaffected.
+  const initialThreadIdRef = useRef(opts.threadId);
+  const transport = useMemo(
+    () => makeReopenTransport(client, getSettings(), initialThreadIdRef.current),
+    [client],
+  );
+
   const stream = useStream<AgentState>({
-    client,
-    assistantId: opts.assistantId || agent.id,
+    transport,
+    // The custom-adapter branch types `assistantId` as `never` (no declared
+    // subagent union on this untyped adapter), but `useStream` reads it from
+    // the raw options object at runtime in both branches
+    // (`"assistantId" in options`, use-stream.js), so the cast is safe.
+    assistantId: (opts.assistantId || agent.id) as never,
     threadId: threadId ?? null,
     messagesKey: 'messages',
-    // The protocol-v2 SSE transport uses `options.fetch ?? globalThis.fetch`
-    // and ignores the SDK's fetch-override singleton, so native must pass its
-    // streaming fetch (expo/fetch) here or SSE won't stream on iOS/Android.
-    fetch: streamingFetch(),
     onThreadId: (id: string) => {
       // No thread metadata is written here: the Calls tab renders from the
       // server's own `metadata.graph_id` + `extract`ed inputs (see
