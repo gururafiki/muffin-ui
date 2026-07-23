@@ -7,7 +7,7 @@ import { makeClient } from '@/lib/agent/client';
 import type { AgentDef } from '@/lib/agent/registry';
 import type { AgentInput, AgentState } from '@/lib/agent/stream-types';
 import { queryClient } from '@/lib/query';
-import { buildConfigurable } from '@/lib/settings/configurable';
+import { buildAuthHeaders, buildConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
 
 import { makeReopenTransport } from './fast-hydration-transport';
@@ -76,6 +76,13 @@ export function useRunStream(
     // the raw options object at runtime in both branches
     // (`"assistantId" in options`, use-stream.js), so the cast is safe.
     assistantId: (opts.assistantId || agent.id) as never,
+    // The custom-adapter branch omits `client`/`defaultHeaders`, so useStream
+    // builds its own internal Client for getHistory / subagent-namespace
+    // resolution / runs.cancel(stop). Re-supply auth headers here or a
+    // signed-in user's Bearer token is dropped on those calls (stop() ->
+    // runs.cancel silently failing, run keeps executing server-side). Runtime
+    // reads defaultHeaders in both branches.
+    defaultHeaders: buildAuthHeaders(getSettings()) as never,
     threadId: threadId ?? null,
     messagesKey: 'messages',
     onThreadId: (id: string) => {

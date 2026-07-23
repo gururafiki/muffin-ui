@@ -62,7 +62,7 @@ const base = `http://localhost:${port}`;
 const truth = await fetch(`${base}/api/threads/${TID}`).then((r) => r.json());
 const criterionName = truth?.values?.criterion_evaluations?.[0]?.criterion_name;
 const synthSignal = truth?.values?.synthesis?.signal;
-if (!criterionName) { console.error('FIXTURE BROKEN: thread has no criterion_evaluations[0].criterion_name', truth?.values && Object.keys(truth.values)); await server.close?.(); process.exit(2); }
+if (!criterionName) { console.error('FIXTURE BROKEN: thread has no criterion_evaluations[0].criterion_name', truth?.values && Object.keys(truth.values)); server.close(); process.exit(2); }
 
 const browser = await puppeteer.launch({ channel: 'chrome', headless: 'new', args: ['--no-sandbox'] });
 const page = await browser.newPage();

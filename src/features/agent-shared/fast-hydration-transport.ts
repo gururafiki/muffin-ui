@@ -36,8 +36,14 @@ import type { Settings } from '@/lib/settings/store';
  * override is never invoked mid-run and the stock SSE submit/stream path is
  * untouched.
  *
- * Interrupted/busy threads: `thread.values` is a fine seed; the live event
- * subscription refines it, so interrupts still arrive over the stream.
+ * Busy/interrupted threads: the fast shape below (`next: []`, `tasks: []`, no
+ * `status`/`interrupts`) reads as IDLE to `StreamController` — it decides
+ * whether to open the live event pump + lifecycle watcher, and whether to
+ * keep HITL interrupts, from exactly those fields. So those two statuses
+ * delegate to the stock checkpoint `getState` (captured below before we
+ * override it) — slower (~27s), but correct active-thread + interrupt
+ * detection. Only idle/error reopens (the reopen-of-a-finished-run case this
+ * optimisation targets) take the fast `thread.values` path.
  */
 export function makeReopenTransport(
   client: Client,
@@ -53,10 +59,23 @@ export function makeReopenTransport(
     threadId: initialThreadId,
   });
 
+  // The stock SSE checkpoint read (GET /threads/{id}/state). Correct but ~27s
+  // on the deployed node — used only for threads that must hydrate as ACTIVE.
+  const stockGetState = adapter.getState?.bind(adapter);
+
   adapter.getState = (async () => {
     const threadId = adapter.threadId;
     if (!threadId) return null;
     const thread = await client.threads.get(threadId);
+    // A busy/interrupted thread must be detected as ACTIVE by the controller
+    // so it opens the live event pump + lifecycle watcher and preserves
+    // interrupts. The fast values-only shape (next:[], tasks:[]) reads as
+    // idle and would freeze a live reopen or drop a HITL interrupt — so
+    // delegate those to the real checkpoint getState. Only idle/error take
+    // the fast thread.values path.
+    if ((thread.status === 'busy' || thread.status === 'interrupted') && stockGetState) {
+      return stockGetState();
+    }
     return {
       values: thread.values,
       metadata: thread.metadata,
