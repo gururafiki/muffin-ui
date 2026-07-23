@@ -7,7 +7,7 @@ import { makeClient } from '@/lib/agent/client';
 import type { AgentDef } from '@/lib/agent/registry';
 import type { AgentInput, AgentState } from '@/lib/agent/stream-types';
 import { queryClient } from '@/lib/query';
-import { buildAuthHeaders, buildConfigurable } from '@/lib/settings/configurable';
+import { buildConfigurable } from '@/lib/settings/configurable';
 import { getSettings } from '@/lib/settings/store';
 
 import { makeReopenTransport } from './fast-hydration-transport';
@@ -76,13 +76,17 @@ export function useRunStream(
     // the raw options object at runtime in both branches
     // (`"assistantId" in options`, use-stream.js), so the cast is safe.
     assistantId: (opts.assistantId || agent.id) as never,
-    // The custom-adapter branch omits `client`/`defaultHeaders`, so useStream
-    // builds its own internal Client for getHistory / subagent-namespace
-    // resolution / runs.cancel(stop). Re-supply auth headers here or a
-    // signed-in user's Bearer token is dropped on those calls (stop() ->
-    // runs.cancel silently failing, run keeps executing server-side). Runtime
-    // reads defaultHeaders in both branches.
-    defaultHeaders: buildAuthHeaders(getSettings()) as never,
+    // The custom-adapter branch would otherwise make useStream build its OWN
+    // internal Client (no auth headers) for getHistory / subagent-namespace
+    // resolution / runs.cancel(stop) — dropping a signed-in user's Bearer token
+    // (stop() -> runs.cancel silently failing, run keeps executing server-side).
+    // Pass our already-memoized client (built by makeClient WITH auth headers);
+    // useStream uses `asBag.client` when present. MUST be the stable memoized
+    // reference — an inline `defaultHeaders: buildAuthHeaders()` object is a new
+    // `{}` each render, which sits in useStream's internal-client dep array and
+    // would rebuild the client + controller every render, re-running hydrate
+    // forever (isThreadLoading never settles → stuck on "Loading").
+    client: client as never,
     threadId: threadId ?? null,
     messagesKey: 'messages',
     onThreadId: (id: string) => {
