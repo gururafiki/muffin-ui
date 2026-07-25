@@ -203,6 +203,47 @@ The whole app is organised around **"one graph → one screen"**:
   Card/Collapsible when the caller (`DebateDetail`, inside an already-expanded `SubAgentRunRow`)
   already owns the expand/collapse affordance — new stage/detail renderers should follow the same
   pattern rather than reaching for a bare `Collapsible`.
+  **Recursive sub-agent tree (Phase 2, M22):** the flat sub-agents panel (`useSubgraphRows`,
+  discovery-only — see the `muffin-ui-subagents-panel-discovery` memory) only ever shows one level
+  of compiled-subgraph invocations. `lib/agent/subagent-tree.ts`'s `collectSubagentTree(values)`
+  additionally gathers the backend `AgentCaptureMiddleware` **`subagent_tree`** channel — the
+  top-level map plus each `criterion_evaluations[i].subagent_tree` (the criteria-homing split
+  `collectToolRuns`/`collectSubagentTree` both use, since criterion workers write their state under
+  `criterion_evaluations[i]`, not the root). `buildForest(nodes)` reconstructs the actual execution
+  tree from `<name>:<uuid>`-segment ids joined by `|` (e.g.
+  `criterion_evaluation:<uuid>|evaluate:<uuid>`) — **parentage comes from splitting the id, never
+  from `parent_id`**, because a re-homed node's `parent_id` can point at an ancestor that was
+  stripped or lives in a different part of state; an uncaptured intermediate level (e.g. the
+  `criterion_evaluation` worker itself, which is never written as its own node — only its
+  `evaluate` child is) is synthesized as a placeholder `TreeRow` (`synthetic: true`) so no real node
+  is ever orphaned. `features/agent-shared/subagent-tree.tsx`'s `SubagentTree({ rows, threadId })`
+  is deliberately not a bespoke tree widget: each `TreeRow` maps to a `SubagentRun` and delegates to
+  the existing `SubagentActivity`/`SubAgentRunRow` for the row look and expand/collapse — a row's
+  `renderDetail` renders that node's own `NodeDetail` plus, when it has children, a nested
+  `SubagentActivity` of them, so recursion falls out of the existing component rather than a new
+  one. `features/agent-shared/use-subagent-detail.ts`'s `useSubagentDetail(threadId, nodeId,
+  enabled)` is a `useQuery` (`staleTime: Infinity`, keyed `['subagent-detail', threadId, nodeId]`)
+  that lazily fetches ONE node's heavy payload (`messages`/`tool_runs`/`output`) from the
+  `["subagent_detail", threadId]` Store namespace only when its row is expanded (`enabled = !
+  synthetic && hasDetail !== false`) — this keeps `thread.values` light; a synthetic placeholder row
+  renders no detail (its real children carry it), and a Store miss renders "No detail was recorded
+  for this step." rather than erroring. **Mount rule (additive everywhere, nothing removed):** every
+  surface computes `tree = buildForest(collectSubagentTree(values))` and renders `tree.length > 0 ?
+  <SubagentTree rows={tree} threadId={threadId} /> : <SubagentActivity ... />` — the existing flat
+  panel is the fallback, never deleted, so old/shallow threads look exactly as before. Mounted in
+  the generic runner (`run-results.tsx`), calls history (`app/calls/[threadId].tsx`, plus a
+  per-criterion subtree threaded into `historicalRuns()`), and council (`member-detail.tsx`, via
+  `findMemberRow(tree, slug)`). **Criteria is the one exception to a plain `tree` prop:**
+  `renderers/criteria-result.tsx` is part of the `renderers` barrel, and `SubagentTree` transitively
+  imports back into that same barrel (via `NodeDetail` -> `StructuredOutput`/`ToolRunsPanel`) — a
+  direct import would silently create the require cycle the file already dodges for `Conversation`
+  (Metro doesn't fail `tsc`/`expo export` on it, it just resolves to `undefined` at runtime). So
+  `CriterionDetails`/`CriterionRow`/`CriteriaResult` take an optional `renderTree?: (rows: TreeRow[])
+  => React.ReactNode` render-prop instead (parallel to the existing `renderTranscript`); each caller
+  builds the actual `<SubagentTree>` closure where the cycle is safe. Trees are only ever as deep as
+  the agents actually nested — today's evaluators single-shot, so a validated real thread renders
+  a shallow 2-level tree (`criterion_evaluation` -> `evaluate`); nothing in the reconstruction caps
+  the depth.
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —
