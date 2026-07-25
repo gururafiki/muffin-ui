@@ -430,6 +430,37 @@ Two run-page complaints: the top "inputs to the agent" block looked plain/joyles
   checkpoint bloat — points at checkpointer connection/pool/setup. Fixing it also
   speeds live runs + resume. [backend-patch] — see docs/backend-notes/2026-07-23-getstate-latency.md
 
+## ✅ Milestone 22 — Recursive sub-agent tree, Phase 2 (2026-07)
+The flat sub-agents panel (`useSubgraphRows`, discovery-only — one level of compiled-subgraph
+invocations, see the `muffin-ui-subagents-panel-discovery` memory) never showed the deeper
+execution structure a sub-agent can itself contain. Consumes the muffin-agent
+`AgentCaptureMiddleware` **`subagent_tree`** channel (the actual captured execution topology, at
+whatever depth the agents really nested — not registry-seeded, per the same "reflect reality"
+directive as the earlier discovery fix):
+- **Data layer** (`lib/agent/subagent-tree.ts`) — `collectSubagentTree(values)` gathers the
+  top-level `subagent_tree` map plus each criterion's homed `criterion_evaluations[i].subagent_tree`;
+  `buildForest(nodes)` reconstructs the tree from `<name>:<uuid>` id segments (parentage from the
+  id, deliberately never `parent_id`, which a re-homed node's `parent_id` can point away from) and
+  synthesizes any never-captured intermediate ancestor as a placeholder row.
+- **Lazy detail** (`agent-shared/use-subagent-detail.ts`) — `useSubagentDetail` fetches one node's
+  heavy `messages`/`tool_runs`/`output` payload from the `["subagent_detail", threadId]` Store
+  namespace only when that row is expanded, keeping `thread.values` light.
+- **Recursive UI** (`agent-shared/subagent-tree.tsx` + `node-detail.tsx`) — `SubagentTree` reuses
+  the existing `SubagentActivity`/`SubAgentRunRow` row look for every level (no bespoke tree
+  widget); recursion falls out of a row's `renderDetail` nesting a child `SubagentActivity`.
+- **Mounted everywhere, additively** — the generic runner, calls history (incl. a per-criterion
+  subtree), and council all render `<SubagentTree>` in place of the flat panel only when its forest
+  is non-empty, else the pre-existing flat panel/fallback renders exactly as before. Criteria's
+  renderer (`renderers/criteria-result.tsx`) takes a `renderTree` render-prop instead of a plain
+  prop to dodge a `renderers`-barrel require cycle `SubagentTree` would otherwise reintroduce
+  (same pattern the file already uses for `Conversation`).
+- Verified: `tsc` clean, `expo export -p web` clean, headless smoke against a real deployed
+  criteria thread (structural assertions: hydrated content, hit `thread.values` not the checkpoint
+  `getState`, zero Reanimated errors) plus an interactive drill-down via the Playwright MCP.
+- **Note:** today's evaluators single-shot, so validated real trees are shallow (2 levels:
+  `criterion_evaluation` → `evaluate`) — the reconstruction itself has no depth cap and will
+  render deeper as agents nest more.
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
