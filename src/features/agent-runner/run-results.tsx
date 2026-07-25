@@ -12,6 +12,7 @@ import { Conversation, type SubagentRun } from '@/features/agent-shared/conversa
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { HydrationCard } from '@/features/agent-shared/run-surface';
 import { SubagentActivity, SubagentPanelSkeleton } from '@/features/agent-shared/subagent-activity';
+import { SubagentTree } from '@/features/agent-shared/subagent-tree';
 import type { AgentDef } from '@/lib/agent/registry';
 import {
   collectToolRuns,
@@ -22,15 +23,24 @@ import {
   TradingResult,
   type Todo,
 } from '@/lib/agent/renderers';
+import type { TreeRow } from '@/lib/agent/subagent-tree';
 
 const renderRunTranscript = (run: SubagentRun) => (
   <Conversation messages={run.messages ?? []} viewMode="verbose" />
 );
 
-const RESULT_RENDERERS: Record<string, (value: unknown, runs?: SubagentRun[]) => React.ReactNode> = {
+const RESULT_RENDERERS: Record<
+  string,
+  (value: unknown, runs?: SubagentRun[], threadId?: string) => React.ReactNode
+> = {
   research: (value) => <ResearchResult value={value} />,
-  criteria: (value, runs) => (
-    <CriteriaResult value={value} subagentRuns={runs} renderTranscript={renderRunTranscript} />
+  criteria: (value, runs, threadId) => (
+    <CriteriaResult
+      value={value}
+      subagentRuns={runs}
+      renderTranscript={renderRunTranscript}
+      renderTree={(rows: TreeRow[]) => <SubagentTree rows={rows} threadId={threadId} />}
+    />
   ),
   trading: (value) => <TradingResult value={value} />,
 };
@@ -99,6 +109,8 @@ export function RunResults({
   busy,
   byNode,
   subagentRuns,
+  tree,
+  threadId,
 }: {
   agent: AgentDef;
   /** The merged values view (root state ∪ live criterion events). */
@@ -108,6 +120,10 @@ export function RunResults({
   busy: boolean;
   byNode: ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
   subagentRuns: SubagentRun[];
+  /** The run's recursive sub-agent forest (`buildForest(collectSubagentTree(view))`) —
+   * rendered via `SubagentTree` instead of the flat `subagentRuns` panel when non-empty. */
+  tree: TreeRow[];
+  threadId?: string;
 }) {
   return (
     <>
@@ -123,7 +139,7 @@ export function RunResults({
       {/* Headline result — same widget live and from history. */}
       {hasResult ? (
         agent.resultRenderer && RESULT_RENDERERS[agent.resultRenderer] ? (
-          RESULT_RENDERERS[agent.resultRenderer](result, subagentRuns)
+          RESULT_RENDERERS[agent.resultRenderer](result, subagentRuns, threadId)
         ) : (
           <Card className="gap-2">
             <Badge label={busy ? 'streaming result' : 'result'} tone="info" />
@@ -149,9 +165,16 @@ export function RunResults({
       />
 
       {/* Sub-agent activity (deep agents like criteria) — captured transcripts.
+          The recursive tree (`AgentCaptureMiddleware`'s `subagent_tree`
+          channel) renders INSTEAD of the flat panel when the run captured
+          one; older runs (no captured tree) keep the flat panel as-is.
           `loadingHint` holds a panel skeleton through the discovery `/history`
           gap for agents that surface native subagents (node-based stages). */}
-      <SubagentActivity runs={subagentRuns} loadingHint={agent.stages?.some((s) => !!s.node) ?? false} />
+      {tree.length > 0 ? (
+        <SubagentTree rows={tree} threadId={threadId} />
+      ) : (
+        <SubagentActivity runs={subagentRuns} loadingHint={agent.stages?.some((s) => !!s.node) ?? false} />
+      )}
     </>
   );
 }

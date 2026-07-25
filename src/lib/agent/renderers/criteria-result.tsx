@@ -3,10 +3,14 @@ import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
 import { Badge, Card, Chip, Collapsible, Text } from '@/components/ui';
-// Type-only import — a runtime import of Conversation here would create a
-// require cycle (renderers barrel → this file → conversation → barrel), so the
-// nested-transcript rendering is injected by the caller via `renderTranscript`.
+// Type-only import — a runtime import of Conversation (or SubagentTree, which
+// itself pulls in Conversation/StructuredOutput via subagent-activity /
+// node-detail) here would create a require cycle (renderers barrel → this
+// file → subagent-tree/conversation → barrel), so the nested-transcript AND
+// nested-tree rendering are injected by the caller via `renderTranscript` /
+// `renderTree`.
 import type { SubagentRun } from '@/features/agent-shared/conversation-turns';
+import { buildForest, collectSubagentTree, type TreeRow } from '@/lib/agent/subagent-tree';
 import { parseArray, zCriterionEvaluation, type CriterionEvaluation } from '@/lib/agent/schemas';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
@@ -76,15 +80,22 @@ export function CriterionDetails({
   c,
   transcript,
   renderTranscript,
+  renderTree,
 }: {
   c: Criterion;
   transcript?: SubagentRun;
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
+  /** Renders this criterion's own recursive sub-agent forest — injected by the
+   * caller (see the require-cycle note above); builds `TreeRow`s from
+   * `c.subagent_tree` (`criterion_evaluations[i].subagent_tree`, the same
+   * criterion-homed channel `collectToolRuns` uses for `tool_runs`). */
+  renderTree?: (rows: TreeRow[]) => React.ReactNode;
 }) {
   const tone = toneForSignal(c.signal);
   const evidence = asStrings(c.evidence_summary);
   const sources = asSourceLines(c.data_sources);
   const limitations = asStrings(c.limitations);
+  const critTree = buildForest(collectSubagentTree({ subagent_tree: c.subagent_tree }));
 
   return (
         <View className="gap-3 pl-4 pt-2">
@@ -173,6 +184,8 @@ export function CriterionDetails({
 
           <ToolRunsPanel title="Data collection" runs={c.tool_runs} mode="flat" />
 
+          {critTree.length > 0 && renderTree ? renderTree(critTree) : null}
+
           {transcript?.messages?.length && renderTranscript ? (
             <Collapsible title="How this was evaluated" icon="agents">
               {renderTranscript(transcript)}
@@ -193,10 +206,12 @@ function CriterionRow({
   c,
   transcript,
   renderTranscript,
+  renderTree,
 }: {
   c: Criterion;
   transcript?: SubagentRun;
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
+  renderTree?: (rows: TreeRow[]) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const tone = toneForSignal(c.signal);
@@ -221,7 +236,9 @@ function CriterionRow({
         ) : null}
       </Pressable>
 
-      {open ? <CriterionDetails c={c} transcript={transcript} renderTranscript={renderTranscript} /> : null}
+      {open ? (
+        <CriterionDetails c={c} transcript={transcript} renderTranscript={renderTranscript} renderTree={renderTree} />
+      ) : null}
     </View>
   );
 }
@@ -251,10 +268,14 @@ export function CriteriaResult({
   value,
   subagentRuns,
   renderTranscript,
+  renderTree,
 }: {
   value: unknown;
   subagentRuns?: SubagentRun[];
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
+  /** Renders a criterion's own recursive sub-agent forest — see the
+   * require-cycle note on `CriterionDetails` above. */
+  renderTree?: (rows: TreeRow[]) => React.ReactNode;
 }) {
   if (!value || typeof value !== 'object') return <JsonBlock value={value} />;
   const v = value as Dict;
@@ -288,6 +309,7 @@ export function CriteriaResult({
               c={c}
               transcript={transcriptFor(c.criterion_name, subagentRuns)}
               renderTranscript={renderTranscript}
+              renderTree={renderTree}
             />
           ))}
         </Card>

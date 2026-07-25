@@ -10,17 +10,24 @@ import {
 import { useCall } from '@/features/agent-calls/use-calls';
 import { Conversation, type SubagentRun, type SubagentRuns } from '@/features/agent-shared/conversation';
 import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
+import { SubagentTree } from '@/features/agent-shared/subagent-tree';
 import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsPanel, type Todo } from '@/lib/agent/renderers';
 import { parseArray, zCriterionEvaluation } from '@/lib/agent/schemas';
+import { buildForest, collectSubagentTree, type TreeRow } from '@/lib/agent/subagent-tree';
 import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 
 /**
  * Historical sub-agent rows straight from the thread's persisted values —
  * captured deep-agent transcripts plus one row per criterion evaluation.
  * Completed runs have no replayable event stream, so checkpointed state is
- * the only (and cheap: one `threads.get`) source here.
+ * the only (and cheap: one `threads.get`) source here. `renderTree` (built by
+ * the caller, which owns `threadId`) lets each criterion's own detail show
+ * its recursive sub-agent forest, if it captured one.
  */
-function historicalRuns(values: Record<string, unknown> | undefined): SubagentRun[] {
+function historicalRuns(
+  values: Record<string, unknown> | undefined,
+  renderTree: (rows: TreeRow[]) => React.ReactNode,
+): SubagentRun[] {
   const captured = values?.subagent_runs as SubagentRuns | undefined;
   const evals = parseArray(zCriterionEvaluation, values?.criterion_evaluations, 'criterion_evaluations');
   return [
@@ -28,7 +35,7 @@ function historicalRuns(values: Record<string, unknown> | undefined): SubagentRu
     ...evals.map((c) => ({
       name: c.criterion_name ? `Criterion — ${c.criterion_name}` : 'Criterion',
       status: 'complete' as const,
-      renderDetail: () => <CriterionDetails c={c} />,
+      renderDetail: () => <CriterionDetails c={c} renderTree={renderTree} />,
     })),
   ];
 }
@@ -88,7 +95,12 @@ export default function CallDetailRoute() {
             const values = thread.values as
               | ({ messages?: unknown; todos?: Todo[]; subagent_runs?: SubagentRuns } & Record<string, unknown>)
               | undefined;
-            const activity = historicalRuns(values);
+            // Recursive sub-agent tree, straight from persisted state (the
+            // AUGMENT — rendered instead of the flat panel when non-empty;
+            // older threads with no captured tree keep the flat panel).
+            const renderTree = (rows: TreeRow[]) => <SubagentTree rows={rows} threadId={threadId} />;
+            const tree = buildForest(collectSubagentTree(values));
+            const activity = historicalRuns(values, renderTree);
             if (values && isMessageArray(values.messages)) {
               return (
                 <Conversation
@@ -106,7 +118,11 @@ export default function CallDetailRoute() {
                     <Text variant="label">Result</Text>
                     <StructuredOutput value={values} />
                   </Card>
-                  <SubagentActivity runs={activity} />
+                  {tree.length > 0 ? (
+                    <SubagentTree rows={tree} threadId={threadId} />
+                  ) : (
+                    <SubagentActivity runs={activity} />
+                  )}
                 </>
               );
             }

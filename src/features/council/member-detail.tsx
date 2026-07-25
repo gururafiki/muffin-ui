@@ -4,11 +4,25 @@ import { Icon } from '@/components/icons';
 import { Badge, Card, Collapsible, Text } from '@/components/ui';
 import type { SubgraphRow } from '@/features/agent-shared/run-projections';
 import { SubagentStateDigest } from '@/features/agent-shared/subagent-activity';
+import { SubagentTree } from '@/features/agent-shared/subagent-tree';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { Markdown, StructuredOutput, ToolRunsPanel, type ToolRun } from '@/lib/agent/renderers';
+import type { TreeRow } from '@/lib/agent/subagent-tree';
 import { palette } from '@/theme/colors';
-import type { MemberStep, PersonaMeta } from './personas';
+import { normalizeSlug, type MemberStep, type PersonaMeta } from './personas';
 import { signalTone, type PersonaSignal, type PersonaStage } from './types';
+
+/**
+ * The selected member's own root subtree: the row whose id's leading
+ * `<name>:<uuid>` segment matches the persona/specialist slug (root ids are
+ * always single-segment — see `buildForest`). `normalizeSlug` tolerates a
+ * differently-cased/hyphenated name the backend might emit for the same
+ * member. `undefined` (old run / persona hasn't called tools yet — currently
+ * shallow) means nothing renders.
+ */
+function findMemberRow(tree: TreeRow[] | undefined, slug: string): TreeRow | undefined {
+  return tree?.find((r) => normalizeSlug(r.id.split(':')[0]) === slug);
+}
 
 /** Which of the member's inner steps a live stage sits on. */
 const STAGE_STEP: Partial<Record<PersonaStage, number>> = {
@@ -57,6 +71,8 @@ export function MemberDetail({
   liveValues,
   row,
   toolRuns,
+  tree,
+  threadId,
   onDismiss,
 }: {
   meta: PersonaMeta;
@@ -66,6 +82,10 @@ export function MemberDetail({
   liveValues?: Record<string, unknown>;
   row?: SubgraphRow;
   toolRuns: ToolRun[];
+  /** The whole run's recursive sub-agent forest (`council-screen.tsx`) — this
+   * member's own root subtree is picked out below. */
+  tree?: TreeRow[];
+  threadId?: string;
   onDismiss: () => void;
 }) {
   const dark = useColorScheme() === 'dark';
@@ -83,6 +103,10 @@ export function MemberDetail({
   // and there's no per-subagent `/history` fetch for council members — so only
   // mount it live, and tell it not to wait on a transcript that never loads.
   const rowHasBody = !!row && busy;
+  // This member's own root subtree, if the run captured one (personas are
+  // currently shallow — no nested tools yet — so this is commonly absent;
+  // nothing renders in that case, or for an old run predating capture).
+  const personaRow = findMemberRow(tree, meta.slug);
 
   return (
     <Card className="gap-3">
@@ -137,6 +161,8 @@ export function MemberDetail({
       ) : null}
 
       <ToolRunsPanel title="Data collected" runs={toolRuns} mode="flat" />
+
+      {personaRow ? <SubagentTree rows={[personaRow]} threadId={threadId} /> : null}
 
       <SubagentStateDigest values={digestValues} />
 
