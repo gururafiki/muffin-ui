@@ -34,6 +34,34 @@ export const zToolRun = z.looseObject({
 });
 export type ToolRun = z.infer<typeof zToolRun>;
 
+/**
+ * One node of the sub-agent tree (backend `AgentCaptureMiddleware`'s
+ * `subagent_tree` channel). `id` is a `|`-joined `<name>:<uuid>` segment path —
+ * the tree's TRUE parentage is the id minus its last segment, not `parent_id`
+ * (which can point elsewhere for a re-homed node, e.g. a criterion worker's
+ * `evaluate` step homed under `criterion_evaluations[i].subagent_tree`). See
+ * `subagent-tree.ts` for the forest reconstruction that relies on this.
+ */
+export const zTreeNode = z.looseObject({
+  id: z.string(),
+  parent_id: z.string().nullable().optional(),
+  name: zStr,
+  kind: zStr,
+  status: zStr,
+  tool_summary: z
+    .looseObject({
+      count: zNum,
+      tools: z.array(z.string()).optional(),
+      ok: zNum,
+      failed: zNum,
+      cached: zNum,
+    })
+    .optional(),
+  output_preview: z.string().nullable().optional(),
+  has_detail: z.boolean().optional(),
+});
+export type TreeNode = z.infer<typeof zTreeNode>;
+
 const zSubCriterion = z.looseObject({
   name: zStr,
   criterion_name: zStr,
