@@ -44,3 +44,6 @@ example
 
 # Headless reopen-smoke screenshot artifact (scripts/smoke-reopen.mjs)
 /smoke-reopen.png
+
+# Headless subagent-tree-smoke screenshot artifact (scripts/smoke-subagent-tree.mjs)
+/smoke-subagent-tree.png
