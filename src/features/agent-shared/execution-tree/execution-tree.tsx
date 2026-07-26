@@ -29,6 +29,21 @@ import { useSubagentDetail } from '../use-subagent-detail';
 import { buildExecTree } from './plan-steps';
 import type { ExecNode, ExecStatus } from './types';
 
+/** Drop tool runs that appear in both the eager per-node list and the lazily
+ * fetched Store detail (same call homed to two places). Keyed on `args_hash`
+ * when present; records without one (rare — errors, `task` delegations) always
+ * pass through, since they have no stable identity to collapse on. */
+function dedupeToolRuns(runs: ToolRun[]): ToolRun[] {
+  const seen = new Set<string>();
+  return runs.filter((r) => {
+    if (!r.args_hash) return true;
+    const key = `${r.tool ?? ''}:${r.args_hash}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Leading status dot for one rail row — mirrors `StageDot` (`run-progress.tsx`)
  * but covers all four `ExecStatus` values (adds `error`). */
 function ExecStatusDot({ status }: { status?: ExecStatus }) {
@@ -50,10 +65,14 @@ function NodeFacets({ node, threadId }: { node: ExecNode; threadId?: string }) {
 
   const output = node.output ?? detail?.output;
   const messages = coerceMessages((detail?.messages ?? []) as ConversationMessage[]);
-  const toolRuns: ToolRun[] = [
+  // Merge eager per-node tool runs (e.g. a criterion's homed `tool_runs`) with
+  // the node's lazily-fetched Store detail, de-duping: a criterion node carries
+  // BOTH its homed copy AND a `detailNodeId` pointing at the same worker, so the
+  // two sources overlap. Key on `args_hash` (the backend's stable per-call id).
+  const toolRuns = dedupeToolRuns([
     ...(node.toolRuns ?? []),
     ...parseArray(zToolRun, detail?.tool_runs, 'exec.tool_runs'),
-  ];
+  ]);
 
   const hasEagerContent = node.output != null || !!node.toolRuns?.length || node.children.length > 0;
   if (isPending && !hasEagerContent) {

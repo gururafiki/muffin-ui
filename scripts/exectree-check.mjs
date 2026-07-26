@@ -239,6 +239,30 @@ function childrenForStage(stage, rootsByName) {
   return out;
 }
 
+// Mirror of plan-steps.ts `criterionChildren`: the criteria fan-out stage
+// builds one NAMED node per `criterion_evaluations[i]` (not the raw forest's
+// indistinguishable "criterion_evaluation" roots), with the evaluation as eager
+// output and the flattened worker node as `detailNodeId`.
+function criterionChildren(values) {
+  const raw = values.criterion_evaluations;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  return raw.map((entry, i) => {
+    const forest = buildForest(collectSubagentTree({ criterion_evaluations: [entry] }));
+    const worker = forest.flatMap((r) => (r.synthetic && r.children.length ? r.children : [r]))[0];
+    return {
+      id: `criterion:${i}`,
+      label: entry?.criterion_name ?? `Criterion ${i + 1}`,
+      kind: 'agent',
+      status: 'done',
+      output: entry,
+      detailNodeId: worker && !worker.synthetic ? worker.id : undefined,
+      toolRuns: Array.isArray(entry?.tool_runs) ? entry.tool_runs : undefined,
+      summary: entry?.signal ? String(entry.signal) : undefined,
+      children: (worker?.children ?? []).map(treeRowToExecNode),
+    };
+  });
+}
+
 function buildExecTree(stages, values, busy, byNode) {
   const forest = buildForest(collectSubagentTree(values));
   const rootsByName = new Map();
@@ -255,6 +279,9 @@ function buildExecTree(stages, values, busy, byNode) {
     const toolRuns = stage.node
       ? toolRunsAll.filter((r) => r.agent === stage.node || r.agent === `${stage.node}_data_collection`)
       : [];
+    const children =
+      (stage.node === 'criterion_evaluation' ? criterionChildren(values) : undefined) ??
+      childrenForStage(stage, rootsByName).map(treeRowToExecNode);
     return {
       id: `stage:${stage.key}`,
       label: stage.label,
@@ -262,7 +289,7 @@ function buildExecTree(stages, values, busy, byNode) {
       status: row.status,
       output: stageOutput(stage, values),
       toolRuns: toolRuns.length > 0 ? toolRuns : undefined,
-      children: childrenForStage(stage, rootsByName).map(treeRowToExecNode),
+      children,
     };
   });
 }
@@ -369,25 +396,32 @@ const labelsMatch = expectedSubstrings.every((expected, i) => {
 });
 
 const evaluateNode = tree.find((n) => n.id === 'stage:evaluate');
-const evaluateChildCount = evaluateNode?.children.length ?? 0;
+const evalChildren = evaluateNode?.children ?? [];
+const evaluateChildCount = evalChildren.length;
+// The fan-out children are now NAMED per criterion (criterionChildren), not the
+// raw forest's indistinguishable "Criterion Evaluation" roots.
+const childLabels = evalChildren.map((c) => c.label);
+const allNamed = childLabels.length > 0 && childLabels.every((l) => l && l !== 'Criterion Evaluation');
 
-// Every real `criterion_evaluation:<uuid>|evaluate:<uuid>` node captured in
-// `subagent_tree` must appear somewhere in the assembled tree (nothing
-// orphaned by the stage join).
+// Each named criterion node points `detailNodeId` at its real captured
+// `criterion_evaluation:<uuid>|evaluate:<uuid>` worker; that set must cover
+// every captured evaluate leaf (nothing orphaned by the fan-out join).
 const realNodes = collectSubagentTree(values);
 const evaluateLeafIds = realNodes
   .map((n) => n.id)
   .filter((id) => /^criterion_evaluation:[^|]+\|evaluate:[^|]+$/.test(id));
-const flatIds = new Set(flattenIds(tree));
-const missingLeafIds = evaluateLeafIds.filter((id) => !flatIds.has(id));
+const detailIds = new Set(evalChildren.map((c) => c.detailNodeId).filter(Boolean));
+const missingLeafIds = evaluateLeafIds.filter((id) => !detailIds.has(id));
 
 const checks = {
   sixStageNodes: tree.length === 6,
   stageLabelsInOrder: labelsMatch,
-  evaluateHas11Children: evaluateChildCount === 11,
+  evaluateHas11NamedChildren: evaluateChildCount === 11 && allNamed,
   allEvaluateLeafIdsPresent: missingLeafIds.length === 0 && evaluateLeafIds.length > 0,
 };
 
+console.log('--- evaluate children (named) ---');
+for (const c of evalChildren) console.log(`- ${c.label} (signal=${c.summary}, detail=${c.detailNodeId ? 'yes' : 'no'})`);
 console.log(
   `stageCount=${tree.length} evaluateChildCount=${evaluateChildCount} evaluateLeafIds=${evaluateLeafIds.length} missingLeafIds=${missingLeafIds.length}`,
 );
