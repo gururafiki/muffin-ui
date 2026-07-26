@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
-import { Button, Card, MuffinLogo, ScallopDivider, Screen, Text } from '@/components/ui';
+import { Button, Card, MuffinLogo, ScallopDivider, Screen, Segmented, Text } from '@/components/ui';
 import { AnalyseButton } from '@/features/markets/analyse-button';
 import {
   getScheme,
@@ -17,43 +17,6 @@ import { useMapView } from '@/features/markets/map-view-store';
 import { analyseCountry, analyseGlobalMacro, getCountryByIso } from '@/features/markets/taxonomy';
 import { WorldMap } from '@/features/markets/world-map';
 import { palette } from '@/theme/colors';
-
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { id: T; label: string }[];
-  value: T;
-  onChange: (id: T) => void;
-}) {
-  return (
-    <View className="flex-row flex-wrap gap-2">
-      {options.map((o) => {
-        const active = o.id === value;
-        return (
-          <Pressable
-            key={o.id}
-            onPress={() => onChange(o.id)}
-            className={
-              'rounded-pill border-2 px-3 py-1.5 active:opacity-80 ' +
-              (active
-                ? 'border-frosting-600 bg-frosting-500'
-                : 'border-frosting-200 bg-white dark:border-night-border dark:bg-night-surface')
-            }>
-            <Text
-              className={
-                'font-heading text-sm ' +
-                (active ? 'text-white' : 'text-frosting-600 dark:text-frosting-300')
-              }>
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
 
 export default function HomeScreen() {
   const router = useRouter();
