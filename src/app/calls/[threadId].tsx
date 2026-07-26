@@ -5,12 +5,17 @@ import { Badge, Card, Screen, Skeleton, Text } from '@/components/ui';
 import {
   agentTitleForThread,
   relativeTime,
+  threadGraphId,
   threadStatusTone,
 } from '@/features/agent-calls/threads';
 import { useCall } from '@/features/agent-calls/use-calls';
+import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { Conversation, type SubagentRun, type SubagentRuns } from '@/features/agent-shared/conversation';
+import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
+import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
 import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
 import { SubagentTree } from '@/features/agent-shared/subagent-tree';
+import { getAgent } from '@/lib/agent/registry';
 import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsPanel, type Todo } from '@/lib/agent/renderers';
 import { parseArray, zCriterionEvaluation } from '@/lib/agent/schemas';
 import { buildForest, collectSubagentTree, type TreeRow } from '@/lib/agent/subagent-tree';
@@ -43,6 +48,13 @@ function historicalRuns(
 export default function CallDetailRoute() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
   const { data: thread, isLoading, isError, error } = useCall(threadId);
+
+  // Resolve the run's registry agent (from the server-owned graph_id) so this
+  // history view can offer the same Overview ↔ Execution-tree toggle the live
+  // surfaces do. Unknown graph → no agent → toggle hidden, Overview only.
+  const agentId = thread ? threadGraphId(thread) : undefined;
+  const agent = agentId ? getAgent(agentId) : undefined;
+  const agentView = useAgentView(agentId ?? '');
 
   const title = thread ? agentTitleForThread(thread) : 'Call';
 
@@ -91,6 +103,17 @@ export default function CallDetailRoute() {
             </Text>
           </Card>
 
+          {agent ? <RunViewToggle agentId={agent.id} /> : null}
+
+          {agentView === 'tree' && agent ? (
+            <ExecutionTree
+              agent={agent}
+              values={(thread.values ?? {}) as Record<string, unknown>}
+              busy={false}
+              threadId={threadId}
+            />
+          ) : (
+          <>
           {(() => {
             const values = thread.values as
               | ({ messages?: unknown; todos?: Todo[]; subagent_runs?: SubagentRuns } & Record<string, unknown>)
@@ -136,6 +159,8 @@ export default function CallDetailRoute() {
           {/* Tool execution from persisted state — rows join the provider-call
               cache on expand for the full gathered payload. */}
           <ToolRunsPanel title="Tool execution" mode="grouped" runs={collectToolRuns(thread.values)} />
+          </>
+          )}
         </View>
         </ToolCacheProvider>
       )}

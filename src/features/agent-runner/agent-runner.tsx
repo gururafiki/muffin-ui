@@ -11,11 +11,14 @@ import { View } from 'react-native';
 import { AdvancedOptions } from '@/components/advanced-options';
 import { Button, Field, Screen } from '@/components/ui';
 import { useSignInRequiredToRun } from '@/features/account/run-gate';
+import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { AgentHero } from '@/features/agent-shared/agent-hero';
 import { type SubagentRun, type SubagentRuns } from '@/features/agent-shared/conversation';
+import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
 import { mergeLiveEvaluations, useCriterionEvents, useSubgraphRows } from '@/features/agent-shared/run-projections';
 import { RunRecap } from '@/features/agent-shared/run-recap';
 import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
+import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
@@ -56,6 +59,9 @@ export function AgentRunner({
   const [advanced, setAdvanced] = useState(() => initialOverrides(agent.advanced));
 
   const busy = stream.isLoading;
+  // Overview (bespoke result widget) vs the generic Execution-tree view —
+  // per-agent, persisted on-device; default Overview.
+  const agentView = useAgentView(agent.id);
   // The values view: root state unioned with live `criterion_evaluated` custom
   // events, so criteria rows/counters stream in ahead of the superstep barrier.
   const { byName } = useCriterionEvents(stream);
@@ -161,11 +167,21 @@ export function AgentRunner({
             onStop={() => stream.stop()}
           />
 
+          <RunViewToggle agentId={agent.id} />
+
           <RunErrorCard error={stream.error} />
 
           {stream.isThreadLoading ? (
             /* Reopened thread, state fetch in flight — hold the layout's shape. */
             <HydrationSkeleton agent={agent} />
+          ) : agentView === 'tree' ? (
+            <ExecutionTree
+              agent={agent}
+              values={view}
+              busy={busy}
+              byNode={stream.subgraphsByNode}
+              threadId={liveThreadId}
+            />
           ) : (
             <RunResults
               agent={agent}

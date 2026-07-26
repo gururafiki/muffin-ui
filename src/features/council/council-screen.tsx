@@ -8,10 +8,13 @@ import { AdvancedOptions } from '@/components/advanced-options';
 import { Button, Card, Field, Screen, Skeleton } from '@/components/ui';
 import { useSignInRequiredToRun } from '@/features/account/run-gate';
 import { useCall } from '@/features/agent-calls/use-calls';
+import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { AgentHero } from '@/features/agent-shared/agent-hero';
+import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { useSubgraphRows } from '@/features/agent-shared/run-projections';
 import { RunRecap } from '@/features/agent-shared/run-recap';
+import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
 import { HydrationCard, RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
 import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
@@ -127,6 +130,8 @@ export function CouncilScreen({
   const values = stream.values as Record<string, unknown> | undefined;
   const busy = stream.isLoading;
   const signInRequired = useSignInRequiredToRun();
+  // Bespoke council arena (default) vs the generic Execution-tree view.
+  const agentView = useAgentView(agent.id);
 
   // The reopened/submitted session's actual ticker/query, straight from
   // streamed state — shown read-only via `RunRecap`. The run input lands in
@@ -235,6 +240,8 @@ export function CouncilScreen({
         onStop={() => stream.stop()}
       />
 
+      <RunViewToggle agentId={agent.id} />
+
       <RunErrorCard error={stream.error} />
 
       {stream.isThreadLoading ? (
@@ -249,6 +256,16 @@ export function CouncilScreen({
         <RunProgress agent={agent} values={values} busy={busy} byNode={stream.subgraphsByNode} />
       ) : null}
 
+      {agentView === 'tree' ? (
+        <ExecutionTree
+          agent={agent}
+          values={values ?? {}}
+          busy={busy}
+          byNode={stream.subgraphsByNode}
+          threadId={liveThreadId}
+        />
+      ) : (
+        <>
       {busy || totalVotes > 0 ? (
         <Card className="gap-2">
           <VoteBar tally={tally} seats={members.length} />
@@ -305,6 +322,8 @@ export function CouncilScreen({
           <JudgePanel synthesis={synthesis} judging={judging} />
         </Animated.View>
       ) : null}
+        </>
+      )}
     </View>
     </RunSurface>
     </Screen>

@@ -10,5 +10,6 @@ export { PlaidBackground } from './plaid-background';
 export { ProgressBar } from './progress-bar';
 export { ScallopDivider } from './scallop-divider';
 export { Screen } from './screen';
+export { Segmented } from './segmented';
 export { Skeleton } from './skeleton';
 export { Text } from './text';

@@ -6,12 +6,10 @@ import { Badge, Card, Collapsible, Text } from '@/components/ui';
 import type { Signal } from '@/components/ui/badge';
 import { relativeTime } from '@/features/agent-calls/threads';
 import { parseArray, zCriterionEvaluation, zToolRun, type ToolRun } from '@/lib/agent/schemas';
-import { fmtSize, safeParse, summariseArgs, useToolCache } from '@/lib/agent/tool-cache';
+import { fmtSize, summariseArgs, useToolCache } from '@/lib/agent/tool-cache';
 import { palette } from '@/theme/colors';
-import { TimeSeriesChart } from './chart';
-import { parseTimeSeries } from './chart-data';
 import { JsonBlock } from './json-block';
-import { Markdown } from './markdown';
+import { renderToolOutput } from './tool-registry';
 
 /** One tool-execution record — the schema mirrors `ToolTelemetryMiddleware`. */
 export type { ToolRun } from '@/lib/agent/schemas';
@@ -73,9 +71,6 @@ function ToolRunRow({ run }: { run: ToolRun }) {
   // Prefer the full cached args/payload; fall back to the capped previews.
   const parsedArgs = hit ? hit.args : tryParse(run.args_preview);
   const body = (hit?.text ?? '').trim();
-  const bodyJson = body.startsWith('{') || body.startsWith('[') ? safeParse(body) : undefined;
-  const outputSource = hit ? body : run.status === 'ok' ? run.output_preview : undefined;
-  const series = open ? parseTimeSeries(outputSource) : undefined;
   const argsLine = hit ? summariseArgs(hit.args) : '';
 
   return (
@@ -114,18 +109,12 @@ function ToolRunRow({ run }: { run: ToolRun }) {
           {hit && body ? (
             <View className="gap-1">
               <Text variant="label">Output</Text>
-              {series ? (
-                <TimeSeriesChart data={series} />
-              ) : bodyJson !== undefined ? (
-                <JsonBlock value={bodyJson} />
-              ) : (
-                <Markdown value={body.length > 6000 ? body.slice(0, 6000) + '\n… (truncated)' : body} />
-              )}
+              {renderToolOutput(run.tool ?? undefined, body)}
             </View>
           ) : !hit && run.output_preview ? (
             <View className="gap-1">
               <Text variant="label">Output</Text>
-              {series ? <TimeSeriesChart data={series} /> : <Markdown value={run.output_preview} />}
+              {renderToolOutput(run.tool ?? undefined, run.output_preview)}
             </View>
           ) : null}
 

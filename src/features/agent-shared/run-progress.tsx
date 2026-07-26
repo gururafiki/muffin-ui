@@ -17,10 +17,10 @@ import { TodoList, isTodoList, type Todo } from '@/lib/agent/renderers';
 import { describeStep } from '@/lib/agent/steps';
 import { palette } from '@/theme/colors';
 
-type StageStatus = 'done' | 'active' | 'pending';
-type ByNode = ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
+export type StageStatus = 'done' | 'active' | 'pending';
+export type ByNode = ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
 
-interface StageRow {
+export interface StageRow {
   stage: StageDef;
   status: StageStatus;
   childrenRows: { key: string; label: string; done: boolean }[];
@@ -29,7 +29,7 @@ interface StageRow {
 }
 
 /** Discovery snapshots belonging to a stage: exact `node`, else `active` regex. */
-function stageSnaps(stage: StageDef, byNode: ByNode | undefined): readonly SubgraphDiscoverySnapshot[] {
+export function stageSnaps(stage: StageDef, byNode: ByNode | undefined): readonly SubgraphDiscoverySnapshot[] {
   if (!byNode) return [];
   if (stage.node) return byNode.get(stage.node) ?? [];
   if (!stage.active) return [];
@@ -43,7 +43,7 @@ function stageSnaps(stage: StageDef, byNode: ByNode | undefined): readonly Subgr
  * stack is subgraph discovery (`byNode`: live per-node statuses); `done(values)`
  * stays authoritative for plain-function nodes that are never discovered.
  */
-function resolveStages(
+export function resolveStages(
   stages: StageDef[],
   values: Record<string, unknown>,
   busy: boolean,
