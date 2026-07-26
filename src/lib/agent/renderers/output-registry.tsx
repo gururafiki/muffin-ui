@@ -46,8 +46,14 @@ export function renderNodeOutput(
     }
   }
 
-  // Criterion shape — a criteria-analysis worker's evaluation.
-  const c = parseOr(zCriterionEvaluation, value, 'exec.criterion');
+  // Criterion shape — a criteria-analysis worker's evaluation. Some workers
+  // store it wrapped (`{ evaluation: {...} }`, the raw model output); unwrap so
+  // the criterion card renders instead of an empty "—".
+  const unwrapped =
+    typeof value === 'object' && value && 'evaluation' in value
+      ? (value as { evaluation: unknown }).evaluation
+      : value;
+  const c = parseOr(zCriterionEvaluation, unwrapped, 'exec.criterion');
   if (c && (c.criterion_name || /criter|evaluate/i.test(node.name ?? ''))) {
     return (
       <View className="gap-3">

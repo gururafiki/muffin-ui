@@ -12,6 +12,7 @@
 import type { AgentDef, StageDef } from '@/lib/agent/registry';
 import { stageOutput } from '@/lib/agent/registry';
 import { collectToolRuns, isTodoList } from '@/lib/agent/renderers';
+import { parseOr, zCriterionEvaluation } from '@/lib/agent/schemas';
 import { buildForest, collectSubagentTree, type TreeRow } from '@/lib/agent/subagent-tree';
 import { titleCase } from '@/lib/format';
 import { resolveStages, type ByNode } from '../run-progress';
@@ -56,6 +57,38 @@ function childrenForStage(stage: StageDef, rootsByName: ReadonlyMap<string, Tree
 }
 
 /**
+ * Children of the criteria "Evaluate each criterion" fan-out stage, built from
+ * `values.criterion_evaluations` rather than the raw forest roots. Each
+ * criterion becomes ONE node labeled by its `criterion_name` (the raw forest
+ * would give 11 indistinguishable "Criterion Evaluation" rows) with the
+ * evaluation as eager `output` (the criterion card renders without a Store
+ * fetch), the criterion's own tool runs, and — flattening the redundant
+ * synthetic `criterion_evaluation` wrapper — the real worker node as its lazy
+ * transcript source (`detailNodeId`) and that worker's own children (its
+ * data-collection subagents) as this node's subtree.
+ */
+function criterionChildren(values: Record<string, unknown>): ExecNode[] | undefined {
+  const raw = values.criterion_evaluations;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  return raw.map((entry, i): ExecNode => {
+    const c = parseOr(zCriterionEvaluation, entry, 'exec.criterion');
+    const forest = buildForest(collectSubagentTree({ criterion_evaluations: [entry] }));
+    const worker = forest.flatMap((r) => (r.synthetic && r.children.length ? r.children : [r]))[0];
+    return {
+      id: `criterion:${i}`,
+      label: c?.criterion_name ?? `Criterion ${i + 1}`,
+      kind: 'agent',
+      status: 'done',
+      output: c ?? entry,
+      detailNodeId: worker && !worker.synthetic ? worker.id : undefined,
+      toolRuns: c?.tool_runs,
+      summary: c?.signal ? String(c.signal) : undefined,
+      children: (worker?.children ?? []).map(treeRowToExecNode),
+    };
+  });
+}
+
+/**
  * Assemble the Level-0 execution-tree plan for one run:
  * 1. Graph agents (`AgentDef.stages`) — one `ExecNode` per registry stage,
  *    joined to its real topology children.
@@ -86,6 +119,12 @@ export function buildExecTree(
       const toolRuns = stage.node
         ? toolRunsAll.filter((r) => r.agent === stage.node || r.agent === `${stage.node}_data_collection`)
         : [];
+      // The criteria fan-out stage (`node: 'criterion_evaluation'`) builds named
+      // per-criterion children from `criterion_evaluations`; every other stage
+      // maps its matched forest roots as-is.
+      const children =
+        (stage.node === 'criterion_evaluation' ? criterionChildren(values) : undefined) ??
+        childrenForStage(stage, rootsByName).map(treeRowToExecNode);
       return {
         id: `stage:${stage.key}`,
         label: stage.label,
@@ -94,7 +133,7 @@ export function buildExecTree(
         status: row.status,
         output: stageOutput(stage, values),
         toolRuns: toolRuns.length > 0 ? toolRuns : undefined,
-        children: childrenForStage(stage, rootsByName).map(treeRowToExecNode),
+        children,
       };
     });
   }
