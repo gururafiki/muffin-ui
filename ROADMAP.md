@@ -461,6 +461,47 @@ directive as the earlier discovery fix):
   `criterion_evaluation` → `evaluate`) — the reconstruction itself has no depth cap and will
   render deeper as agents nest more.
 
+## ✅ Milestone 23 — Generic "Execution tree" view (per-agent toggle) (2026-07)
+A single generic drill-down view for **every** agent, offered beside today's bespoke Overview via a
+persisted per-agent toggle (default Overview). The run's plan is a vertical rail at the root; any node
+expands, at the same level of detail, into its real captured sub-agent topology — to any depth.
+Built almost entirely by re-composing the M22 primitives:
+- **Plan model** (`features/agent-shared/execution-tree/plan-steps.ts` + `types.ts`) — `buildExecTree`
+  assembles a shared `ExecNode[]` ("plan-first hybrid"): graph agents use the registry `stages`
+  (`resolveStages`), deep agents use the `todos` plan, both joined to the `buildForest` topology by
+  matching a stage's `node`/`active` to a forest root's leading id segment; agents with neither fall
+  back to the raw forest. The criteria **fan-out** stage is special-cased to build one **named** node
+  per `criterion_evaluations[i]` (the raw forest would render 11 indistinguishable "Criterion
+  Evaluation" rows) with the evaluation as eager `output` (the criterion card renders with no Store
+  fetch) and the worker node as its lazy transcript source.
+- **Pluggable renderers** (`lib/agent/renderers/output-registry.tsx` + `tool-registry.tsx`) — two
+  string-keyed maps added beside the existing `RESULT_RENDERERS` axis: `renderNodeOutput` (output
+  shape → component: criterion card / persona verdict / debate / default `StructuredOutput`; unwraps a
+  `{ evaluation }` wrapper) and `renderToolOutput` (**new tool-name axis**: price/OHLCV/indicator →
+  `TimeSeriesChart`, default = the existing shape heuristic). `renderToolOutput` is wired into the
+  existing `ToolRunRow`, so every tool panel app-wide gains per-tool pluggability and the duplicated
+  chart/json/markdown heuristic collapses to one place.
+- **Recursive UI** (`features/agent-shared/execution-tree/execution-tree.tsx`) — `ExecutionTree` +
+  the mutually-recursive `TreeNodeRow`/`NodeFacets` (one file, hoisted `function` decls, like
+  `conversation.tsx`). Each node's expanded body shows the same four facets — Result
+  (`renderNodeOutput`), Steps (`Conversation` over the Store transcript), Sub-agents (child
+  `TreeNodeRow`s — the recursion), Tool-calls (`ToolRunsPanel`) — lazily fetching heavy detail via
+  `useSubagentDetail` only on expand. Empty facets are omitted.
+- **Toggle** (`components/ui/segmented.tsx` promoted from the Globe screen + `agent-view-store.ts` +
+  `run-view-toggle.tsx`) — a persisted per-agent `Overview | Execution tree` control, mounted
+  additively on all four surfaces (runner, council, chat, calls history); the tree branch replaces the
+  Overview body, never removes it. Old runs (no `subagent_tree`) render the empty-state and keep
+  working.
+- Verified: `tsc` clean, `expo export -p web` clean (require-cycle exercised once real screens import
+  `ExecutionTree`), `scripts/smoke-exectree.mjs` structural gate against the real deployed criteria
+  thread (toggle + 6 ordered stages + fast `thread.values` hydration + zero Reanimated errors), plus
+  an interactive Playwright-MCP drill-down: Evaluate → 11 named criterion rows (with signals) → a
+  criterion card (POSITIVE, conviction, reasoning) → toggle persists and flips back to an unchanged
+  Overview.
+- **Follow-ups:** the criterion node still nests a redundant single "Criterion Evaluation" worker
+  child (harmless; its transcript could fold into the parent); a full connecting rail line + elapsed
+  timers are cosmetic polish; trees stay as shallow as agents actually nest (same M22 note).
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

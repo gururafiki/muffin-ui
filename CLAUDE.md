@@ -244,6 +244,38 @@ The whole app is organised around **"one graph → one screen"**:
   the agents actually nested — today's evaluators single-shot, so a validated real thread renders
   a shallow 2-level tree (`criterion_evaluation` -> `evaluate`); nothing in the reconstruction caps
   the depth.
+  **Generic "Execution tree" view (M23):** an alternative, agent-agnostic drill-down offered beside
+  each surface's bespoke Overview via a persisted per-agent toggle (default Overview). It re-composes
+  the M22 primitives, no new capture channel. `features/agent-shared/execution-tree/`:
+  `plan-steps.ts`'s `buildExecTree(agent, values, busy, byNode)` assembles a shared
+  `ExecNode[]` ("plan-first hybrid") — graph agents use the registry `stages` (`resolveStages`, now
+  exported from `run-progress.tsx` along with `stageSnaps`/`ByNode`/`StageRow`), deep agents use the
+  `todos` plan, both joined to the `buildForest` topology by matching a stage's `node`/`active` to a
+  forest root's leading id segment; neither → the raw forest. The criteria **fan-out** stage
+  (`node === 'criterion_evaluation'`) is special-cased in `criterionChildren()` to build one **named**
+  node per `criterion_evaluations[i]` (the raw forest gives 11 indistinguishable "Criterion
+  Evaluation" rows) with the evaluation as eager `output` (the criterion card renders with no Store
+  fetch), the criterion's `tool_runs`, and — flattening the redundant synthetic `criterion_evaluation`
+  wrapper — the real worker node as the lazy transcript `detailNodeId`. `execution-tree.tsx` holds the
+  mutually-recursive `ExecutionTree`/`TreeNodeRow`/`NodeFacets` (one file, hoisted `function` decls,
+  same cycle-avoidance as `conversation.tsx`); each node's expanded `NodeFacets` shows the same four
+  facets at any depth — Result (`renderNodeOutput`), Steps (`Conversation` over the `useSubagentDetail`
+  transcript), Sub-agents (child `TreeNodeRow`s = the recursion), Tool-calls (`ToolRunsPanel`) —
+  omitting empties, lazily fetching heavy detail only on expand. **Two new UI-side renderer
+  registries** (JSX stays out of the registry) live in the `renderers/` barrel:
+  `renderNodeOutput(node, value, threadId)` (output-shape → component: criterion card / persona
+  verdict / debate / default `StructuredOutput`; unwraps a `{ evaluation }` wrapper so a wrapped
+  worker output still renders a card, not "—") and `renderToolOutput(toolName, payload)` — the **new
+  tool-name axis** (price/OHLCV/indicator → `TimeSeriesChart`, default = the pre-existing shape
+  heuristic), which is also wired back into `ToolRunRow` so every tool panel app-wide gains per-tool
+  pluggability and the duplicated chart/json/markdown branch collapses to one place. The toggle is
+  `components/ui/Segmented` (promoted from the Globe screen) bound to `agent-view-store.ts`
+  (`useAgentView(agentId)` / `setAgentView`, persisted `muffin.agentview.v1`) via `run-view-toggle.tsx`;
+  mounted **additively** on the runner, council, chat, and calls-history surfaces (calls resolves the
+  `AgentDef` from the server-owned `graph_id` via `getAgent(threadGraphId(thread))`) — `view === 'tree'`
+  branches `<ExecutionTree>` in place of the Overview body, never removing it, and old runs render the
+  tree's empty-state. Verified via `scripts/smoke-exectree.mjs` (structural gate) + a Playwright-MCP
+  drill-down against the real deployed criteria thread.
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —
