@@ -1,5 +1,6 @@
 /** The registry's type surface — see `index.ts` for the "one graph → one screen" story. */
 import type { IconName } from '@/components/icons';
+import type { OutputKind } from '@/lib/agent/exec-tree';
 
 export type CustomScreen = 'council';
 
@@ -88,6 +89,14 @@ export interface StageDef {
    * `StructuredOutput` of `output`.
    */
   detail?: StageDetail;
+  /**
+   * How this stage's `output` should be RENDERED, in the execution tree as well as
+   * the Overview. Declared explicitly because output shapes are not reliably
+   * self-identifying: the loose zod schemas accept almost any dict, so inference
+   * mis-rendered "Define the criteria" as an empty criterion card. Prefer setting
+   * this over relying on shape detection.
+   */
+  outputKind?: OutputKind;
   /** Dynamic sub-rows derived from state (criteria, persona votes, …). */
   children?: (values: Record<string, unknown>) => StageChild[];
   /**

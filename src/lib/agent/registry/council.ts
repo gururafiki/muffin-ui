@@ -39,6 +39,6 @@ export const council: AgentDef = {
           done: true,
         })),
     },
-    { key: 'judge', label: 'The judge synthesises', icon: 'sparkle', done: (v) => has(v, 'council_synthesis'), active: /judge|synth/i },
+    { key: 'judge', label: 'The judge synthesises', icon: 'sparkle', done: (v) => has(v, 'council_synthesis'), active: /judge|synth/i, output: 'council_synthesis' },
   ],
 };
