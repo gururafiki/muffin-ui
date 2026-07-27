@@ -58,6 +58,10 @@ export type ExecNode = {
   toolRuns?: ToolRun[];
   /** One-line collapsed summary, e.g. "3 tools · 1 failed". */
   summary?: string;
+  /** LangGraph `checkpoint_ns` to read this node's own transcript and children from
+   * (`run-history.ts`). Present only for compiled agents/subgraphs added via
+   * `add_node` — a plain function node has none and is genuinely a leaf. */
+  namespace?: string;
   children: ExecNode[];
 };
 
