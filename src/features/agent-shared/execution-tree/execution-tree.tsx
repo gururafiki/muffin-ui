@@ -26,8 +26,8 @@ import { Conversation } from '../conversation';
 import { coerceMessages, type ConversationMessage } from '../conversation-turns';
 import { type ByNode } from '../run-progress';
 import { useSubagentDetail } from '../use-subagent-detail';
+import type { ExecNode, ExecStatus } from '@/lib/agent/exec-tree';
 import { buildExecTree } from './plan-steps';
-import type { ExecNode, ExecStatus } from './types';
 
 /** Drop tool runs that appear in both the eager per-node list and the lazily
  * fetched Store detail (same call homed to two places). Keyed on `args_hash`
@@ -98,7 +98,7 @@ function NodeFacets({ node, threadId }: { node: ExecNode; threadId?: string }) {
       {output != null ? (
         <View className="gap-1">
           <Text variant="label">Result</Text>
-          {renderNodeOutput({ name: node.label }, output, threadId)}
+          {renderNodeOutput({ name: node.label, outputKind: node.outputKind }, output, threadId)}
         </View>
       ) : null}
       {messages.length > 0 ? <Conversation messages={messages} viewMode="verbose" /> : null}

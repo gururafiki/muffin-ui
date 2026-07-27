@@ -1,0 +1,341 @@
+{
+  "thread_id": "019f98e1-b104-7742-a893-4b1a9a388366",
+  "metadata": {
+    "graph_id": "criteria_analysis"
+  },
+  "values": {
+    "tool_runs": [],
+    "criterion_evaluations": [
+      {
+        "criterion_name": "Revenue Growth (3Y CAGR)",
+        "signal": "positive",
+        "score": 0.6,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:40ef13b9-09a7-0acc-dd0e-f8dca8790227|evaluate:b99658f6-7eb4-9527-03cf-16a37844d852": {
+            "has_detail": true,
+            "id": "criterion_evaluation:40ef13b9-09a7-0acc-dd0e-f8dca8790227|evaluate:b99658f6-7eb4-9527-03cf-16a37844d852",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='Revenue Growth (3Y CAGR)', score=0.6, confidence=0.8, signal='positive', sub_criteria=[SubCriterion(name='Historical 3-Year Revenue CAGR', weight=0.7, score=0.5, evidence=\"AAPL's historical revenue CAGR for FY2021-FY2024 is 9.7",
+            "parent_id": "criterion_evaluation:40ef13b9-09a7-0acc-dd0e-f8dca8790227",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "Operating Margin",
+        "signal": "positive",
+        "score": 0.85,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:52b89955-49a0-9f23-6008-410a33609c75|evaluate:2b98b6e4-09d8-cd50-6986-692e51ebde42": {
+            "has_detail": true,
+            "id": "criterion_evaluation:52b89955-49a0-9f23-6008-410a33609c75|evaluate:2b98b6e4-09d8-cd50-6986-692e51ebde42",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='Operating Margin', score=0.85, confidence=0.9, signal='positive', sub_criteria=[SubCriterion(name='TTM Operating Margin vs Target Range', weight=0.5, score=0.9, evidence='TTM operating margin is 30.3% (FY2024), within the targe",
+            "parent_id": "criterion_evaluation:52b89955-49a0-9f23-6008-410a33609c75",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "PEG Ratio",
+        "signal": "negative",
+        "score": 0.3,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:c94e3368-13df-fb5d-1043-27aa1ae998c8|evaluate:4ba7d458-1108-693e-07b0-3848fa9f00bd": {
+            "has_detail": true,
+            "id": "criterion_evaluation:c94e3368-13df-fb5d-1043-27aa1ae998c8|evaluate:4ba7d458-1108-693e-07b0-3848fa9f00bd",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='PEG Ratio', score=0.3, confidence=0.8, signal='negative', sub_criteria=[SubCriterion(name='Forward P/E', weight=0.5, score=0.2, evidence='Forward P/E of 28.2 for FY2025 (equity-estimates)'), SubCriterion(name='Analyst 5-year EP",
+            "parent_id": "criterion_evaluation:c94e3368-13df-fb5d-1043-27aa1ae998c8",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "ROIC",
+        "signal": "positive",
+        "score": 0.85,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:cdff1f75-5c24-56cd-c832-af0916b14d7c|evaluate:65d63335-5e3d-ed72-d3e4-5144ca2bac17": {
+            "has_detail": true,
+            "id": "criterion_evaluation:cdff1f75-5c24-56cd-c832-af0916b14d7c|evaluate:65d63335-5e3d-ed72-d3e4-5144ca2bac17",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='ROIC', score=0.85, confidence=0.9, signal='positive', sub_criteria=[SubCriterion(name='ROIC Level', weight=0.7, score=0.9, evidence='ROIC of 28.3% for FY2024 exceeds the target range of >18% and is significantly above WACC of 8",
+            "parent_id": "criterion_evaluation:cdff1f75-5c24-56cd-c832-af0916b14d7c",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "FCF Yield",
+        "signal": "positive",
+        "score": 0.7,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:987ac6ae-e67a-623e-9452-77ac34db864d|evaluate:b14621d6-04a5-2e88-68ba-f04b1a8a248a": {
+            "has_detail": true,
+            "id": "criterion_evaluation:987ac6ae-e67a-623e-9452-77ac34db864d|evaluate:b14621d6-04a5-2e88-68ba-f04b1a8a248a",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='FCF Yield', score=0.7, confidence=0.8, signal='positive', sub_criteria=[SubCriterion(name='Latest FCF Yield', weight=0.6, score=0.8, evidence='Latest FCF yield for AAPL is 4.2% (FY2023), within the target range of 3.5-5.5%.'), ",
+            "parent_id": "criterion_evaluation:987ac6ae-e67a-623e-9452-77ac34db864d",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "Debt/EBITDA",
+        "signal": "strong_positive",
+        "score": 0.9,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:d1077d11-66e8-4efa-b543-295c0651e5ff|evaluate:a38666c7-72d7-f7d8-2a4b-a2b073113d46": {
+            "has_detail": true,
+            "id": "criterion_evaluation:d1077d11-66e8-4efa-b543-295c0651e5ff|evaluate:a38666c7-72d7-f7d8-2a4b-a2b073113d46",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='Debt/EBITDA', score=0.9, confidence=0.95, signal='strong_positive', sub_criteria=[SubCriterion(name='Debt/EBITDA ratio vs target <1.5', weight=1.0, score=0.9, evidence=\"AAPL's Debt/EBITDA ratio for FY2024 is 0.42 (Total Debt $9",
+            "parent_id": "criterion_evaluation:d1077d11-66e8-4efa-b543-295c0651e5ff",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "Revenue Geography Mix",
+        "signal": "positive",
+        "score": 0.85,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:ba892aea-4863-629d-e1da-a2f8eb29eb17|evaluate:973bf968-f189-3cc4-c282-703840335e15": {
+            "has_detail": true,
+            "id": "criterion_evaluation:ba892aea-4863-629d-e1da-a2f8eb29eb17|evaluate:973bf968-f189-3cc4-c282-703840335e15",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='Revenue Geography Mix', score=0.85, confidence=0.85, signal='positive', sub_criteria=[SubCriterion(name='Developed Market Revenue Percentage', weight=1.0, score=0.85, evidence=\"AAPL's geographic revenue breakdown for FY2024 sho",
+            "parent_id": "criterion_evaluation:ba892aea-4863-629d-e1da-a2f8eb29eb17",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "R&D Intensity",
+        "signal": "positive",
+        "score": 0.7,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:8df569a0-f388-80d0-b40e-b4e1369d670a|evaluate:acfda21b-5590-6fdf-6751-a157aa4cef46": {
+            "has_detail": true,
+            "id": "criterion_evaluation:8df569a0-f388-80d0-b40e-b4e1369d670a|evaluate:acfda21b-5590-6fdf-6751-a157aa4cef46",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='R&D Intensity', score=0.7, confidence=0.9, signal='positive', sub_criteria=[SubCriterion(name='Level of R&D Intensity', weight=0.6, score=0.8, evidence='Average R&D intensity over FY2019-FY2023 is 7.3%, within the target range ",
+            "parent_id": "criterion_evaluation:8df569a0-f388-80d0-b40e-b4e1369d670a",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "Services Gross Margin Trend",
+        "signal": "positive",
+        "score": 0.7,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:bd1b124a-1287-4d5f-d1ff-81ea48914394|evaluate:6a20703a-5271-a97a-ea3c-421c0bbc6e78": {
+            "has_detail": true,
+            "id": "criterion_evaluation:bd1b124a-1287-4d5f-d1ff-81ea48914394|evaluate:6a20703a-5271-a97a-ea3c-421c0bbc6e78",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='Services Gross Margin Trend', score=0.7, confidence=0.8, signal='positive', sub_criteria=[SubCriterion(name='Current Quarter Services Gross Margin', weight=0.4, score=0.8, evidence='Q1 2024 Services gross margin was 71.8% (with",
+            "parent_id": "criterion_evaluation:bd1b124a-1287-4d5f-d1ff-81ea48914394",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "iPhone Installed Base Growth",
+        "signal": "positive",
+        "score": 0.7,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:bd8a27fe-c0ae-1461-1a8d-b4ab47365c5b|evaluate:be76073d-f49c-2197-e98e-93ff5f751a2e": {
+            "has_detail": true,
+            "id": "criterion_evaluation:bd8a27fe-c0ae-1461-1a8d-b4ab47365c5b|evaluate:be76073d-f49c-2197-e98e-93ff5f751a2e",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='iPhone Installed Base Growth', score=0.7, confidence=0.7, signal='positive', sub_criteria=[SubCriterion(name='Latest iPhone installed base YoY growth', weight=0.7, score=0.7, evidence='Latest reported iPhone active installed ba",
+            "parent_id": "criterion_evaluation:bd8a27fe-c0ae-1461-1a8d-b4ab47365c5b",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "criterion_name": "Regulatory Risk Overhang Score",
+        "signal": "neutral",
+        "score": 0.5,
+        "confidence": 0.3,
+        "subagent_tree": {
+          "criterion_evaluation:e86697de-6b60-5066-e237-282364da0035|evaluate:a6d21f62-8274-adaf-1f2e-29ebaa2052cb": {
+            "has_detail": true,
+            "id": "criterion_evaluation:e86697de-6b60-5066-e237-282364da0035|evaluate:a6d21f62-8274-adaf-1f2e-29ebaa2052cb",
+            "kind": "subgraph",
+            "name": "criterion_evaluation",
+            "output_preview": "evaluation=CriterionEvaluationOutput(criterion_name='Regulatory Risk Overhang Score', score=0.5, confidence=0.7, signal='neutral', sub_criteria=[SubCriterion(name='Active Major Investigations Count', weight=0.6, score=0.5, evidence='News and filings show 2 active major investigat",
+            "parent_id": "criterion_evaluation:e86697de-6b60-5066-e237-282364da0035",
+            "status": "ok",
+            "tool_summary": {
+              "cached": 0,
+              "count": 0,
+              "failed": 0,
+              "ok": 0,
+              "tools": []
+            }
+          }
+        }
+      }
+    ],
+    "subagent_tree": {
+      "criteria_definition:9599521c-2cf9-6479-af1b-6aede2402702": {
+        "has_detail": true,
+        "id": "criteria_definition:9599521c-2cf9-6479-af1b-6aede2402702",
+        "kind": "subgraph",
+        "name": "criteria_definition",
+        "output_preview": "criteria_definition=CriteriaDefinitionOutput(ticker='AAPL', sector='technology', market_type='developed', stock_type='growth', classification_rationale='Provided in task context: technology sector, developed market, growth stock.', primary_valuation_method='DCF with growth adjust",
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 0,
+          "failed": 0,
+          "ok": 0,
+          "tools": []
+        }
+      },
+      "synthesis:3ac157cd-2425-4969-38b5-21fd70c58e03": {
+        "has_detail": true,
+        "id": "synthesis:3ac157cd-2425-4969-38b5-21fd70c58e03",
+        "kind": "subgraph",
+        "name": "criteria_analysis_synthesis",
+        "output_preview": "synthesis=CriteriaAnalysisSynthesis(ticker='AAPL', composite_score=0.69, signal='buy', weighted_breakdown=[WeightedBreakdownEntry(name='Operating Margin', weight=0.125, score=0.85, contribution=0.10625, source='skill'), WeightedBreakdownEntry(name='ROIC', weight=0.125, score=0.85",
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 0,
+          "failed": 0,
+          "ok": 0,
+          "tools": []
+        }
+      },
+      "ticker_classification:a31e205e-ebd9-7881-8a75-f2c18232106e": {
+        "has_detail": true,
+        "id": "ticker_classification:a31e205e-ebd9-7881-8a75-f2c18232106e",
+        "kind": "subgraph",
+        "name": "ticker_classification",
+        "output_preview": "classification=TickerClassificationOutput(ticker='AAPL', sector='technology', sub_sector=None, market='developed', stock_type='growth', rationale='AAPL is classified as technology (software-saas not exact but closest) due to dominant revenue from hardware, software, and services.",
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 0,
+          "failed": 0,
+          "ok": 0,
+          "tools": []
+        }
+      },
+      "valuation_methodology:3a103d01-14fd-76ca-79c6-7297bf880108": {
+        "has_detail": true,
+        "id": "valuation_methodology:3a103d01-14fd-76ca-79c6-7297bf880108",
+        "kind": "subgraph",
+        "name": "valuation_methodology",
+        "output_preview": "valuation_methodology=ValuationMethodologyOutput(ticker='AAPL', methodology_summary=\"The canonical valuation approach for AAPL among sell-side analysts is a discounted cash flow (DCF) model, often supplemented by EV/EBITDA and P/E multiples for cross-checking. This fits AAPL's te",
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 0,
+          "failed": 0,
+          "ok": 0,
+          "tools": []
+        }
+      }
+    }
+  }
+}

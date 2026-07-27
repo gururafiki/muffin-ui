@@ -1,0 +1,638 @@
+{
+  "thread_id": "019f9e96-9e51-7268-a44c-fd860e7c51d1",
+  "metadata": {
+    "graph_id": "stock_evaluation"
+  },
+  "values": {
+    "todos": [
+      {
+        "content": "Plan data collection for AMZN DCF evaluation and five-dimensional analysis",
+        "status": "completed"
+      },
+      {
+        "content": "Collect data from relevant subagents in parallel",
+        "status": "in_progress"
+      },
+      {
+        "content": "Validate collected data",
+        "status": "pending"
+      },
+      {
+        "content": "Analyze data: compute DCF and score five dimensions",
+        "status": "pending"
+      },
+      {
+        "content": "Reflect on analysis and produce final output",
+        "status": "pending"
+      }
+    ],
+    "tool_runs": [
+      {
+        "agent": "equity_price",
+        "args_hash": "2e1e24370c7e",
+        "args_preview": "{\"symbol\": \"AMZN\", \"provider\": \"yfinance\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660b1-fbdd-7673-8000-eec41095cb10\",\"results\":[{\"symbol\":\"AMZN\",\"asset_type\":\"EQUITY\",\"name\":\"Amazon.com, Inc.\",\"exchange\":\"NMS\",\"bid\":231.88,\"bid_size\":1,\"ask\":246.49,\"ask_size\":1,\"last_price\":232.11,\"open\":234.37,\"high\":234.95,\"low\":231.35,\"volume\":33836532,\"prev_close\":233.66,\"year_high\":278.56,\"year_low\":196.0,\"ma_50d\":249.2232,\"ma_200d\":234.5882,\"volume_average\":48745987.0,\"volume_av\u2026",
+        "status": "ok",
+        "tool": "equity_price_quote"
+      },
+      {
+        "agent": "equity_price",
+        "args_hash": "fd5adaee73c7",
+        "args_preview": "{\"provider\": \"yfinance\", \"interval\": \"1d\", \"start_date\": \"2020-08-24\", \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": "Output validation error: {'date': '2026-07-24', 'open': 234.3699951171875, 'high': 234.9499969482422, 'low': 231.35000610351562, 'close': None, 'volume': 33836532, 'split_ratio': 0.0} is not valid under any of the given schemas",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_price_historical"
+      },
+      {
+        "agent": "equity_price",
+        "args_hash": "957ec862b273",
+        "args_preview": "{\"interval\": \"1d\", \"provider\": \"fmp\", \"start_date\": \"2020-08-24\", \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "Tool result too large, the result of this tool call call-7d5d293a-e87c-4d45-8060-5d0fa4ac4915 was saved in the filesystem at this path: /large_tool_results/call-7d5d293a-e87c-4d45-8060-5d0fa4ac4915\n\nYou can read the result from the filesystem by using the read_file tool, but make sure to only read part of the result at a time.\n\nYou can do this by specifying an offset and limit in the read_file too\u2026",
+        "status": "ok",
+        "tool": "equity_price_historical"
+      },
+      {
+        "agent": "equity_price",
+        "args_hash": "df872b397eaf",
+        "args_preview": "{\"symbol\": \"AMZN\", \"provider\": \"fmp\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660d4-3f0a-7e6f-8000-f718a268b23d\",\"results\":[{\"symbol\":\"AMZN\",\"name\":\"Amazon.com, Inc.\",\"exchange\":\"NASDAQ\",\"last_price\":232.11,\"last_timestamp\":\"2026-07-24T20:00:01\",\"open\":234.37,\"high\":234.95,\"low\":231.34,\"volume\":33836532,\"prev_close\":233.66,\"change\":-1.55,\"change_percent\":-0.0066336,\"year_high\":278.56,\"year_low\":196.0,\"ma50\":249.2232,\"ma200\":234.5882,\"market_cap\":2496830481000.0}],\u2026",
+        "status": "ok",
+        "tool": "equity_price_quote"
+      },
+      {
+        "agent": "equity_price",
+        "args_hash": "4d7814a33a8e",
+        "args_preview": "{\"code\": \"import json\\nimport sys\\n\\nfile_path = '/large_tool_results/call-7d5d293a-e87c-4d45-8060-5d0fa4ac4915'\\nwith open(file_path, 'r') as f:\\n    data = json.load(f)\\n\\n# The structure: {\\\"id\\\": \\\"...\\\", \\\"results\\\": [ ... ]}\\nresults = data.get('results', [])\\nprint(f\\\"Number of records: {len(\u2026",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "Number of records: 1486Found start date 2026-01-02 with close 226.5Start price (approx 2026-01-01): 226.5Current price: 232.11YTD change: 2.48%First record date 2020-08-24 close 165.375-year change (approx): 40.36%",
+        "status": "ok",
+        "tool": "execute_python"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "c5c600bc48a4",
+        "args_preview": "{\"provider\": \"intrinio\", \"symbol\": \"AMZN\", \"fiscal_year\": 2025, \"fiscal_period\": \"fy\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_forward_sales': HTTP error 400: Bad Request - {'detail': \"Missing credential 'intrinio_api_key'. Check https://intrinio.com to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api_keys.\"\u2026",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_forward_sales"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "cd020b4c08d3",
+        "args_preview": "{\"period\": \"annual\", \"symbol\": \"AMZN\", \"provider\": \"seeking_alpha\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_forward_sales': HTTP error 400: Bad Request - {'detail': 'No estimates data was returned for: AMZN'}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_forward_sales"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "df872b397eaf",
+        "args_preview": "{\"provider\": \"fmp\", \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_forward_sales': HTTP error 422: Unprocessable Entity - {'detail': [{'type': 'literal_error', 'loc': ['query', 'provider'], 'msg': \"Input should be 'intrinio' or 'seeking_alpha'\", 'input': 'fmp', 'ctx': {'expected': \"'intrinio' or 'seeking_alpha'\"}}]}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_forward_sales"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "f56a2fb49184",
+        "args_preview": "{\"provider\": \"seeking_alpha\", \"calendar_year\": 2025, \"period\": \"annual\", \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_forward_sales': HTTP error 400: Bad Request - {'detail': 'No estimates data was returned for: AMZN'}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_forward_sales"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "cd020b4c08d3",
+        "args_preview": "{\"period\": \"annual\", \"provider\": \"seeking_alpha\", \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_forward_eps': HTTP error 400: Bad Request - {'detail': 'No estimates data was returned for: AMZN'}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_forward_eps"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "18c9bdb150e5",
+        "args_preview": "{\"provider\": \"intrinio\", \"fiscal_year\": 2025, \"symbol\": \"AMZN\", \"fiscal_period\": \"annual\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_forward_eps': HTTP error 400: Bad Request - {'detail': \"Missing credential 'intrinio_api_key'. Check https://intrinio.com to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api_keys.\"}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_forward_eps"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "2e1e24370c7e",
+        "args_preview": "{\"symbol\": \"AMZN\", \"provider\": \"yfinance\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660e5-10a1-7838-8000-3782f503d30d\",\"results\":[{\"symbol\":\"AMZN\",\"target_high\":370.0,\"target_low\":207.0,\"target_consensus\":313.1321,\"target_median\":317.5,\"recommendation\":\"strong_buy\",\"recommendation_mean\":1.33333,\"number_of_analysts\":62,\"current_price\":232.11,\"currency\":\"USD\"}],\"provider\":\"yfinance\",\"warnings\":null,\"chart\":null,\"extra\":{\"metadata\":{\"arguments\":{\"provider_choices\":{\"provid\u2026",
+        "status": "ok",
+        "tool": "equity_estimates_consensus"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "d608ad450ab8",
+        "args_preview": "{\"provider\": \"fmp\", \"period\": \"annual\", \"limit\": 5, \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660e8-f9fa-781b-8000-9bbdb0e5066b\",\"results\":[{\"symbol\":\"AMZN\",\"date\":\"2026-12-31\",\"estimated_revenue_low\":810619412561,\"estimated_revenue_high\":835405274287,\"estimated_revenue_avg\":824938137029,\"estimated_sga_expense_low\":74427461971,\"estimated_sga_expense_high\":76703189338,\"estimated_sga_expense_avg\":75742143441,\"estimated_ebitda_low\":131840037815,\"estimated_ebitda_high\":135871237780,\"\u2026",
+        "status": "ok",
+        "tool": "equity_estimates_historical"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "65b01cfd8d77",
+        "args_preview": "{\"symbol\": \"AMZN\", \"period\": \"annual\", \"provider\": \"fmp\", \"limit\": 10}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660eb-7d58-7b9d-8000-2b4c244896f0\",\"results\":[{\"symbol\":\"AMZN\",\"date\":\"2021-12-30\",\"estimated_revenue_low\":456213724449,\"estimated_revenue_high\":479255515718,\"estimated_revenue_avg\":470298361760,\"estimated_sga_expense_low\":77449130751,\"estimated_sga_expense_high\":116173696127,\"estimated_sga_expense_avg\":96811413439,\"estimated_ebitda_low\":141768103250,\"estimated_ebitda_high\":212652154875,\u2026",
+        "status": "ok",
+        "tool": "equity_estimates_historical"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "75cccf77d500",
+        "args_preview": "{\"provider\": \"fmp\", \"period\": \"quarter\", \"limit\": 4, \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_historical': HTTP error 502: Bad Gateway - {'detail': \"Unauthorized FMP request -> 402 -> Premium Query Parameter: 'Special Endpoint : This value set for 'period' is not available under your current subscription please visit our subscription page to upgrade your \u2026",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_historical"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "89755167821e",
+        "args_preview": "{\"symbol\": \"AMZN\", \"provider\": \"intrinio\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_forward_pe': HTTP error 400: Bad Request - {'detail': \"Missing credential 'intrinio_api_key'. Check https://intrinio.com to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api_keys.\"}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_forward_pe"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "4d3935a973c7",
+        "args_preview": "{\"limit\": 50, \"provider\": \"benzinga\", \"start_date\": \"2026-04-01\", \"symbol\": \"AMZN\", \"end_date\": \"2026-06-30\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_estimates_price_target': HTTP error 400: Bad Request - {'detail': \"Missing credential 'benzinga_api_key'. Check https://www.benzinga.com to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api_key\u2026",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_estimates_price_target"
+      },
+      {
+        "agent": "equity_estimates",
+        "args_hash": "ff617c35e2a7",
+        "args_preview": "{\"symbol\": \"AMZN\", \"provider\": \"finviz\", \"limit\": 50, \"start_date\": \"2026-04-01\", \"end_date\": \"2026-06-30\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660fc-cefb-7eff-8000-d056342e8e40\",\"results\":[{\"published_date\":\"2026-07-16T00:00:00\",\"symbol\":\"AMZN\",\"price_target\":null,\"adj_price_target\":293.0,\"status\":\"Resumed\",\"rating_change\":\"Outperform\",\"analyst_company\":\"Wedbush\"},{\"published_date\":\"2026-07-16T00:00:00\",\"symbol\":\"AMZN\",\"price_target\":330.0,\"adj_price_target\":335.0,\"status\":\"Reiterated\",\"rating_change\":\"Overweight\",\"analyst_comp\u2026",
+        "status": "ok",
+        "tool": "equity_estimates_price_target"
+      },
+      {
+        "agent": "equity_ownership",
+        "args_hash": "67b8edc2cc96",
+        "args_preview": "{\"provider\": \"sec\", \"start_date\": \"2025-02-24\", \"limit\": 100, \"symbol\": \"AMZN\", \"end_date\": \"2025-08-24\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "Tool result too large, the result of this tool call call-6bf72b15-629e-454c-b429-c9915ba21dcc was saved in the filesystem at this path: /large_tool_results/call-6bf72b15-629e-454c-b429-c9915ba21dcc\n\nYou can read the result from the filesystem by using the read_file tool, but make sure to only read part of the result at a time.\n\nYou can do this by specifying an offset and limit in the read_file too\u2026",
+        "status": "ok",
+        "tool": "equity_ownership_insider_trading"
+      },
+      {
+        "agent": "equity_ownership",
+        "args_hash": "df872b397eaf",
+        "args_preview": "{\"symbol\": \"AMZN\", \"provider\": \"fmp\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_ownership_institutional': HTTP error 502: Bad Gateway - {'detail': 'Unauthorized FMP request -> 402 -> Restricted Endpoint: This endpoint is not available under your current subscription please visit our subscription page to upgrade your plan at https://financialmodelingpr\u2026",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_ownership_institutional"
+      },
+      {
+        "agent": "equity_ownership",
+        "args_hash": "df872b397eaf",
+        "args_preview": "{\"symbol\": \"AMZN\", \"provider\": \"fmp\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_ownership_major_holders': HTTP error 502: Bad Gateway - {'detail': 'Unauthorized FMP request -> 402 -> Restricted Endpoint: This endpoint is not available under your current subscription please visit our subscription page to upgrade your plan at https://financialmodelingpr\u2026",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_ownership_major_holders"
+      },
+      {
+        "agent": "equity_ownership",
+        "args_hash": "47c82e85268d",
+        "args_preview": "{\"provider\": \"sec\", \"symbol\": \"AMZN\", \"limit\": 5}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660d5-9538-7c49-8000-cb49fd8e159c\",\"results\":[{\"period_ending\":\"2026-03-31\",\"issuer\":\"RIVIAN AUTOMOTIVE INC\",\"cusip\":\"76954A103\",\"asset_class\":\"COM CL A\",\"security_type\":\"SH\",\"investment_discretion\":\"SOLE\",\"voting_authority_sole\":158363834,\"principal_amount\":158363834,\"value\":2383375702,\"weight\":0.905705},{\"period_ending\":\"2026-03-31\",\"issuer\":\"BETA TECHNOLOGIES INC\",\"cusip\":\"086921103\",\u2026",
+        "status": "ok",
+        "tool": "equity_ownership_form_13f"
+      },
+      {
+        "agent": "news",
+        "args_hash": "6551942c184c",
+        "args_preview": "{\"end_date\": \"2025-08-24\", \"limit\": 20, \"display\": \"headline\", \"provider\": \"benzinga\", \"start_date\": \"2025-07-24\", \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'news_company': HTTP error 400: Bad Request - {'detail': \"Missing credential 'benzinga_api_key'. Check https://www.benzinga.com to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api_keys.\"}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "news_company"
+      },
+      {
+        "agent": "news",
+        "args_hash": "1132c2c6611e",
+        "args_preview": "{\"provider\": \"intrinio\", \"display\": \"headline\", \"start_date\": \"2025-07-24\", \"symbol\": \"AMZN\", \"limit\": 20, \"end_date\": \"2025-08-24\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'news_company': HTTP error 400: Bad Request - {'detail': \"Missing credential 'intrinio_api_key'. Check https://intrinio.com to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api_keys.\"}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "news_company"
+      },
+      {
+        "agent": "news",
+        "args_hash": "6df5f7cb1e8a",
+        "args_preview": "{\"provider\": \"fmp\", \"start_date\": \"2025-07-24\", \"symbol\": \"AMZN\", \"limit\": 20, \"display\": \"headline\", \"end_date\": \"2025-08-24\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'news_company': HTTP error 502: Bad Gateway - {'detail': 'Unauthorized FMP request -> 402 -> Restricted Endpoint: This endpoint is not available under your current subscription please visit our subscription page to upgrade your plan at https://financialmodelingprep.com/'}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "news_company"
+      },
+      {
+        "agent": "news",
+        "args_hash": "b36c47a7849d",
+        "args_preview": "{\"provider\": \"yfinance\", \"limit\": 20, \"display\": \"headline\", \"end_date\": \"2025-08-24\", \"start_date\": \"2025-07-24\", \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660c0-2d3c-7509-8000-5b055b0b7c69\",\"results\":[{\"date\":\"2026-07-26T10:00:00Z\",\"title\":\"4 Big Tech earnings reports, a Fed meeting, and $100 oil: It's the busiest week of the quarter\",\"url\":\"https://finance.yahoo.com/markets/article/4-big-tech-earnings-reports-a-fed-meeting-and-100-oil-its-the-busiest-week-of-the-quarter-100000261.html\",\"source\":\"Yahoo Finance\",\"symbol\":\"AMZN\",\"summary\":\"I\u2026",
+        "status": "ok",
+        "tool": "news_company"
+      },
+      {
+        "agent": "news",
+        "args_hash": "2ad024b847b3",
+        "args_preview": "{\"provider\": \"yfinance\", \"display\": \"headline\", \"term\": \"AMZN\", \"limit\": 20, \"end_date\": \"2025-08-24\", \"start_date\": \"2025-07-24\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'news_world': HTTP error 422: Unprocessable Entity - {'detail': [{'type': 'literal_error', 'loc': ['query', 'provider'], 'msg': \"Input should be 'benzinga', 'biztoc', 'fmp', 'intrinio' or 'tiingo'\", 'input': 'yfinance', 'ctx': {'expected': \"'benzinga', 'biztoc', 'fmp', 'intrinio' \u2026",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "news_world"
+      },
+      {
+        "agent": "options",
+        "args_hash": "2e1e24370c7e",
+        "args_preview": "{\"provider\": \"yfinance\", \"symbol\": \"AMZN\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "Tool result too large, the result of this tool call call-da6bd760-da75-4da7-a48c-9a611a0e7eaf was saved in the filesystem at this path: /large_tool_results/call-da6bd760-da75-4da7-a48c-9a611a0e7eaf\n\nYou can read the result from the filesystem by using the read_file tool, but make sure to only read part of the result at a time.\n\nYou can do this by specifying an offset and limit in the read_file too\u2026",
+        "status": "ok",
+        "tool": "derivatives_options_chains"
+      },
+      {
+        "agent": "economy_macro",
+        "args_hash": "ae5eeb1f2fbc",
+        "args_preview": "{\"provider\": \"econdb\", \"query\": \"GDP growth\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "Tool result too large, the result of this tool call call-2131109a-b3f6-43e9-8c80-1891ec645e46 was saved in the filesystem at this path: /large_tool_results/call-2131109a-b3f6-43e9-8c80-1891ec645e46\n\nYou can read the result from the filesystem by using the read_file tool, but make sure to only read part of the result at a time.\n\nYou can do this by specifying an offset and limit in the read_file too\u2026",
+        "status": "ok",
+        "tool": "economy_available_indicators"
+      },
+      {
+        "agent": "fixed_income",
+        "args_hash": "57470789ace5",
+        "args_preview": "{\"category\": \"us\", \"index_type\": \"yield\", \"index\": \"bbb\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'fixedincome_bond_indices': HTTP error 400: Bad Request - {'detail': \"Missing credential 'fred_api_key'. Check https://fred.stlouisfed.org to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api_keys.\"}",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "fixedincome_bond_indices"
+      },
+      {
+        "agent": "fixed_income",
+        "args_hash": "57fbf8070c0f",
+        "args_preview": "{\"provider\": \"federal_reserve\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660b3-92a7-7684-8000-5d6195d285c8\",\"results\":[{\"date\":\"2025-07-28\",\"month_1\":0.044000000000000004,\"month_3\":0.044000000000000004,\"month_6\":0.043,\"year_1\":0.0409,\"year_2\":0.0391,\"year_3\":0.0387,\"year_5\":0.039599999999999996,\"year_7\":0.0418,\"year_10\":0.044199999999999996,\"year_20\":0.0495,\"year_30\":0.0496},{\"date\":\"2025-07-29\",\"month_1\":0.044000000000000004,\"month_3\":0.044000000000000004,\"m\u2026",
+        "status": "ok",
+        "tool": "fixedincome_government_treasury_rates"
+      },
+      {
+        "agent": "fixed_income",
+        "args_hash": "ba685dd5af50",
+        "args_preview": "{\"provider\": \"fred\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'fixedincome_government_tips_yields': HTTP error 400: Bad Request - {'detail': \"Missing credential 'fred_api_key'. Check https://fred.stlouisfed.org to get it. Refer to the documentation for setting provider credentials at https://docs.openbb.co/platform/settings/user_settings/api\u2026",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "fixedincome_government_tips_yields"
+      },
+      {
+        "agent": "discovery_screening",
+        "args_hash": "f88086bd17e9",
+        "args_preview": "{\"provider\": \"finviz\", \"metric\": \"valuation\", \"group\": \"sector\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660ab-daff-7ed3-8000-08cf8781f5c9\",\"results\":[{\"name\":\"Energy\",\"market_cap\":4704210000000,\"performance_1d\":-0.0004,\"pe\":19.22,\"forward_pe\":12.99,\"peg\":1.34,\"eps_growth_past_5y\":0.3141,\"eps_growth_next_5y\":0.1437,\"volume\":612840000,\"price_to_sales\":1.42,\"price_to_book\":2.29,\"price_to_cash\":15.74,\"price_to_free_cash_flow\":18.39,\"sales_growth_past_5_years\":0.1476},{\"name\":\"Basic Materials\",\u2026",
+        "status": "ok",
+        "tool": "equity_compare_groups"
+      },
+      {
+        "agent": "discovery_screening",
+        "args_hash": "1f90dc357a21",
+        "args_preview": "{\"metric\": \"financial\", \"provider\": \"finviz\", \"group\": \"sector\"}",
+        "cache_hit": false,
+        "error": "Error calling tool 'equity_compare_groups': HTTP error 422: Unprocessable Entity - {'detail': [{'type': 'literal_error', 'loc': ['query', 'metric'], 'msg': \"Input should be 'performance', 'valuation' or 'overview'\", 'input': 'financial', 'ctx': {'expected': \"'performance', 'valuation' or 'overview'\"\u2026",
+        "is_subagent_call": false,
+        "output_preview": "",
+        "status": "error",
+        "tool": "equity_compare_groups"
+      },
+      {
+        "agent": "discovery_screening",
+        "args_hash": "973c9e6a4943",
+        "args_preview": "{\"group\": \"sector\", \"provider\": \"finviz\", \"metric\": \"overview\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660b3-a92c-7c43-8000-a9d327ce126c\",\"results\":[{\"name\":\"Technology\",\"market_cap\":31767950000000,\"performance_1d\":-0.0146,\"dividend_yield\":0.005699999999999999,\"pe\":35.16,\"forward_pe\":25.86,\"peg\":0.88,\"float_short\":0.044199999999999996,\"analyst_recommendation\":1.59,\"volume\":2510000000,\"Stocks\":\"792\",\"LTDebt/Eq\":0.46,\"Debt/Eq\":0.53},{\"name\":\"Utilities\",\"market_cap\":1992940000000,\"performanc\u2026",
+        "status": "ok",
+        "tool": "equity_compare_groups"
+      },
+      {
+        "agent": "discovery_screening",
+        "args_hash": "d949161edd12",
+        "args_preview": "{\"group\": \"sector\", \"provider\": \"finviz\", \"metric\": \"performance\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660b7-87fd-77f0-8000-e09882b25378\",\"results\":[{\"name\":\"Communication Services\",\"performance_1d\":0.0045000000000000005,\"performance_1w\":-0.0583,\"performance_1m\":-0.0302,\"performance_3m\":-0.0759,\"performance_6m\":-0.0593,\"performance_1y\":0.114,\"performance_ytd\":-0.054299999999999994,\"volume\":661260000,\"volume_average\":729910000,\"volume_relative\":0.91},{\"name\":\"Consumer Cyclical\",\"performanc\u2026",
+        "status": "ok",
+        "tool": "equity_compare_groups"
+      },
+      {
+        "agent": "discovery_screening",
+        "args_hash": "7290abc3fef4",
+        "args_preview": "{\"provider\": \"finviz\", \"group\": \"industry\", \"metric\": \"overview\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660bc-e730-73e3-8000-ce2e4cd2ee54\",\"results\":[{\"name\":\"Electrical Equipment & Parts\",\"market_cap\":286260000000,\"performance_1d\":-0.0608,\"dividend_yield\":0.0026,\"pe\":64.11,\"forward_pe\":30.19,\"peg\":1.38,\"float_short\":0.1557,\"analyst_recommendation\":1.84,\"volume\":178330000,\"Stocks\":\"51\",\"LTDebt/Eq\":0.8,\"Debt/Eq\":0.87},{\"name\":\"Computer Hardware\",\"market_cap\":1200910000000,\"performance_1d\":-\u2026",
+        "status": "ok",
+        "tool": "equity_compare_groups"
+      },
+      {
+        "agent": "discovery_screening",
+        "args_hash": "477960b11942",
+        "args_preview": "{\"metric\": \"valuation\", \"group\": \"industry\", \"provider\": \"finviz\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660c1-de2a-7fc6-8000-6778f9e46791\",\"results\":[{\"name\":\"REIT - Mortgage\",\"market_cap\":64790000000,\"performance_1d\":0.006999999999999999,\"pe\":7.39,\"forward_pe\":6.81,\"peg\":1.71,\"eps_growth_past_5y\":0.1543,\"eps_growth_next_5y\":0.0432,\"volume\":76840000,\"price_to_sales\":1.74,\"price_to_book\":0.86,\"price_to_cash\":3.96,\"price_to_free_cash_flow\":14.53,\"sales_growth_past_5_years\":0.2762},{\"name\":\"P\u2026",
+        "status": "ok",
+        "tool": "equity_compare_groups"
+      },
+      {
+        "agent": "fama_french",
+        "args_hash": "90813c17c4b8",
+        "args_preview": "{\"factor\": \"5_factors\", \"frequency\": \"monthly\", \"end_date\": \"2025-08-31\", \"start_date\": \"2020-08-01\"}",
+        "cache_hit": false,
+        "error": null,
+        "is_subagent_call": false,
+        "output_preview": "{\"id\":\"06a660ae-dd86-7c7a-8000-2755e4d2326e\",\"results\":[{\"date\":\"2020-08-01\",\"mkt_rf\":7.62,\"smb\":-0.89,\"hml\":-3.02,\"rmw\":4.27,\"cma\":-1.51,\"rf\":0.01},{\"date\":\"2020-09-01\",\"mkt_rf\":-3.64,\"smb\":-0.01,\"hml\":-2.72,\"rmw\":-1.38,\"cma\":-1.93,\"rf\":0.01},{\"date\":\"2020-10-01\",\"mkt_rf\":-2.08,\"smb\":4.67,\"hml\":4.25,\"rmw\":-0.77,\"cma\":-0.57,\"rf\":0.01},{\"date\":\"2020-11-01\",\"mkt_rf\":12.44,\"smb\":7.12,\"hml\":2.09,\"rmw\"\u2026",
+        "status": "ok",
+        "tool": "famafrench_factors"
+      }
+    ],
+    "subagent_tree": {
+      "tools:19e82d82-d2cc-3e08-2bea-a2ec473fca82": {
+        "has_detail": true,
+        "id": "tools:19e82d82-d2cc-3e08-2bea-a2ec473fca82",
+        "kind": "task",
+        "name": "equity_price",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 5,
+          "failed": 1,
+          "ok": 4,
+          "tools": [
+            "equity_price_quote",
+            "equity_price_historical",
+            "execute_python"
+          ]
+        }
+      },
+      "tools:3e209d89-cdeb-54ab-9862-02bd56ce443f": {
+        "has_detail": true,
+        "id": "tools:3e209d89-cdeb-54ab-9862-02bd56ce443f",
+        "kind": "task",
+        "name": "equity_estimates",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 13,
+          "failed": 9,
+          "ok": 4,
+          "tools": [
+            "equity_estimates_forward_sales",
+            "equity_estimates_forward_eps",
+            "equity_estimates_consensus",
+            "equity_estimates_historical",
+            "equity_estimates_forward_pe",
+            "equity_estimates_price_target"
+          ]
+        }
+      },
+      "tools:59ec29f6-3e6d-7b05-d9ab-f358788ee775": {
+        "has_detail": true,
+        "id": "tools:59ec29f6-3e6d-7b05-d9ab-f358788ee775",
+        "kind": "task",
+        "name": "equity_ownership",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 4,
+          "failed": 2,
+          "ok": 2,
+          "tools": [
+            "equity_ownership_insider_trading",
+            "equity_ownership_institutional",
+            "equity_ownership_major_holders",
+            "equity_ownership_form_13f"
+          ]
+        }
+      },
+      "tools:5b92135c-39cc-9e31-8f22-b16936796e35": {
+        "has_detail": true,
+        "id": "tools:5b92135c-39cc-9e31-8f22-b16936796e35",
+        "kind": "task",
+        "name": "options",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 1,
+          "failed": 0,
+          "ok": 1,
+          "tools": [
+            "derivatives_options_chains"
+          ]
+        }
+      },
+      "tools:747c6c0d-f8fb-8f4a-92a3-26808c1acdce": {
+        "has_detail": true,
+        "id": "tools:747c6c0d-f8fb-8f4a-92a3-26808c1acdce",
+        "kind": "task",
+        "name": "fama_french",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 1,
+          "failed": 0,
+          "ok": 1,
+          "tools": [
+            "famafrench_factors"
+          ]
+        }
+      },
+      "tools:748e2a05-da5e-2f01-d819-6b64260f711b": {
+        "has_detail": true,
+        "id": "tools:748e2a05-da5e-2f01-d819-6b64260f711b",
+        "kind": "task",
+        "name": "news",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 5,
+          "failed": 4,
+          "ok": 1,
+          "tools": [
+            "news_company",
+            "news_world"
+          ]
+        }
+      },
+      "tools:8cca6dc5-8c01-8237-b458-7c022d05beaf": {
+        "has_detail": true,
+        "id": "tools:8cca6dc5-8c01-8237-b458-7c022d05beaf",
+        "kind": "task",
+        "name": "discovery_screening",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 6,
+          "failed": 1,
+          "ok": 5,
+          "tools": [
+            "equity_compare_groups"
+          ]
+        }
+      },
+      "tools:ae2a6c4f-62b0-45d2-1c72-91b182e8b5af": {
+        "has_detail": true,
+        "id": "tools:ae2a6c4f-62b0-45d2-1c72-91b182e8b5af",
+        "kind": "task",
+        "name": "fixed_income",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 3,
+          "failed": 2,
+          "ok": 1,
+          "tools": [
+            "fixedincome_bond_indices",
+            "fixedincome_government_treasury_rates",
+            "fixedincome_government_tips_yields"
+          ]
+        }
+      },
+      "tools:d0225a13-928a-81c5-7640-f9169e0ca762": {
+        "has_detail": true,
+        "id": "tools:d0225a13-928a-81c5-7640-f9169e0ca762",
+        "kind": "task",
+        "name": "economy_macro",
+        "output_preview": null,
+        "parent_id": "__root__",
+        "status": "ok",
+        "tool_summary": {
+          "cached": 0,
+          "count": 1,
+          "failed": 0,
+          "ok": 1,
+          "tools": [
+            "economy_available_indicators"
+          ]
+        }
+      }
+    }
+  }
+}

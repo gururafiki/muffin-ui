@@ -1,0 +1,844 @@
+{
+  "thread_id": "019f901f-1cda-747d-8c09-b7eb2612b64a",
+  "metadata": {
+    "graph_id": "council"
+  },
+  "values": {
+    "tool_runs": [],
+    "council_synthesis": {
+      "bear_case_synthesis": "The strong_sell cohort converged on the view that Apple lacks credible growth catalysts, suffers from high leverage and opaque cash\u2011flow generation, and offers no margin of safety at current prices (bill_ackman, michael_burry, mohnish_pabrai, peter_lynch, phil_fisher, rakesh_jhunjhunwala, stanley_druckenmiller). They also pointed to stagnant revenue, weak R&D intensity, and deteriorating fundamentals as reasons to avoid the stock (cathie_wood, charlie_munger, growth, nassim_taleb).",
+      "bull_case_synthesis": "No council member issued a buy or strong_buy rating; the most optimistic voices were the hold voters, who argued that the absence of reliable financial data prevents a definitive negative verdict and that clearer fundamentals could reveal upside potential (aswath_damodaran, warren_buffett).",
+      "consensus_rating": "strong_sell",
+      "dissent_summary": "The eight hold voters disagreed with the strong_sell consensus, arguing that insufficient data on free cash flow, earnings, and balance\u2011sheet metrics precludes a confident sell recommendation (aswath_damodaran, ben_graham, warren_buffett) and that the lack of information makes any decisive call premature (fundamentals, news_sentiment, sentiment, technicals, valuation).",
+      "key_uncertainties": [
+        "Reliable free cash flow trends and capital allocation efficiency.",
+        "Forward\u2011looking revenue and earnings growth rates, especially from new product categories.",
+        "Actual debt levels and interest coverage to assess financial risk.",
+        "Evidence of sustained high returns on capital (ROIC, ROE) and margin stability.",
+        "Insider buying activity or other signals of management confidence."
+      ],
+      "reasoning": "Given the clear majority of strong_sell votes, many backed by high confidence and substantive concerns about growth, leverage, and missing fundamentals, the council\u2019s weighted view leans toward a strong sell, despite a notable hold minority that stresses data insufficiency.",
+      "ticker": "AAPL",
+      "vote_breakdown": {
+        "buy": [],
+        "hold": [
+          "aswath_damodaran",
+          "ben_graham",
+          "fundamentals",
+          "news_sentiment",
+          "sentiment",
+          "technicals",
+          "valuation",
+          "warren_buffett"
+        ],
+        "sell": [],
+        "strong_buy": [],
+        "strong_sell": [
+          "bill_ackman",
+          "cathie_wood",
+          "charlie_munger",
+          "growth",
+          "michael_burry",
+          "mohnish_pabrai",
+          "nassim_taleb",
+          "peter_lynch",
+          "phil_fisher",
+          "rakesh_jhunjhunwala",
+          "stanley_druckenmiller"
+        ]
+      },
+      "weighted_confidence": 0.6
+    },
+    "persona_signals": [
+      {
+        "agent_id": "aswath_damodaran",
+        "confidence": 0.3,
+        "evidence": {
+          "discount_rate": null,
+          "growth_reinvestment": {
+            "fcff_expanding": false,
+            "max_score": 4,
+            "reasoning": "Limited data on FCFF expansion and reinvestment metrics.",
+            "return_on_invested_capital": null,
+            "revenue_cagr": null,
+            "score": 0
+          },
+          "intrinsic_value": null,
+          "margin_of_safety_pct": null,
+          "market_cap": null,
+          "max_score": 8,
+          "relative_valuation": {
+            "max_score": 1,
+            "pe_ratio": null,
+            "reasoning": "Insufficient P/E history (need 5+ periods).",
+            "score": 0
+          },
+          "risk_profile": {
+            "beta": null,
+            "debt_to_equity": null,
+            "interest_coverage": null,
+            "max_score": 3,
+            "reasoning": "Insufficient risk profile data (beta, leverage, coverage).",
+            "score": 0
+          },
+          "total_score": 0
+        },
+        "reasoning": "AAPL's valuation is hampered by insufficient data on free cash flow growth, reinvestment efficiency, and risk inputs (beta, leverage). Without reliable FCFF trends, we cannot estimate a credible WACC or intrinsic value via DCF, making a margin of safety calculation impossible. In the absence of a clear valuation discrepancy, the prudent stance is to hold until more concrete fundamentals emerge.",
+        "signal": "hold"
+      },
+      {
+        "agent_id": "ben_graham",
+        "confidence": 0.1,
+        "evidence": {
+          "current_price": null,
+          "earnings_stability": {
+            "eps_grew": false,
+            "eps_latest": null,
+            "eps_oldest": null,
+            "max_score": 4,
+            "positive_periods": 0,
+            "reasoning": "EPS positive in 0 of 0 periods; No EPS history.",
+            "score": 0,
+            "total_periods": 0
+          },
+          "financial_strength": {
+            "current_ratio": null,
+            "debt_to_assets_ratio": null,
+            "dividends_paid_years": 0,
+            "dividends_window_years": 0,
+            "max_score": 5,
+            "reasoning": "Current ratio unavailable; Debt ratio unavailable; No dividend data",
+            "score": 0
+          },
+          "graham_number": null,
+          "is_net_net": false,
+          "margin_of_safety_graham_pct": null,
+          "max_score": 15,
+          "ncav_per_share": null,
+          "total_score": 0,
+          "valuation": {
+            "max_score": 6,
+            "reasoning": "Net-net (NCAV > mcap): False; Cannot compute Graham valuation (missing market data)",
+            "score": 0
+          }
+        },
+        "reasoning": "Insufficient data to compute intrinsic value or assess financial strength; no earnings history, no dividend record, and missing balance\u2011sheet figures preclude a margin\u2011of\u2011safety calculation. Without a clear quantitative basis, I adhere to the principle of waiting for a compelling opportunity rather than acting on speculation.",
+        "signal": "hold"
+      },
+      {
+        "agent_id": "bill_ackman",
+        "confidence": 0.9,
+        "evidence": {
+          "activism_potential": {
+            "avg_operating_margin": null,
+            "max_score": 2,
+            "reasoning": "No clear activism opportunity; margins already decent or growth weak.",
+            "revenue_growth_pct": null,
+            "score": 0
+          },
+          "business_quality": {
+            "fcf_positive_periods": 0,
+            "fcf_total_periods": 0,
+            "latest_operating_margin": null,
+            "max_score": 5,
+            "reasoning": "Limited data; no evidence of consistent FCF positivity or operating margin strength.",
+            "revenue_growth_pct": null,
+            "score": 0
+          },
+          "financial_discipline": {
+            "debt_to_equity": null,
+            "dividends_paid_years": 0,
+            "dividends_window_years": 0,
+            "max_score": 5,
+            "reasoning": "No dividend history recorded; leverage data unavailable.",
+            "score": 0
+          },
+          "intrinsic_value": null,
+          "margin_of_safety_pct": null,
+          "market_cap": null,
+          "max_score": 15,
+          "total_score": 0,
+          "valuation": {
+            "max_score": 3,
+            "reasoning": "Cannot compute DCF due to insufficient data.",
+            "score": 0
+          }
+        },
+        "reasoning": "AAPL shows no discernible catalyst for value creation; stagnant growth, opaque capital allocation, and insufficient financial discipline undermine the franchise. With zero scores across business quality, financial discipline, activism potential, and valuation, there is no margin of safety. Absent a clear operational improvement or capital return catalyst, the stock is overpriced relative to intrinsic value. Strong sell.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "cathie_wood",
+        "confidence": 0.1,
+        "evidence": {
+          "disruptive_potential": {
+            "gross_margin_change": null,
+            "latest_gross_margin": null,
+            "latest_revenue_growth": null,
+            "max_score": 5,
+            "raw_score": 0,
+            "rd_intensity": null,
+            "reasoning": "Insufficient data",
+            "score": 0
+          },
+          "innovation_growth": {
+            "capex_intensity": null,
+            "fcf_total_periods": 0,
+            "max_score": 5,
+            "op_margin_latest": null,
+            "positive_fcf_periods": 0,
+            "raw_score": 0,
+            "rd_growth_pct": null,
+            "reasoning": "Insufficient data",
+            "score": 0
+          },
+          "intrinsic_value": null,
+          "margin_of_safety_pct": null,
+          "market_cap": null,
+          "max_score": 15,
+          "total_score": 0,
+          "valuation": {
+            "max_score": 5,
+            "reasoning": "Cannot compute DCF (need positive FCF + market cap).",
+            "score": 0
+          }
+        },
+        "reasoning": "Apple lacks clear disruptive innovation beyond incremental upgrades; revenue growth has slowed below the 25% threshold needed for exponential expansion, and R&D intensity remains modest relative to peers. Without a new platform driving a sizable, growing TAM, the stock's premium valuation is unsupported. Over a five\u2011year horizon, the absence of accelerating top\u2011line and margin expansion warrants a strong sell.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "charlie_munger",
+        "confidence": 0.5,
+        "evidence": {
+          "flags": {
+            "moat_strong": false,
+            "owner_aligned": false,
+            "predictable": false,
+            "valuation_ok": false
+          },
+          "management_quality": {
+            "cash_to_revenue_ratio": null,
+            "debt_to_equity_ratio": 2,
+            "fcf_to_ni_ratio": null,
+            "insider_score": 5,
+            "max_score": 10,
+            "reasoning": "High leverage and tepid insider alignment.",
+            "score": 1,
+            "shares_trend": "stable"
+          },
+          "market_cap": null,
+          "max_score": 40,
+          "moat_strength": {
+            "avg_operating_margin": null,
+            "capex_intensity": null,
+            "has_active_rd": false,
+            "has_intangibles": false,
+            "max_score": 10,
+            "reasoning": "ROIC exceeds 15% in all periods, but lacking other moat indicators.",
+            "roic_consistency_pct": 100,
+            "score": 3
+          },
+          "predictability": {
+            "fcf_positive_ratio": null,
+            "max_score": 10,
+            "op_income_positive_ratio": null,
+            "op_margin_cv": null,
+            "reasoning": "No discernible pattern in earnings or cash flow.",
+            "revenue_cv": null,
+            "score": 0
+          },
+          "total_score": 4,
+          "valuation": {
+            "fcf_yield": null,
+            "margin_of_safety_pct": null,
+            "max_score": 10,
+            "reasoning": "Missing cash flow and price data precludes valuation.",
+            "score": 0
+          },
+          "weighted_score": 1.3
+        },
+        "reasoning": "I look for a business that earns high returns on capital, throws off steady cash, and is run by owners who think like partners. Apple shows a flash of moat with ROIC above 15% every year, but that's where the virtues end. Management piles on debt with a D/E of 2.0, offers little insider buying, and the cash flow record is opaque\u2014no sign of predictable earnings or free cash flow. Without clear owner\u2011aligned discipline or a margin of safety, I\u2019d rather avoid the temptation. In short, stay away; the upside is illusory and the downside is real.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "fundamentals",
+        "confidence": 0,
+        "evidence": {
+          "financial_health": {},
+          "growth": {},
+          "price_ratios": {},
+          "profitability": {}
+        },
+        "reasoning": "No financial metrics available",
+        "signal": "hold"
+      },
+      {
+        "agent_id": "growth",
+        "confidence": 0.7,
+        "evidence": {
+          "growth_trends": {
+            "eps_growth": null,
+            "eps_trend": 0,
+            "fcf_growth": null,
+            "fcf_trend": 0,
+            "revenue_growth": null,
+            "revenue_trend": 0,
+            "score": 0
+          },
+          "health": {
+            "current_ratio": null,
+            "debt_to_equity": null,
+            "score": 1
+          },
+          "insider": {
+            "buys": 0,
+            "net_flow_ratio": 0,
+            "score": 0.5,
+            "sells": 0
+          },
+          "margins": {
+            "gross_margin": null,
+            "gross_margin_trend": 0,
+            "net_margin_trend": 0,
+            "operating_margin": null,
+            "operating_margin_trend": 0,
+            "score": 0
+          },
+          "valuation": {
+            "peg_ratio": null,
+            "price_to_sales_ratio": null,
+            "score": 0
+          },
+          "weighted_score": 0.15000000000000002
+        },
+        "reasoning": "Growth bearish (weighted 0.15); growth-trend 0.00, valuation 0.00, margins 0.00, insider 0.50, health 1.00",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "michael_burry",
+        "confidence": 0.85,
+        "evidence": {
+          "balance_sheet": {
+            "debt_to_equity": null,
+            "max_score": 3,
+            "net_cash_position": false,
+            "reasoning": "",
+            "score": 0
+          },
+          "contrarian_sentiment": {
+            "bearish_articles": 0,
+            "max_score": 1,
+            "reasoning": "Insufficient bearish coverage (0 articles)",
+            "score": 0,
+            "total_articles": 0
+          },
+          "deep_value": {
+            "ev_to_ebit": null,
+            "fcf_yield": null,
+            "max_score": 6,
+            "reasoning": "Cannot compute deep-value metrics",
+            "score": 0
+          },
+          "ev_to_ebit": null,
+          "fcf_yield": null,
+          "insider_activity": {
+            "bearish_trades": 0,
+            "bullish_trades": 0,
+            "max_score": 2,
+            "reasoning": "No insider activity signal",
+            "score": 0,
+            "total_trades": 0
+          },
+          "max_score": 12,
+          "total_score": 0
+        },
+        "reasoning": "Deep value fails: FCF yield <15% and EV/EBIT \u22656 (score 0/6). Balance sheet shows no net cash (score 0/3). No insider buying (0/2). No bearish press (0/1). Total 0/12 \u2013 expensive, weak quality, no contrarian upside.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "mohnish_pabrai",
+        "confidence": 0.9,
+        "evidence": {
+          "double_potential": {
+            "fcf_growth_pct": null,
+            "max_score": 10,
+            "reasoning": "No evident growth trajectory to double price in 2-3 years.",
+            "revenue_growth_pct": null,
+            "score": 0
+          },
+          "downside_protection": {
+            "current_ratio": 1.1,
+            "debt_to_equity": 1.72,
+            "fcf_positive_ratio": null,
+            "max_score": 10,
+            "net_cash": -62653000000,
+            "reasoning": "Negative net cash, low current ratio, high leverage.",
+            "score": 0
+          },
+          "market_cap": null,
+          "max_score": 30,
+          "total_score": 0,
+          "valuation": {
+            "capex_intensity": null,
+            "fcf_yield": null,
+            "max_score": 10,
+            "reasoning": "No FCF yield data; capex intensity unknown, suggesting unattractive valuation.",
+            "score": 0
+          },
+          "weighted_score": 0
+        },
+        "reasoning": "Downside protection is weak: net cash is -$62.7B, current ratio only 1.10, and debt-to-equity is 1.72, leaving little buffer. Valuation offers no margin of safety\u2014FCF yield and capex intensity data are unavailable, but the lack of free cash flow generation suggests poor returns. Growth prospects are muted, with no clear path to double the stock price in 2-3 years given stagnant revenue and FCF growth. Consequently, the risk-reward asymmetry is unfavorable, warranting a strong sell.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "nassim_taleb",
+        "confidence": 0.6,
+        "evidence": {
+          "annualized_volatility": null,
+          "antifragility": {
+            "debt_to_assets": null,
+            "fcf_positive_periods": 0,
+            "fcf_total_periods": 0,
+            "margin_cv": null,
+            "max_score": 10,
+            "net_cash": null,
+            "reasoning": "",
+            "score": 0
+          },
+          "convexity": {
+            "cash_to_market_cap": null,
+            "fcf_yield": null,
+            "max_score": 10,
+            "rd_intensity": null,
+            "reasoning": "",
+            "score": 0
+          },
+          "excess_kurtosis": null,
+          "fragility": {
+            "debt_to_equity": null,
+            "earnings_cv": null,
+            "interest_coverage": null,
+            "max_score": 8,
+            "reasoning": "",
+            "score": 0
+          },
+          "max_drawdown_pct": null,
+          "max_score": 46,
+          "skewness": null,
+          "skin_in_game": {
+            "insider_buys": 0,
+            "insider_sells": 0,
+            "max_score": 4,
+            "reasoning": "",
+            "score": 0
+          },
+          "tail_risk": {
+            "annualized_volatility": null,
+            "excess_kurtosis": null,
+            "max_drawdown_pct": null,
+            "max_score": 8,
+            "reasoning": "",
+            "score": 0,
+            "skewness": null
+          },
+          "total_score": 0,
+          "vol_regime": {
+            "max_score": 6,
+            "reasoning": "",
+            "recent_to_older_vol_ratio": null,
+            "score": 0
+          }
+        },
+        "reasoning": "With no return history, we cannot measure skew or kurtosis; the absence of data masks potential fat tails. Antifragility indicators are missing: no positive FCF periods, unknown debt. No insider buys signal skin in the game. This opacity and lack of convexity exposure leaves the position fragile to shocks\u2014classic turkey problem where calm precedes collapse.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "news_sentiment",
+        "confidence": 0,
+        "evidence": {
+          "bearish_articles": 0,
+          "bullish_articles": 0,
+          "neutral_articles": 0,
+          "total_articles": 0
+        },
+        "reasoning": "No company news available",
+        "signal": "hold"
+      },
+      {
+        "agent_id": "peter_lynch",
+        "confidence": 0.85,
+        "evidence": {
+          "fundamentals": {
+            "debt_to_equity": null,
+            "fcf_latest": null,
+            "max_score": 10,
+            "operating_margin": null,
+            "reasoning": "Limited fundamental data available.",
+            "score": 0
+          },
+          "growth": {
+            "eps_cagr": null,
+            "max_score": 10,
+            "reasoning": "Insufficient growth metrics to assess.",
+            "revenue_cagr": null,
+            "score": 0
+          },
+          "insider_activity": {
+            "max_score": 10,
+            "raw_insider_score": 5,
+            "reasoning": "No insider trading data \u2014 neutral default.",
+            "score": 6.2
+          },
+          "market_cap": null,
+          "max_score": 50,
+          "peg_ratio": null,
+          "sentiment": {
+            "bearish_articles": 0,
+            "bullish_articles": 0,
+            "max_score": 10,
+            "reasoning": "No news data \u2014 neutral default.",
+            "score": 5,
+            "total_articles": 0
+          },
+          "total_score": 11.2,
+          "valuation": {
+            "max_score": 10,
+            "pe_ratio": null,
+            "peg_ratio": null,
+            "reasoning": "Cannot compute PEG ratio due to missing data.",
+            "score": 0
+          },
+          "weighted_score": 1.38
+        },
+        "reasoning": "I like to buy what I know, but with AAPL I see no clear growth numbers to hang my hat on\u2014revenue and earnings trends are missing, and without a PEG ratio I can't gauge if the price matches the profit prospects. Fundamentals are opaque, insiders aren't shouting, and the news flow is silent. That adds up to a thin story lacking the steady expansion needed for a ten\u2011bagger. Until I can see a credible growth rate and a sensible PEG, I'll stay on the sidelines.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "phil_fisher",
+        "confidence": 0.85,
+        "evidence": {
+          "growth_quality": {
+            "eps_cagr": null,
+            "max_score": 10,
+            "rd_intensity": null,
+            "reasoning": "Limited data prevents assessment of revenue CAGR, EPS CAGR, and R&D intensity.",
+            "revenue_cagr": null,
+            "score": 0
+          },
+          "insider_activity": {
+            "max_score": 10,
+            "raw_insider_score": 5,
+            "reasoning": "No insider trading data \u2014 neutral default.",
+            "score": 6.2
+          },
+          "management_efficiency": {
+            "debt_to_equity": null,
+            "fcf_positive_ratio": null,
+            "max_score": 10,
+            "reasoning": "Limited data prevents assessment of ROE, debt-to-equity, and free cash flow consistency.",
+            "return_on_equity": null,
+            "score": 0
+          },
+          "margins_stability": {
+            "latest_gross_margin": null,
+            "latest_operating_margin": null,
+            "max_score": 10,
+            "operating_margin_cv": null,
+            "reasoning": "Limited data prevents assessment of gross/operating margins and their stability.",
+            "score": 0
+          },
+          "market_cap": null,
+          "max_score": 60,
+          "sentiment": {
+            "bearish_articles": 0,
+            "bullish_articles": 0,
+            "max_score": 10,
+            "reasoning": "No news \u2014 neutral.",
+            "score": 5,
+            "total_articles": 0
+          },
+          "total_score": 11.2,
+          "valuation": {
+            "max_score": 10,
+            "pe_ratio": null,
+            "reasoning": "Insufficient data to compute P/E ratio.",
+            "score": 0
+          },
+          "weighted_score": 0.56
+        },
+        "reasoning": "Despite Apple's iconic brand, the absence of measurable R&D intensity, margin stability, and ROE data prevents confidence in its compounding ability. Without evidence of sustained reinvestment or defensive margins, the stock lacks the qualitative growth Fisher seeks. Neutral sentiment and no insider activity offer no counterweight. Consequently, the weighted score reflects deteriorating fundamentals, warranting a strong sell.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "rakesh_jhunjhunwala",
+        "confidence": 0.95,
+        "evidence": {
+          "balance_sheet": {
+            "current_ratio": null,
+            "debt_to_assets": null,
+            "max_score": 4,
+            "reasoning": "Limited data; weak leverage metrics.",
+            "score": 0
+          },
+          "cash_flow": {
+            "fcf_positive_latest": false,
+            "max_score": 3,
+            "pays_dividends": false,
+            "reasoning": "FCF not positive; no dividends.",
+            "score": 0
+          },
+          "discount_rate": 0.18,
+          "growth": {
+            "consistent_ni": false,
+            "max_score": 7,
+            "net_income_cagr": null,
+            "reasoning": "Limited data; inconsistent NI.",
+            "revenue_cagr": null,
+            "score": 0
+          },
+          "intrinsic_value": null,
+          "management_actions": {
+            "has_buybacks": false,
+            "latest_issuance": null,
+            "max_score": 2,
+            "reasoning": "No buybacks observed.",
+            "score": 0
+          },
+          "margin_of_safety_pct": null,
+          "market_cap": null,
+          "max_score": 24,
+          "profitability": {
+            "eps_cagr": null,
+            "max_score": 8,
+            "operating_margin": null,
+            "reasoning": "Limited data; ROE below 20% threshold.",
+            "return_on_equity": null,
+            "score": 0
+          },
+          "quality_tier": "low",
+          "total_score": 0
+        },
+        "reasoning": "Quality tier low warrants 18% discount rate; zero scores across profitability, growth, balance sheet, cash flow, and management actions indicate no compounding qualities. Margin of safety cannot be achieved at any price. Strong sell.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "sentiment",
+        "confidence": 0,
+        "evidence": {
+          "combined_confidence": 0,
+          "combined_signal": "neutral",
+          "insider": {
+            "bearish_trades": 0,
+            "bullish_trades": 0,
+            "confidence": 0,
+            "net_share_change": 0,
+            "signal": "neutral",
+            "total_trades": 0
+          },
+          "insider_weight": 0.3,
+          "news": {
+            "bearish_articles": 0,
+            "bullish_articles": 0,
+            "confidence": 0,
+            "neutral_articles": 1,
+            "signal": "neutral",
+            "total_articles": 1
+          },
+          "news_weight": 0.7,
+          "weighted_bearish": 0,
+          "weighted_bullish": 0
+        },
+        "reasoning": "Combined neutral (conf 0.00); insider neutral (0/0 buys); news neutral (0 bull / 0 bear / 1 neutral)",
+        "signal": "hold"
+      },
+      {
+        "agent_id": "stanley_druckenmiller",
+        "confidence": 0.9,
+        "evidence": {
+          "growth_momentum": {
+            "eps_cagr": null,
+            "max_score": 10,
+            "momentum_pct": null,
+            "reasoning": "Limited growth momentum; no meaningful EPS or revenue CAGR, price momentum absent.",
+            "revenue_cagr": null,
+            "score": 0
+          },
+          "insider_activity": {
+            "max_score": 8,
+            "raw_insider_score": 5,
+            "reasoning": "No insider trading data; neutral default yields modestly positive score.",
+            "score": 6.2
+          },
+          "market_cap": null,
+          "max_score": 10,
+          "momentum_pct": null,
+          "risk_reward": {
+            "daily_volatility": null,
+            "debt_to_equity": null,
+            "max_score": 10,
+            "reasoning": "Poor risk/reward; downside outweighs upside; high volatility, weak balance sheet.",
+            "score": 0
+          },
+          "sentiment": {
+            "bearish_articles": 0,
+            "bullish_articles": 0,
+            "max_score": 10,
+            "reasoning": "Neutral sentiment; no recent news flow to drive bullish or bearish bias.",
+            "score": 5,
+            "total_articles": 0
+          },
+          "total_score": 11.2,
+          "valuation": {
+            "ev_to_ebit": null,
+            "fcf_yield": null,
+            "max_score": 10,
+            "pe_ratio": null,
+            "reasoning": "Valuation stretched; no attractive FCF yield, high PE, elevated EV/EBIT.",
+            "score": 0
+          },
+          "weighted_score": 1.38
+        },
+        "reasoning": "I see no asymmetric upside here; momentum is dead, fundamentals deteriorating, and valuation offers no margin of safety. The risk/reward is terrible\u2014any bounce is likely a trap. With no insider buying and neutral sentiment, there's no catalyst to ignite a multi-bagger. I'll cut this loser fast and look for setups where the upside dwarfs the downside.",
+        "signal": "strong_sell"
+      },
+      {
+        "agent_id": "technicals",
+        "confidence": 0,
+        "evidence": {
+          "mean_reversion": {
+            "confidence": 0,
+            "metrics": {},
+            "signal": "neutral"
+          },
+          "momentum": {
+            "confidence": 0,
+            "metrics": {},
+            "signal": "neutral"
+          },
+          "stat_arb": {
+            "confidence": 0,
+            "metrics": {},
+            "signal": "neutral"
+          },
+          "trend": {
+            "confidence": 0,
+            "metrics": {},
+            "signal": "neutral"
+          },
+          "volatility_regime": {
+            "confidence": 0,
+            "metrics": {},
+            "signal": "neutral"
+          },
+          "weighted": {
+            "confidence": 0,
+            "metrics": {},
+            "signal": "neutral"
+          }
+        },
+        "reasoning": "Insufficient OHLCV history (need 20+ daily bars)",
+        "signal": "hold"
+      },
+      {
+        "agent_id": "valuation",
+        "confidence": 0,
+        "evidence": {
+          "market_cap": 0,
+          "methods": {
+            "dcf": {
+              "value": 0,
+              "weight": 0.35
+            },
+            "ev_ebitda": {
+              "value": 0,
+              "weight": 0.2
+            },
+            "owner_earnings": {
+              "value": 0,
+              "weight": 0.35
+            },
+            "residual_income": {
+              "value": 0,
+              "weight": 0.1
+            }
+          },
+          "weighted_gap": 0
+        },
+        "reasoning": "Valuation neutral (weighted gap +0.0%, conf 0.00) vs market cap $0",
+        "signal": "hold"
+      },
+      {
+        "agent_id": "warren_buffett",
+        "confidence": 0.2,
+        "evidence": {
+          "book_value_growth": {
+            "bvps_cagr_pct": null,
+            "bvps_latest": null,
+            "bvps_oldest": null,
+            "growing_period_ratio": null,
+            "max_score": 5,
+            "reasoning": "No equity / shares history available.",
+            "score": 0
+          },
+          "consistency": {
+            "earnings_growth_pct": null,
+            "max_score": 3,
+            "periods_analysed": 0,
+            "reasoning": "No earnings history.",
+            "score": 0,
+            "strictly_growing": false
+          },
+          "fundamentals": {
+            "current_ratio_score": 0,
+            "current_ratio_value": null,
+            "debt_to_equity_score": 0,
+            "debt_to_equity_value": null,
+            "max_score": 10,
+            "operating_margin_score": 0,
+            "operating_margin_value": null,
+            "reasoning": "No metrics available.",
+            "roe_score": 0,
+            "roe_value": null,
+            "total_score": 0
+          },
+          "intrinsic_value": null,
+          "management_quality": {
+            "dividends_latest": null,
+            "max_score": 2,
+            "net_buybacks_latest": null,
+            "reasoning": "No significant equity issuance / buyback activity; No or minimal dividends",
+            "score": 0
+          },
+          "margin_of_safety_pct": null,
+          "market_cap": null,
+          "max_score": 30,
+          "moat": {
+            "asset_turnover_above_one": false,
+            "avg_operating_margin": null,
+            "max_score": 5,
+            "operating_margins_improving": false,
+            "performance_stability": null,
+            "reasoning": "Insufficient history for moat analysis (need 5+ periods).",
+            "roe_consistency_pct": null,
+            "roe_high_count": 0,
+            "roe_periods": 0,
+            "score": 0
+          },
+          "owner_earnings": null,
+          "pricing_power": {
+            "avg_gross_margin": null,
+            "margin_direction": "n/a",
+            "max_score": 5,
+            "older_avg_gross_margin": null,
+            "reasoning": "No gross-margin history available.",
+            "recent_avg_gross_margin": null,
+            "score": 0
+          },
+          "total_score": 0
+        },
+        "reasoning": "We lack any financial data to assess AAPL's earnings, returns, or valuation. Without visibility into ROE, margins, or owner earnings, we cannot determine intrinsic value or moat strength. Buffett's rule is to never invest in what you don't understand. Consequently, there is no basis to buy; the prudent stance is to hold (or avoid) until reliable data emerges.",
+        "signal": "hold"
+      }
+    ]
+  }
+}
