@@ -14,7 +14,6 @@ import {
 import {
   CriterionDetails,
   StructuredOutput,
-  ToolRunsPanel,
   type AnyMessage,
 } from '@/lib/agent/renderers';
 import { useRunStreamContext } from '@/lib/agent/stream-context';
@@ -86,9 +85,10 @@ function SubgraphDetailSkeleton() {
  *
  * Completed threads: the event stream is gone (transient buffer, never
  * replayable), so the scoped channels stay empty. The row falls back to what
- * checkpointed state DID keep: the criterion evaluation (workers), the stage's
- * structured output (registry `StageDef.output`), and the run-level `tool_runs`
- * records the backend attributed to this node.
+ * checkpointed state DID keep: the criterion evaluation (workers) and the
+ * stage's structured output (registry `StageDef.output`). The full transcript
+ * and tool calls of a finished node live in the Execution Tree, which reads
+ * that node's own LangGraph namespace.
  */
 export function SubgraphDetail({
   row,
@@ -130,12 +130,7 @@ export function SubgraphDetail({
   }
 
   const output = row.evaluation == null && messages.length === 0 ? row.output : undefined;
-  // Historical fall-back only: the persisted `tool_runs` records (authoritative
-  // status). While live, the scoped `Conversation` (Steps) below already shows
-  // every tool call WITH its correct `ToolMessage.status`, so a separate flat
-  // panel would be redundant AND carried the wrong (lifecycle-derived) status.
-  const persistedRuns = row.toolRuns ?? [];
-  const hasBody = !!row.evaluation || output != null || messages.length > 0 || persistedRuns.length > 0;
+  const hasBody = !!row.evaluation || output != null || messages.length > 0;
 
   if (!hasBody) {
     return (
@@ -161,14 +156,13 @@ export function SubgraphDetail({
           </View>
         )
       ) : null}
+      {/* Live transcript — the Steps timeline includes every tool call. The
+          `busy` footer keeps it clear more is still streaming in. On a finished
+          thread there is no replayable stream; that run's transcript and tool
+          calls come from its own namespace in the Execution Tree. */}
       {messages.length > 0 ? (
-        /* Live transcript — the Steps timeline includes every tool call. The
-           `busy` footer keeps it clear more is still streaming in. */
         <Conversation messages={messages} viewMode="verbose" busy={row.status === 'running'} />
-      ) : (
-        /* History (no replayable transcript) — persisted tool records only. */
-        <ToolRunsPanel title="Tool calls" runs={persistedRuns} mode="flat" />
-      )}
+      ) : null}
     </View>
   );
 }

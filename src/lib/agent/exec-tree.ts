@@ -2,35 +2,32 @@
  * The single execution-tree model. Pure data — no rendering, no React, so it can be
  * exercised directly by `scripts/exectree-check.ts`.
  *
- * This replaces the two parallel systems (`subagent-tree.ts`'s `TreeRow` +
- * `execution-tree/types.ts`'s `ExecNode`) and their lossy adapters with one node type
- * that every surface builds and renders.
- *
  * ## Where the tree comes from
  *
- * `buildExecTree` assembles a "plan-first hybrid": prefer the agent's registered
- * recipe (`AgentDef.stages`) or a deep agent's `todos`, joined to the REAL captured
- * topology so each plan step drills into what actually ran under it. Agents with
- * neither fall back to the raw topology.
+ * **LangGraph's own checkpoints** (`run-history.ts`), one namespace at a time, fetched
+ * lazily as rows are expanded. There is no capture channel and no bespoke telemetry:
+ * a node's children are the `tasks[]` its namespace recorded, and its transcript is
+ * that namespace's `values.messages`.
  *
- * Topology today comes from the backend's `subagent_tree` channel
- * (`buildTopology`); Phase 3 swaps that source for LangGraph's own recursive
- * `/threads/{id}/history` without changing this model.
+ * `buildExecTree` (`../../features/agent-shared/execution-tree/plan-steps`) assembles a
+ * "plan-first hybrid": prefer the agent's registered recipe (`AgentDef.stages`) or a
+ * deep agent's `todos`, joined to the real topology so each plan step drills into what
+ * actually ran under it. Agents with neither render the topology directly.
  *
- * ## Two invariants worth keeping
+ * ## Why this file is so much smaller than it was
  *
- * 1. **Parentage comes from splitting the id, never from `parent_id`.** A re-homed
- *    node's `parent_id` can point at an ancestor that was stripped or lives in a
- *    different part of state.
- * 2. **A synthetic node with exactly one child collapses into that child.** Levels
- *    that the backend never captures appear only as id prefixes, and synthesizing
- *    them verbatim is what produced the "Criterion evaluation > Criterion evaluation"
- *    double-nesting: the synthesized ancestor took its label from the `<name>:` id
- *    segment while its only real child took the same string from the builder's static
- *    agent name. Collapsing is safe because a synthetic node has no detail of its own.
+ * The previous version reconstructed the tree from the `subagent_tree` capture channel
+ * by splitting `|`-joined id paths and *synthesizing* the ancestor levels the backend
+ * never captured. That is what produced the "Criterion evaluation > Criterion
+ * evaluation" double-nesting: a synthesized ancestor took its label from an id segment
+ * while its only real child took the same string from the builder's static agent name.
+ *
+ * Reading namespaces directly makes that class of bug structurally impossible — every
+ * level is a level LangGraph actually recorded, so there is nothing to infer and
+ * nothing to collapse.
  */
 import type { IconName } from '@/components/icons';
-import { parseArray, zTreeNode, type ToolRun, type TreeNode } from '@/lib/agent/schemas';
+import type { ToolRun } from '@/lib/agent/schemas';
 
 export type ExecStatus = 'done' | 'active' | 'pending' | 'error';
 
@@ -44,31 +41,32 @@ export type ExecNode = {
   label: string;
   icon?: IconName;
   status?: ExecStatus;
-  /** `stage` = a registry step or deep-agent todo; `agent` = a really-captured
-   * node; `synthetic` = an uncaptured intermediate level inferred from an id
-   * prefix (carries no detail of its own). */
-  kind: 'stage' | 'agent' | 'synthetic';
-  /** Id to resolve this node's lazily-fetched heavy detail. Undefined for
-   * synthetic placeholders — there is no real node to fetch. */
-  detailNodeId?: string;
-  /** Structured output already present in streamed `values`. */
+  /** `stage` = a registry step or deep-agent todo; `agent` = a graph node that
+   * really ran, read from a checkpoint's `tasks[]`. */
+  kind: 'stage' | 'agent';
+  /** The raw graph node name (`market_analyst`), as opposed to the humanised
+   * `label`. Registry stages join on this — never on a parsed id. */
+  name?: string;
+  /** Structured output already present in streamed `values`, or lifted from the
+   * task's own channel writes. */
   output?: unknown;
   outputKind?: OutputKind;
-  /** Per-node tool-execution records already present in streamed `values`. */
+  /** Tool calls this node made, derived from its transcript (`run-history.ts`).
+   * Populated only once the node's namespace has been fetched. */
   toolRuns?: ToolRun[];
   /** One-line collapsed summary, e.g. "3 tools · 1 failed". */
   summary?: string;
-  /** LangGraph `checkpoint_ns` to read this node's own transcript and children from
-   * (`run-history.ts`). Present only for compiled agents/subgraphs added via
-   * `add_node` — a plain function node has none and is genuinely a leaf. */
+  /**
+   * LangGraph `checkpoint_ns` to read this node's own transcript and children from.
+   *
+   * Present ONLY for compiled agents/subgraphs added via `add_node`. A plain function
+   * node (a single LLM call, a pure reducer) has none — it is genuinely leaf-shaped,
+   * and rendering it as a step with no drill-down is honest rather than a gap. See
+   * muffin-agent's graph-authoring rule.
+   */
   namespace?: string;
   children: ExecNode[];
 };
-
-/** The `<name>` half of a `<name>:<uuid>` id segment. */
-export function segmentName(segment: string): string {
-  return segment.split(':', 1)[0] || segment;
-}
 
 /** Middleware hooks compile to their own graph nodes and surface as tasks; they are
  * plumbing, never execution steps a reader cares about. */
@@ -84,124 +82,19 @@ export function humanise(name: string): string {
   return spaced ? spaced[0].toUpperCase() + spaced.slice(1) : name;
 }
 
-/**
- * Gather the captured topology: the top-level `subagent_tree` map plus each
- * `criterion_evaluations[i].subagent_tree` (criterion workers re-home their capture
- * under the evaluation rather than the root, so a reader must union both).
- */
-export function collectTopology(values: Record<string, unknown> | undefined): TreeNode[] {
-  if (!values) return [];
-  const dicts: unknown[] = [];
-  const top = values.subagent_tree;
-  if (top && typeof top === 'object') dicts.push(...Object.values(top));
-  const evals = values.criterion_evaluations;
-  if (Array.isArray(evals)) {
-    for (const c of evals) {
-      const t = (c as { subagent_tree?: unknown })?.subagent_tree;
-      if (t && typeof t === 'object') dicts.push(...Object.values(t));
-    }
-  }
-  return parseArray(zTreeNode, dicts, 'subagent_tree');
-}
-
-function toolSummary(node: TreeNode): string | undefined {
-  const ts = node.tool_summary;
-  const count = ts?.count ?? 0;
-  if (!count) return undefined;
-  const failed = ts?.failed ? ` · ${ts.failed} failed` : '';
-  return `${count} tool${count === 1 ? '' : 's'}${failed}`;
-}
-
-/**
- * Reconstruct the execution forest from captured nodes, synthesizing uncaptured
- * ancestor levels and then collapsing the redundant ones.
- */
-export function buildTopology(nodes: TreeNode[]): ExecNode[] {
-  const rows = new Map<string, ExecNode>();
-
-  const ensure = (id: string, synthetic: boolean): ExecNode => {
-    let r = rows.get(id);
-    if (!r) {
-      const segs = id.split('|');
-      r = {
-        id,
-        label: humanise(segmentName(segs[segs.length - 1])),
-        kind: synthetic ? 'synthetic' : 'agent',
-        children: [],
-      };
-      rows.set(id, r);
-    }
-    return r;
-  };
-
-  // Real nodes first so their fields win over any placeholder.
-  for (const n of nodes) {
-    if (isInternalNode(n.name ?? '')) continue;
-    const r = ensure(n.id, false);
-    r.kind = 'agent';
-    // The backend `name` is the builder's static agent label — usually far more
-    // informative than the node position (`equity_price` vs `tools`), so prefer it.
-    if (n.name) r.label = humanise(n.name);
-    r.status = n.status === 'error' ? 'error' : 'done';
-    r.summary = toolSummary(n);
-    r.detailNodeId = n.has_detail === false ? undefined : n.id;
-  }
-
-  // Synthesize every ancestor prefix so no node is ever orphaned.
-  for (const id of [...rows.keys()]) {
-    const segs = id.split('|');
-    for (let i = 1; i < segs.length; i++) ensure(segs.slice(0, i).join('|'), true);
-  }
-
-  // Wire parent -> children by id-minus-last-segment; roots are single-segment ids.
-  const roots: ExecNode[] = [];
-  for (const r of rows.values()) {
-    const segs = r.id.split('|');
-    if (segs.length <= 1) {
-      roots.push(r);
-      continue;
-    }
-    const parentId = segs.slice(0, -1).join('|');
-    (rows.get(parentId) ?? ensure(parentId, true)).children.push(r);
-  }
-  return collapseRedundant(roots);
-}
-
-/**
- * Collapse synthetic wrappers that add a level without adding information.
- *
- * A synthetic node exists only because an id prefix implied it; it has no detail, no
- * output and no tool runs. When it has exactly one child, that child IS the step —
- * showing both is the double-nesting bug.
- */
-export function collapseRedundant(nodes: ExecNode[]): ExecNode[] {
-  return nodes.map((n) => {
-    const children = collapseRedundant(n.children);
-    if (n.kind === 'synthetic' && children.length === 1) return children[0];
-    return { ...n, children };
-  });
-}
-
 /** Depth-first walk, parents before children. */
-export function walkTree(nodes: ExecNode[], visit: (n: ExecNode, depth: number) => void, depth = 0): void {
+export function walkTree(
+  nodes: ExecNode[],
+  visit: (n: ExecNode, depth: number) => void,
+  depth = 0,
+): void {
   for (const n of nodes) {
     visit(n, depth);
     walkTree(n.children, visit, depth + 1);
   }
 }
 
-// ── Plan assembly (stages / todos joined to the captured topology) ────────────
-
-/** Roots belonging to a stage. Exact `node` match wins, else the `active` regex —
- * the SAME precedence `stageSnaps` uses for status and `childrenForStage` uses for
- * children, so a step's status, its children and its tool calls can never disagree
- * about which nodes are "its own". Previously the tool-run join used `node` only,
- * so every stage that declares just `active` (all council stages, all four trading
- * analysts) showed zero tool calls by construction. */
-export function stageMatches(stage: StageLike, name: string): boolean {
-  if (stage.node) return name === stage.node;
-  return stage.active ? stage.active.test(name) : false;
-}
+// ── Plan assembly (stages / todos joined to the real topology) ────────────────
 
 export type StageLike = {
   key: string;
@@ -212,31 +105,23 @@ export type StageLike = {
   outputKind?: OutputKind;
 };
 
-/** Tool runs belonging to a stage, matched on the record's `agent` field.
- * Council records carry `<slug>_data_collection`, so the bare slug is tried too. */
-export function toolRunsForStage(stage: StageLike, runs: ToolRun[]): ToolRun[] {
-  return runs.filter((r) => {
-    const agent = r.agent ?? '';
-    if (!agent) return false;
-    return stageMatches(stage, agent) || stageMatches(stage, agent.replace(/_data_collection$/, ''));
-  });
+/**
+ * Does a stage own the graph node called `name`? Exact `node` match wins, else the
+ * `active` regex.
+ *
+ * This is the SAME precedence `stageSnaps` uses for status and `childrenForStage`
+ * uses for children, so a step's status and its children can never disagree about
+ * which nodes are "its own". The tool-run join used to consult `stage.node` alone,
+ * so every stage that declares only `active` — all council stages, all four trading
+ * analysts — showed zero tool calls by construction.
+ */
+export function stageMatches(stage: StageLike, name: string): boolean {
+  if (stage.node) return name === stage.node;
+  return stage.active ? stage.active.test(name) : false;
 }
 
-/** Group forest roots by their leading segment name — a Send fan-out stage has many
- * roots sharing one name (`criterion_evaluation:<u1>`, `<u2>`, …). */
-export function rootsByName(forest: ExecNode[]): Map<string, ExecNode[]> {
-  const byName = new Map<string, ExecNode[]>();
-  for (const root of forest) {
-    const name = segmentName(root.id.split('|')[0]);
-    const bucket = byName.get(name);
-    if (bucket) bucket.push(root);
-    else byName.set(name, [root]);
-  }
-  return byName;
-}
-
-export function childrenForStage(stage: StageLike, byName: Map<string, ExecNode[]>): ExecNode[] {
-  const out: ExecNode[] = [];
-  for (const [name, roots] of byName) if (stageMatches(stage, name)) out.push(...roots);
-  return out;
+/** The topology nodes belonging to a stage. A `Send` fan-out stage matches many
+ * (`criterion_evaluation` × 11), all of which are that stage's children. */
+export function childrenForStage(stage: StageLike, topology: ExecNode[]): ExecNode[] {
+  return topology.filter((n) => stageMatches(stage, n.name ?? ''));
 }

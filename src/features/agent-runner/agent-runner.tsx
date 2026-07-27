@@ -13,7 +13,7 @@ import { Button, Field, Screen } from '@/components/ui';
 import { useSignInRequiredToRun } from '@/features/account/run-gate';
 import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { AgentHero } from '@/features/agent-shared/agent-hero';
-import { type SubagentRun, type SubagentRuns } from '@/features/agent-shared/conversation';
+import { type SubagentRun } from '@/features/agent-shared/conversation';
 import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
 import { mergeLiveEvaluations, useCriterionEvents, useSubgraphRows } from '@/features/agent-shared/run-projections';
 import { RunRecap } from '@/features/agent-shared/run-recap';
@@ -23,7 +23,6 @@ import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
-import { buildTopology, collectTopology } from '@/lib/agent/exec-tree';
 import { HydrationSkeleton, RunResults } from './run-results';
 import { SavePresetCard } from './save-preset-card';
 
@@ -83,25 +82,16 @@ export function AgentRunner({
     [agent.inputs, draft],
   );
 
-  // Sub-agent rows: captured deep-agent transcripts (persisted state channel)
-  // + protocol-v2 discovered subgraph invocations (criteria stages/workers,
-  // trading analysts) with live statuses and scoped transcript detail.
-  const captured = (view as { subagent_runs?: SubagentRuns } | undefined)?.subagent_runs;
+  // Sub-agent rows: the subgraph invocations discovered on the live stream
+  // (criteria stages/workers, trading analysts) with their statuses and scoped
+  // transcript detail. The recursive tree lives in the Execution Tree view,
+  // which reads each node's own LangGraph namespace on expand.
   const discovered = useSubgraphRows(agent, stream);
-  const subagentRuns: SubagentRun[] = [
-    ...(captured ? Object.values(captured) : []),
-    ...discovered.map((row) => ({
-      name: row.label,
-      status: row.status,
-      renderDetail: () => <SubgraphDetail row={row} />,
-    })),
-  ];
-
-  // Recursive sub-agent tree (backend `AgentCaptureMiddleware`'s `subagent_tree`
-  // channel, both top-level and criterion-homed — see `collectTopology`).
-  // Rendered INSTEAD of the flat `SubagentActivity` panel when non-empty;
-  // older runs (no captured tree) keep the flat panel unchanged.
-  const tree = useMemo(() => buildTopology(collectTopology(view)), [view]);
+  const subagentRuns: SubagentRun[] = discovered.map((row) => ({
+    name: row.label,
+    status: row.status,
+    renderDetail: () => <SubgraphDetail row={row} />,
+  }));
 
   const run = () => submitRun(agent.buildInput(draft), { overrides: buildOverrides(agent.advanced, advanced) });
 
@@ -191,7 +181,6 @@ export function AgentRunner({
               busy={busy}
               byNode={stream.subgraphsByNode}
               subagentRuns={subagentRuns}
-              tree={tree}
               threadId={liveThreadId}
             />
           )}

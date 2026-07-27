@@ -7,9 +7,7 @@ import {
   parseOr,
   zCriterionEvaluation,
   zCriterionEvent,
-  zToolRun,
   type CriterionEvaluation,
-  type ToolRun,
 } from '@/lib/agent/schemas';
 import type { AnyStream, RunStream } from '@/lib/agent/stream-types';
 import { titleCase } from '@/lib/format';
@@ -84,8 +82,6 @@ export type SubgraphRow = {
    * scoped transcript.
    */
   output?: unknown;
-  /** History fallback: persisted `tool_runs` records attributed to this node. */
-  toolRuns?: ToolRun[];
   /** Bespoke expanded-detail renderer id (registry `StageDef.detail`). */
   detail?: StageDetail;
 };
@@ -107,7 +103,6 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStream): SubgraphRow
     // `active` regex fallback (same resolution RunProgress uses).
     const stageFor = (node: string): StageDef | undefined =>
       stages.find((s) => s.node === node) ?? stages.find((s) => s.active?.test(node));
-    const persistedRuns = parseArray(zToolRun, values?.tool_runs, 'values.tool_runs');
 
     // Evaluations by name — labels finished workers even after a refresh,
     // when custom events are gone but values carry the full scorecard.
@@ -120,13 +115,11 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStream): SubgraphRow
     const rows: SubgraphRow[] = [];
     for (const [node, snaps] of byNode) {
       const stage = stageFor(node);
-      // History detail for the node's rows: its stage's persisted output +
-      // the run-level tool records the backend attributed to this agent. The
-      // council members' inner collect agents are named `<node>_data_collection`.
+      // History detail for the node's rows: its stage's persisted output. Tool
+      // calls are NOT attached here — while live the scoped transcript already
+      // shows each one with its real `ToolMessage.status`, and on history they
+      // come from the node's own namespace via the Execution Tree.
       const output = stage ? stageOutput(stage, values) : undefined;
-      const toolRuns = persistedRuns.filter(
-        (r) => r.agent === node || r.agent === `${node}_data_collection`,
-      );
       snaps.forEach((snap, i) => {
         let label = stage?.node === node ? stage.label : titleCase(node);
         let evaluation: CriterionEvaluation | undefined;
@@ -150,7 +143,6 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStream): SubgraphRow
           nodeName: snap.nodeName,
           evaluation,
           output,
-          toolRuns: toolRuns.length > 0 ? toolRuns : undefined,
           detail: stage?.detail,
         });
       });

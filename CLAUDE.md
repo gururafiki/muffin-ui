@@ -203,31 +203,48 @@ The whole app is organised around **"one graph → one screen"**:
   Card/Collapsible when the caller (`DebateDetail`, inside an already-expanded `SubAgentRunRow`)
   already owns the expand/collapse affordance — new stage/detail renderers should follow the same
   pattern rather than reaching for a bare `Collapsible`.
-  **The execution tree (M22/M23, rebuilt 2026-07-27).** ONE node model —
+  **The execution tree (M22/M23, rebuilt on native history 2026-07-27).** ONE node model —
   `lib/agent/exec-tree.ts`'s `ExecNode` — with two presentations. `SubagentTree`
   (`features/agent-shared/subagent-tree.tsx`) renders it in the Overview's row idiom by mapping each
   node to a `SubagentRun` and delegating to `SubagentActivity`/`SubAgentRunRow`; `ExecutionTree`
   (`features/agent-shared/execution-tree/`) renders it as the rail-of-plan-steps drill-down behind
-  the per-agent toggle. They are two views of one tree, not two trees — the earlier
-  `lib/agent/subagent-tree.ts` (`TreeRow`, `buildForest`, `collectSubagentTree`) is **deleted**.
-  - **Topology.** `collectTopology(values)` gathers the backend `subagent_tree` channel — the
-    top-level map plus each `criterion_evaluations[i].subagent_tree` (criterion workers re-home their
-    capture under the evaluation, so a reader must union both). `buildTopology(nodes)` reconstructs
-    the forest from `<name>:<uuid>` id segments joined by `|`. **Parentage comes from splitting the
-    id, never from `parent_id`** — a re-homed node's `parent_id` can point at an ancestor that was
-    stripped. Uncaptured intermediate levels are synthesized from id prefixes, then
-    `collapseRedundant` **collapses any synthetic node with exactly one child into that child**: that
-    is what fixed the "Criterion evaluation > Criterion evaluation" double-nesting, where the
-    synthesized ancestor took its label from the id segment and its only real child took the same
-    string from the builder's static agent name. Safe because a synthetic node carries no detail.
-    Internal graph nodes (`*Middleware*`, `__start__`/`__end__`) are filtered — LangGraph compiles
-    each middleware hook into its own node and surfaces it as a task; that is plumbing.
-  - **Plan assembly.** `execution-tree/plan-steps.ts`'s `buildExecTree(agent, values, busy, byNode)`
-    is the plan-first hybrid: registry `stages` (or a deep agent's `todos`) joined to the topology;
-    neither → the raw forest. Stage→children, stage→status AND stage→tool-runs all use the SAME
-    `node`-then-`active` precedence (`stageMatches`). Using `node` alone for the tool-run join is
-    what made every stage that declares only `active` — all council stages, all four trading
-    analysts — show zero tool calls *by construction* (measured: 0/55 → 55/55 once fixed).
+  the per-agent toggle. Two views of one tree, not two trees.
+  - **The tree comes from LangGraph's own checkpoints — there is no capture channel.**
+    `lib/agent/run-history.ts`: `POST /threads/{id}/history` returns one snapshot per superstep, each
+    carrying the `tasks[]` that ran in it; every task has `{id, name, result, checkpoint:{checkpoint_ns}}`,
+    and passing that namespace back to `getHistory` yields the child's supersteps and *its* tasks.
+    A namespace's `values.messages` is that node's transcript, tool calls included (verified on prod
+    thread `019f81a0`: `market_analyst:<uuid>` → 13 messages, 10 tool calls).
+    **A node is drillable iff it is a compiled agent/subgraph added via `add_node`** — a plain
+    function node reports `checkpoint: null` and is genuinely a leaf, so the UI says so rather than
+    offering an empty drill-down. Internal nodes (`*Middleware*`, `__start__`/`__end__`) are
+    filtered: LangGraph compiles each middleware hook into its own node and surfaces it as a task.
+  - **Everything below the root is lazy.** `useRunTreeRoot` / `useRunTreeNode`
+    (`features/agent-shared/use-run-tree.ts`) read one namespace per expanded row, cached forever
+    once the thread settles. A criteria run has 27 namespaces; walking them eagerly would cost 27
+    round trips for data nobody asked to see.
+  - **Why the double-nesting bug is now structurally impossible.** The old builder read the
+    `subagent_tree` channel, split `|`-joined `<name>:<uuid>` ids, and *synthesized* the ancestor
+    levels the backend never captured — a synthesized "Criterion evaluation" wrapping a real child
+    that took the same label from the builder's static agent name. Reading namespaces directly means
+    every level is one LangGraph actually recorded: nothing to infer, nothing to collapse. All of
+    `collectTopology` / `buildTopology` / `collapseRedundant` / `segmentName` are **deleted**.
+  - **Tool calls are read from the transcript**, not from a parallel record: `toolRunsFromMessages`
+    pairs each `AIMessage.tool_calls` entry with its `ToolMessage` by `tool_call_id`. A call with no
+    reply is kept as `pending` (a cancelled run must not silently lose it). There is deliberately
+    **no run-wide tool roll-up** any more — a tool call belongs to the node that made it, and
+    rebuilding a flat summary would mean walking every namespace eagerly.
+  - **Fan-out rows are named from `task.result`.** The 11 criteria workers are all the same graph
+    node, so the raw topology gives 11 identical labels. Each task's `result` carries the channels it
+    wrote (`taskWrite`), so the criterion's name is available from the ROOT history without fetching
+    each worker. Deliberately **not** index-paired against `values.criterion_evaluations`: parallel
+    `Send` workers complete out of order and the labels would drift onto the wrong rows.
+  - **Plan assembly.** `execution-tree/plan-steps.ts`'s `buildExecTree(agent, values, busy, topology,
+    byNode)` is the plan-first hybrid: registry `stages` (or a deep agent's `todos`) joined to the
+    topology; neither → the raw topology. `topology` is *injected* so the module stays pure and
+    directly testable. Stage→children and stage→status use the SAME `node`-then-`active` precedence
+    (`stageMatches`); using `node` alone is what made every stage declaring only `active` — all
+    council stages, all four trading analysts — show zero tool calls by construction.
   - **Output rendering is explicitly dispatched**, never shape-sniffed: `StageDef.outputKind`
     (`'debate' | 'criterion' | 'persona' | 'report' | 'structured'`) drives `renderNodeOutput`, with
     shape inference only as the fallback. The loose zod schemas accept *any* dict, so the old
@@ -236,33 +253,16 @@ The whole app is organised around **"one graph → one screen"**:
     also handles a **bare array** of serialized BaseMessages — `stageOutput` extracts
     `investment_debate_messages`, so the renderer sees a list, not a wrapper dict; only matching the
     dict is why both trading debates rendered as raw JSON.
-  - **Lazy detail.** `use-subagent-detail.ts` fetches one node's heavy payload from the
-    `["subagent_detail", threadId]` Store namespace on expand; `NodeDetail` takes a single
-    `detailNodeId?` (undefined = nothing to fetch, covering both the synthetic and
-    backend-says-no-detail cases).
-  - **Require-cycle dodge (still load-bearing).** `renderers/criteria-result.tsx` is in the
-    `renderers` barrel and `SubagentTree` transitively imports back into it, so
-    `CriterionDetails`/`CriterionRow`/`CriteriaResult` take a `renderTree?: (nodes: ExecNode[]) =>
-    React.ReactNode` render-prop rather than importing it. Metro resolves such cycles to `undefined`
-    at runtime without failing `tsc` or `expo export`.
-  - **Verification.** `scripts/exectree-check.ts` (run with `npx tsx`) imports the REAL module and
-    asserts against four checked-in production threads under `scripts/fixtures/threads/`. It replaced
-    `exectree-check.mjs` + `buildforest-check.mjs`, which were hand-maintained JS *ports* of the
-    builders ("Keep in sync by hand", said their headers) and drifted by construction.
-
-  **Native history (`lib/agent/run-history.ts`) — the intended replacement for the capture channel.**
-  `POST /threads/{id}/history` returns one snapshot per superstep, each carrying the `tasks[]` that
-  ran in it; every task has `{id, name, checkpoint:{checkpoint_ns}}`, and passing that namespace back
-  to `getHistory` yields the child's supersteps and *its* tasks. So the whole tree is reachable by
-  recursion on a finished run, and each namespace's `values.messages` is that node's transcript with
-  its tool calls (verified on prod thread `019f81a0`: `market_analyst:<uuid>` → 13 messages, 10 tool
-  calls). **A node is drillable iff it is a compiled agent/subgraph added via `add_node`** — a plain
-  function node reports `checkpoint: null` and is genuinely a leaf. `useRunTreeRoot` /
-  `useRunTreeNode` (`features/agent-shared/use-run-tree.ts`) expose this lazily, because the endpoint
-  costs ~1s per namespace in the thread (criteria 27 ns → 27.3s; trading 7 ns → 4.1s) — an app-side
-  N+1, diagnosed in `muffin-agent/docs/backend-notes/2026-07-27-history-endpoint-namespace-n-plus-1.md`.
-  **Not yet wired to any screen**; the tree still reads `subagent_tree`. Wiring it is the prerequisite
-  for deleting `AgentCaptureMiddleware` backend-side.
+  - **Overview vs Tree is a deliberate split.** Overview answers *what the run concluded* (headline
+    result, criterion cards, the council arena); the Execution Tree answers *what the run did*.
+    That is why criterion cards no longer carry a tool panel and the surfaces no longer carry a
+    run-wide roll-up: that content has one correct home now.
+  - **Verification.** `scripts/exectree-check.ts` (`npx tsx`) imports the REAL modules. Its topology
+    fixtures are synthetic — the snapshot shape is fixed by `langgraph_api/state.py`'s
+    `state_snapshot_to_thread_state` and the SDK's `ThreadTask` — which keeps it runnable offline and
+    lets it cover cases a captured fixture can't hold (an errored task, a tool call that never got a
+    reply). `scripts/history-check.ts` confirms the same end-to-end against the deployment (needs CF
+    Access credentials).
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —

@@ -1,30 +1,40 @@
 /**
- * One execution-tree node's expanded content — lazily fetched the moment its row is
- * expanded, so the heavy transcript/tool-run payload never inflates `thread.values`.
+ * One execution-tree node's expanded content, in the **Overview**'s idiom — fetched
+ * the moment its row is expanded, straight from that node's LangGraph namespace.
+ *
+ * `namespace` is the single gate: `undefined` means there is nothing to fetch, because
+ * the node is a plain function node in the graph rather than a compiled agent/subgraph.
+ * That is a leaf by construction, not missing data.
+ *
  * Reuses the same renderers `SubgraphDetail` composes (`Conversation`,
  * `StructuredOutput`, `ToolRunsPanel`).
- *
- * `detailNodeId` is the single gate: `undefined` means there is nothing to fetch —
- * either a synthetic placeholder (its children carry the real detail) or a node the
- * backend flagged as detail-less. The caller no longer has to pass `synthetic` and
- * `hasDetail` separately; `ExecNode.detailNodeId` already encodes both.
  */
 import { View } from 'react-native';
 
 import { Skeleton, Text } from '@/components/ui';
 import { StructuredOutput, ToolRunsPanel } from '@/lib/agent/renderers';
-import { parseArray, zToolRun } from '@/lib/agent/schemas';
 import { Conversation } from './conversation';
 import { coerceMessages, type ConversationMessage } from './conversation-turns';
-import { useSubagentDetail } from './use-subagent-detail';
+import { useRunTreeNode } from './use-run-tree';
 
-export function NodeDetail({ threadId, detailNodeId }: { threadId?: string; detailNodeId?: string }) {
-  const enabled = !!detailNodeId;
-  const { data, isPending } = useSubagentDetail(threadId, detailNodeId ?? '', enabled);
+export function NodeDetail({
+  threadId,
+  namespace,
+  output,
+  busy,
+}: {
+  threadId?: string;
+  namespace?: string;
+  /** Already-known structured output (a task's own channel writes) — rendered
+   * immediately, without waiting for the namespace read. */
+  output?: unknown;
+  busy?: boolean;
+}) {
+  const { data, isPending } = useRunTreeNode(threadId, namespace, !!namespace, busy);
 
-  if (!enabled) return null;
+  if (!namespace && output == null) return null;
 
-  if (isPending) {
+  if (isPending && namespace && output == null) {
     return (
       <View className="gap-1.5">
         <Skeleton className="h-3.5 w-full" />
@@ -34,14 +44,13 @@ export function NodeDetail({ threadId, detailNodeId }: { threadId?: string; deta
   }
 
   const messages = coerceMessages((data?.messages ?? []) as ConversationMessage[]);
-  const toolRuns = parseArray(zToolRun, data?.tool_runs, 'tool_runs');
-  const output = data?.output;
+  const toolRuns = data?.toolRuns ?? [];
   const hasBody = messages.length > 0 || toolRuns.length > 0 || output != null;
 
   if (!hasBody) {
     return (
       <Text variant="muted" className="text-xs">
-        No detail was recorded for this step.
+        This step recorded no transcript or tool calls.
       </Text>
     );
   }

@@ -17,5 +17,5 @@ export { ResearchResult } from './research-result';
 export { StructuredOutput } from './structured';
 export { TodoList, isTodoList, type Todo } from './todo-list';
 export { renderToolOutput } from './tool-registry';
-export { collectToolRuns, ToolRunsPanel, type ToolRun } from './tool-runs';
+export { ToolRunsPanel, type ToolRun } from './tool-runs';
 export { TradingResult } from './trading-result';
