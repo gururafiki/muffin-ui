@@ -43,8 +43,8 @@ export function isRetryNudge(m: AnyMessage): boolean {
   return m.additional_kwargs?.[RETRY_NUDGE_KEY] === true;
 }
 
-/** One sub-agent run row: a captured transcript (backend `subagent_runs`
- * state channel) and/or a protocol-v2 discovered subgraph invocation. */
+/** One sub-agent row in the Overview panels: a protocol-v2 discovered subgraph
+ * invocation, or a caller-rendered result row. */
 export type SubagentRun = {
   name?: string;
   description?: string;
@@ -56,7 +56,6 @@ export type SubagentRun = {
   /** Caller-provided expanded content (scoped live transcript / evaluation). */
   renderDetail?: () => React.ReactNode;
 };
-export type SubagentRuns = Record<string, SubagentRun>;
 
 /** A transcript accepts persisted dicts AND live `stream.messages` instances. */
 export type ConversationMessage = AnyMessage | BaseMessage;
@@ -68,17 +67,6 @@ export function coerceMessages(messages: readonly ConversationMessage[]): AnyMes
       ? (toMessageDict(m as BaseMessage) as AnyMessage)
       : (m as AnyMessage),
   );
-}
-
-/** Find the captured transcript for a `task` call, matched by its description. */
-export function findRun(runs: SubagentRuns | undefined, description?: string): SubagentRun | undefined {
-  if (!runs || !description) return undefined;
-  const target = description.trim();
-  for (const r of Object.values(runs)) {
-    const d = r.description?.trim();
-    if (d && (d === target || target.startsWith(d) || d.startsWith(target))) return r;
-  }
-  return undefined;
 }
 
 /** Split a message list into turns, pairing tool calls with their results. */

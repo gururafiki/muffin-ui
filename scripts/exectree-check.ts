@@ -1,29 +1,36 @@
 /**
- * Structural gate for the execution tree, run against REAL production threads.
+ * Structural gate for the execution tree. Imports the REAL modules, so a regression in
+ * `exec-tree.ts` / `run-history.ts` fails here instead of quietly diverging from a
+ * hand-maintained copy (which is what the `.mjs` ports this replaced always did).
  *
- * Replaces `exectree-check.mjs` + `buildforest-check.mjs`, which were hand-maintained
- * JS ports of the tree builders ("Keep in sync by hand", said their own headers). They
- * drifted by construction. This imports the REAL module, so a regression in
- * `exec-tree.ts` fails the gate instead of quietly diverging from a copy.
+ *   npx tsx scripts/exectree-check.ts            # offline; no credentials needed
+ *   npx tsx scripts/exectree-check.ts --fetch    # refresh the prod fixtures first
  *
- *   npx tsx scripts/exectree-check.ts            # uses fixtures/threads/*.json
- *   npx tsx scripts/exectree-check.ts --fetch    # re-pull the threads first
+ * ## Why the topology fixtures are synthetic
  *
- * Fetching needs CF Access service-token headers in the environment:
- *   CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, MUFFIN_API (default prod).
+ * The tree is now read from checkpoint **history**, not from thread `values`, and a
+ * history snapshot's shape is fixed by `langgraph_api/state.py`
+ * (`state_snapshot_to_thread_state`) and the SDK's `ThreadTask` type — `{id, name,
+ * result, error, checkpoint}`. Encoding that shape here keeps the gate runnable
+ * offline and lets it exercise cases a captured fixture can't reliably contain (an
+ * errored task, a task that never got a `ToolMessage` back).
+ *
+ * End-to-end confirmation against the live deployment is `scripts/history-check.ts`,
+ * which needs CF Access credentials.
+ *
+ * Fetching needs: CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, MUFFIN_API (default prod).
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { childrenForStage, walkTree, type ExecNode, type StageLike } from '../src/lib/agent/exec-tree';
 import {
-  buildTopology,
-  collectTopology,
-  toolRunsForStage,
-  walkTree,
-  type ExecNode,
-  type StageLike,
-} from '../src/lib/agent/exec-tree';
+  nodesFromSnapshots,
+  taskWrite,
+  toolRunsFromMessages,
+  type HistorySnapshot,
+} from '../src/lib/agent/run-history';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, 'fixtures', 'threads');
@@ -64,69 +71,148 @@ function check(label: string, ok: boolean, detail = ''): void {
   if (!ok) failures += 1;
 }
 
-function render(nodes: ExecNode[]): string[] {
-  const lines: string[] = [];
-  walkTree(nodes, (n, d) => lines.push(`${'  '.repeat(d)}${n.label} [${n.kind}]${n.summary ? ` (${n.summary})` : ''}`));
-  return lines;
+type TaskSpec = {
+  id: string;
+  name: string;
+  ns?: string;
+  result?: unknown;
+  error?: string | null;
+};
+
+/** One history snapshot carrying the given tasks, in the API's own shape. */
+function snapshot(tasks: TaskSpec[], values: Record<string, unknown> = {}): HistorySnapshot {
+  return {
+    values,
+    next: [],
+    tasks: tasks.map((t) => ({
+      id: t.id,
+      name: t.name,
+      error: t.error ?? null,
+      interrupts: [],
+      result: t.result,
+      checkpoint: t.ns ? { thread_id: 'T', checkpoint_ns: t.ns } : null,
+      state: null,
+    })),
+    metadata: {},
+    created_at: null,
+    checkpoint: null,
+    parent_checkpoint: null,
+  } as unknown as HistorySnapshot;
+}
+
+/** getHistory returns newest-first — build the list the same way. */
+function history(...oldestFirst: HistorySnapshot[]): HistorySnapshot[] {
+  return [...oldestFirst].reverse();
 }
 
 async function main(): Promise<void> {
   if (process.argv.includes('--fetch')) await fetchThreads();
 
-  console.log('\ncriteria_analysis — the double-nesting repro');
+  console.log('\nroot topology — what is drillable, and what is plumbing');
   {
-    const forest = buildTopology(collectTopology(load('criteria')));
-    const labels: string[] = [];
-    walkTree(forest, (n) => labels.push(n.label));
-    // The bug: a synthesized "Criterion evaluation" wrapping a real node with the
-    // SAME label. After collapsing, no node may share its parent's label.
+    // Mirrors trading_decision: four analysts + two debates are compiled subgraphs
+    // (namespaced), while judge/trader/portfolio_manager are plain function nodes.
+    const snaps = history(
+      snapshot([{ id: '1', name: 'market_analyst', ns: 'market_analyst:u1' }]),
+      snapshot([
+        { id: '1', name: 'market_analyst', ns: 'market_analyst:u1' }, // repeat
+        { id: '2', name: 'AgentCaptureMiddleware.after_agent' },
+        { id: '3', name: '__start__' },
+      ]),
+      snapshot([{ id: '4', name: 'investment_judge' }, { id: '5', name: 'trader', error: 'boom' }]),
+    );
+    const nodes = nodesFromSnapshots(snaps);
+    check('middleware + sentinels filtered', !nodes.some((n) => /Middleware|__start__/.test(n.name ?? '')));
+    check('repeated tasks de-duplicate', nodes.filter((n) => n.name === 'market_analyst').length === 1);
+    check('execution order preserved', nodes.map((n) => n.name).join(',') === 'market_analyst,investment_judge,trader');
+    check('compiled subgraphs are drillable', nodes.find((n) => n.name === 'market_analyst')?.namespace === 'market_analyst:u1');
+    // Pattern C: a plain function node has no namespace. That is a leaf by
+    // construction, not a missing branch — the UI must not offer a drill-down.
+    check('plain function nodes are leaves', !nodes.find((n) => n.name === 'investment_judge')?.namespace);
+    check('errors surface as status', nodes.find((n) => n.name === 'trader')?.status === 'error');
+  }
+
+  console.log('\nfan-out — the criteria double-nesting repro');
+  {
+    // 11 parallel Send workers, all the SAME graph node. The old builder split
+    // `|`-joined ids and synthesized an ancestor per prefix, labelling it from the
+    // id segment while its only real child took the same string from the builder's
+    // static agent name — "Criterion evaluation > Criterion evaluation".
+    const snaps = history(
+      snapshot(
+        Array.from({ length: 11 }, (_, i) => ({
+          id: `c${i}`,
+          name: 'criterion_evaluation',
+          ns: `criterion_evaluation:u${i}`,
+          result: { criterion_evaluations: [{ criterion_name: `Criterion ${i}`, signal: 'bullish' }] },
+        })),
+      ),
+    );
+    const nodes = nodesFromSnapshots(snaps);
+    check('one node per worker, no synthesized levels', nodes.length === 11);
+    check('workers are flat, not nested', nodes.every((n) => n.children.length === 0));
     let dupes = 0;
-    const walkPairs = (nodes: ExecNode[], parent?: ExecNode) => {
-      for (const n of nodes) {
-        if (parent && parent.label === n.label) dupes += 1;
-        walkPairs(n.children, n);
-      }
-    };
-    walkPairs(forest);
+    walkTree(nodes, (n) => {
+      const child = n.children.find((c) => c.label === n.label);
+      if (child) dupes += 1;
+    });
     check('no node repeats its parent label', dupes === 0, `${dupes} duplicate pair(s)`);
-    check('criterion workers present', forest.length >= 11, `${forest.length} roots`);
-    check('no synthetic-with-one-child survives', !render(forest).some((l, i, a) =>
-      l.includes('[synthetic]') && (a[i + 1]?.startsWith(l.replace(/\S.*/, '') + '  ') ?? false)));
-    console.log(render(forest).slice(0, 4).map((l) => '      ' + l).join('\n'));
+    // Names come from each task's own channel writes — never from index-pairing
+    // against `values.criterion_evaluations`, whose order is completion order.
+    const named = taskWrite(nodes[3].output, 'criterion_evaluations') as { criterion_name?: string };
+    check('worker names come from the task result', named?.criterion_name === 'Criterion 3', named?.criterion_name ?? '-');
+    check('taskWrite unwraps $writes', taskWrite({ k: { $writes: [[{ v: 1 }]] } }, 'k') !== undefined);
+    check('taskWrite tolerates a missing channel', taskWrite({}, 'nope') === undefined);
   }
 
-  console.log('\nstock_evaluation — deep-agent task subagents keep their real names');
+  console.log('\ntool calls — derived from the transcript, not a capture channel');
   {
-    const forest = buildTopology(collectTopology(load('stockeval')));
-    const labels = forest.map((n) => n.label);
-    check('9 task subagents', forest.length === 9, `${forest.length}`);
-    check('named from the agent, not the node', labels.includes('Equity price'), labels.slice(0, 3).join(', '));
-    check('no raw "Tools" labels', !labels.includes('Tools'));
-    check('tool summaries present', forest.some((n) => !!n.summary), forest[0]?.summary ?? '-');
-  }
-
-  console.log('\ntrading_decision — stage/tool-run join');
-  {
-    const values = load('trading');
-    const runs = (values.tool_runs ?? []) as { agent?: string }[];
-    const analysts: StageLike[] = [
-      { key: 'market', label: 'Market & technicals', node: 'market_analyst', active: /market_analyst/i },
-      { key: 'fundamentals', label: 'Fundamentals', node: 'fundamentals_analyst', active: /fundamentals_analyst/i },
-      { key: 'news', label: 'News', node: 'news_analyst', active: /news_analyst/i },
-      { key: 'sentiment', label: 'Social sentiment', node: 'social_analyst', active: /social_analyst|sentiment/i },
+    const messages = [
+      { type: 'human', content: 'go' },
+      {
+        type: 'ai',
+        content: '',
+        tool_calls: [
+          { id: 'a', name: 'get_indicators', args: { ticker: 'NVDA' } },
+          { id: 'b', name: 'get_news', args: {} },
+          { id: 'c', name: 'never_returned', args: {} },
+        ],
+      },
+      { type: 'tool', tool_call_id: 'a', content: 'ok', status: 'success' },
+      { type: 'tool', tool_call_id: 'b', content: 'kaboom', status: 'error' },
     ];
-    const attached = analysts.reduce((a, s) => a + toolRunsForStage(s, runs as never).length, 0);
-    // The four analyst stages used to declare no `node`, and the join was node-only,
-    // so every one of them showed zero tool calls by construction.
-    check('every analyst tool run attaches to a stage', attached === runs.length, `${attached}/${runs.length}`);
-    check('each analyst has some', analysts.every((s) => toolRunsForStage(s, runs as never).length > 0));
-
-    // A stage that matches only by regex must still collect its runs.
-    const regexOnly: StageLike = { key: 'x', label: 'x', active: /market_analyst/i };
-    check('regex-only stages collect runs too', toolRunsForStage(regexOnly, runs as never).length > 0);
+    const runs = toolRunsFromMessages(messages, 'market_analyst');
+    check('every tool call becomes a run', runs.length === 3, `${runs.length}`);
+    check('results pair by tool_call_id', runs.find((r) => r.tool === 'get_indicators')?.status === 'ok');
+    check('errors are marked', runs.find((r) => r.tool === 'get_news')?.status === 'error');
+    // A cancelled run leaves a call with no ToolMessage. Dropping it would hide
+    // exactly the case a reader most needs to see.
+    check('unanswered calls are kept as pending', runs.find((r) => r.tool === 'never_returned')?.status === 'pending');
+    check('runs are attributed to the node', runs.every((r) => r.agent === 'market_analyst'));
+    check('a transcript with no calls yields none', toolRunsFromMessages([{ type: 'ai', content: 'hi' }]).length === 0);
   }
 
-  console.log('\ntrading_decision — debate output shape');
+  console.log('\nstage → topology join');
+  {
+    const topology: ExecNode[] = [
+      { id: '1', label: 'Market analyst', name: 'market_analyst', kind: 'agent', children: [] },
+      { id: '2', label: 'Bull researcher', name: 'bull_researcher', kind: 'agent', children: [] },
+    ];
+    const byNode: StageLike = { key: 'm', label: 'Market', node: 'market_analyst' };
+    // The join used to consult `stage.node` alone, so every stage declaring only
+    // `active` — all council stages, all four trading analysts — matched nothing.
+    const byActive: StageLike = { key: 'd', label: 'Debate', active: /researcher/i };
+    check('exact node match binds', childrenForStage(byNode, topology).length === 1);
+    check('regex-only stages bind too', childrenForStage(byActive, topology).length === 1);
+    check('a stage matching nothing binds nothing', childrenForStage({ key: 'x', label: 'x' }, topology).length === 0);
+    check(
+      'node takes precedence over active',
+      childrenForStage({ key: 'm', label: 'M', node: 'market_analyst', active: /researcher/i }, topology)[0]?.name ===
+        'market_analyst',
+    );
+  }
+
+  console.log('\ntrading_decision — debate output shape (prod fixture)');
   {
     const values = load('trading');
     const msgs = values.investment_debate_messages;
@@ -140,10 +226,10 @@ async function main(): Promise<void> {
     check('array is recognisable as serialized messages', isMsgList);
   }
 
-  console.log('\ncouncil — pre-capture thread degrades cleanly');
+  console.log('\nempty run degrades cleanly');
   {
-    const forest = buildTopology(collectTopology(load('council')));
-    check('empty tree, no crash', Array.isArray(forest), `${forest.length} roots`);
+    check('no snapshots, no crash', nodesFromSnapshots([]).length === 0);
+    check('snapshots with no tasks, no crash', nodesFromSnapshots([snapshot([])]).length === 0);
   }
 
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`);

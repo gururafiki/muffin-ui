@@ -3,19 +3,14 @@ import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
 import { Badge, Card, Chip, Collapsible, Text } from '@/components/ui';
-// Type-only import — a runtime import of Conversation (or SubagentTree, which
-// itself pulls in Conversation/StructuredOutput via subagent-activity /
-// node-detail) here would create a require cycle (renderers barrel → this
-// file → subagent-tree/conversation → barrel), so the nested-transcript AND
-// nested-tree rendering are injected by the caller via `renderTranscript` /
-// `renderTree`.
+// Type-only import — a runtime import of Conversation here would create a
+// require cycle (renderers barrel → this file → conversation → barrel), so the
+// nested-transcript rendering is injected by the caller via `renderTranscript`.
 import type { SubagentRun } from '@/features/agent-shared/conversation-turns';
-import { buildTopology, collectTopology, type ExecNode } from '@/lib/agent/exec-tree';
 import { parseArray, zCriterionEvaluation, type CriterionEvaluation } from '@/lib/agent/schemas';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
 import { Markdown } from './markdown';
-import { ToolRunsPanel } from './tool-runs';
 import { ConfidenceBar, ReportSection, ScoreBar, TagRow, toneColor, Verdict, toneForSignal } from './widgets';
 
 type Dict = Record<string, unknown>;
@@ -28,10 +23,13 @@ export type Criterion = CriterionEvaluation;
  * The evaluation collected no live data — either the backend truthing pass
  * says so (`data_collected: false`, criteria runs after 2026-07), or, for
  * older threads, there is no evidence of collection at all.
+ *
+ * `data_collected` is a worker *finding*, not telemetry: the backend reconciles
+ * it against the tools that actually ran, and it survives the removal of the
+ * capture channels precisely because a node needs it for logic.
  */
 const noLiveData = (c: Criterion): boolean =>
-  c.data_collected === false ||
-  (c.data_collected === undefined && !(c.data_sources?.length || c.tool_runs?.length));
+  c.data_collected === false || (c.data_collected === undefined && !c.data_sources?.length);
 
 const asStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).filter(Boolean) : [];
@@ -80,22 +78,15 @@ export function CriterionDetails({
   c,
   transcript,
   renderTranscript,
-  renderTree,
 }: {
   c: Criterion;
   transcript?: SubagentRun;
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
-  /** Renders this criterion's own recursive sub-agent forest — injected by the
-   * caller (see the require-cycle note above); builds `ExecNode`s from
-   * `c.subagent_tree` (`criterion_evaluations[i].subagent_tree`, the same
-   * criterion-homed channel `collectToolRuns` uses for `tool_runs`). */
-  renderTree?: (nodes: ExecNode[]) => React.ReactNode;
 }) {
   const tone = toneForSignal(c.signal);
   const evidence = asStrings(c.evidence_summary);
   const sources = asSourceLines(c.data_sources);
   const limitations = asStrings(c.limitations);
-  const critTree = buildTopology(collectTopology({ subagent_tree: c.subagent_tree }));
 
   return (
         <View className="gap-3 pl-4 pt-2">
@@ -182,9 +173,9 @@ export function CriterionDetails({
             </DetailBlock>
           ) : null}
 
-          <ToolRunsPanel title="Data collection" runs={c.tool_runs} mode="flat" />
-
-          {critTree.length > 0 && renderTree ? renderTree(critTree) : null}
+          {/* This card is the criterion's RESULT. What the worker did to reach it —
+              its transcript, tool calls and sub-agents — lives in the Execution Tree,
+              read from that worker's own LangGraph namespace. */}
 
           {transcript?.messages?.length && renderTranscript ? (
             <Collapsible title="How this was evaluated" icon="agents">
@@ -206,12 +197,10 @@ function CriterionRow({
   c,
   transcript,
   renderTranscript,
-  renderTree,
 }: {
   c: Criterion;
   transcript?: SubagentRun;
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
-  renderTree?: (nodes: ExecNode[]) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const tone = toneForSignal(c.signal);
@@ -237,7 +226,7 @@ function CriterionRow({
       </Pressable>
 
       {open ? (
-        <CriterionDetails c={c} transcript={transcript} renderTranscript={renderTranscript} renderTree={renderTree} />
+        <CriterionDetails c={c} transcript={transcript} renderTranscript={renderTranscript} />
       ) : null}
     </View>
   );
@@ -268,14 +257,12 @@ export function CriteriaResult({
   value,
   subagentRuns,
   renderTranscript,
-  renderTree,
 }: {
   value: unknown;
   subagentRuns?: SubagentRun[];
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
   /** Renders a criterion's own recursive sub-agent forest — see the
    * require-cycle note on `CriterionDetails` above. */
-  renderTree?: (nodes: ExecNode[]) => React.ReactNode;
 }) {
   if (!value || typeof value !== 'object') return <JsonBlock value={value} />;
   const v = value as Dict;
@@ -309,7 +296,6 @@ export function CriteriaResult({
               c={c}
               transcript={transcriptFor(c.criterion_name, subagentRuns)}
               renderTranscript={renderTranscript}
-              renderTree={renderTree}
             />
           ))}
         </Card>

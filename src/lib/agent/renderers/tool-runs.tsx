@@ -5,7 +5,7 @@ import { Icon, type IconName } from '@/components/icons';
 import { Badge, Card, Collapsible, Text } from '@/components/ui';
 import type { Signal } from '@/components/ui/badge';
 import { relativeTime } from '@/features/agent-calls/threads';
-import { parseArray, zCriterionEvaluation, zToolRun, type ToolRun } from '@/lib/agent/schemas';
+import type { ToolRun } from '@/lib/agent/schemas';
 import { fmtSize, summariseArgs, useToolCache } from '@/lib/agent/tool-cache';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
@@ -13,26 +13,6 @@ import { renderToolOutput } from './tool-registry';
 
 /** One tool-execution record — the schema mirrors `ToolTelemetryMiddleware`. */
 export type { ToolRun } from '@/lib/agent/schemas';
-
-type Dict = Record<string, unknown>;
-
-/**
- * Gather every tool run in a criteria-analysis run: the stage-level records at
- * the top level plus each criterion's own `tool_runs` (attached by the backend
- * worker's `package` node). Reads streamed `values` — identical live and
- * post-refresh; records are validated at this boundary (see schemas.ts).
- */
-export function collectToolRuns(values: unknown): ToolRun[] {
-  if (!values || typeof values !== 'object') return [];
-  const v = values as Dict;
-  const top = parseArray(zToolRun, v.tool_runs, 'values.tool_runs');
-  const perCriterion = parseArray(
-    zCriterionEvaluation,
-    v.criterion_evaluations,
-    'values.criterion_evaluations',
-  ).flatMap((e) => e.tool_runs ?? []);
-  return [...top, ...perCriterion];
-}
 
 const STATUS_TONE: Record<string, Signal> = {
   ok: 'bullish',

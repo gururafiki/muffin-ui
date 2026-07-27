@@ -22,12 +22,11 @@ import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { parseArray, zPersonaSignal } from '@/lib/agent/schemas';
-import { collectToolRuns, ToolRunsPanel } from '@/lib/agent/renderers';
-import { buildTopology, collectTopology } from '@/lib/agent/exec-tree';
+import { useRunTreeRoot } from '@/features/agent-shared/use-run-tree';
 import { CouncilArena } from './council-arena';
 import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
-import { MemberDetail } from './member-detail';
+import { findMemberNode, MemberDetail } from './member-detail';
 import {
   COUNCIL_MEMBERS,
   COUNCIL_PERSONAS,
@@ -35,7 +34,6 @@ import {
   getPersonaMeta,
   MEMBER_SLUGS,
   normalizeSlug,
-  toolRunAgentSlug,
   type PersonaMeta,
 } from './personas';
 import { signalTone, type PersonaSignal, type PersonaStage, type VoteTally } from './types';
@@ -150,10 +148,11 @@ export function CouncilScreen({
     [values, live, stream.subgraphsByNode, busy, wantSpecialists],
   );
 
-  // The whole run's recursive sub-agent forest (backend `AgentCaptureMiddleware`'s
-  // `subagent_tree` channel) — computed once here; `MemberDetail` picks out the
-  // selected persona's own root subtree by matching its id's leading slug.
-  const tree = useMemo(() => buildTopology(collectTopology(values)), [values]);
+  // The run's top-level execution steps, read once from LangGraph's own
+  // checkpoints. `MemberDetail` picks out the selected member's node; expanding
+  // it reads that member's namespace for its transcript, tool calls and
+  // sub-agents.
+  const { data: topology } = useRunTreeRoot(liveThreadId, busy);
   const judging = busy && Object.keys(signals).length >= members.length && !synthesis;
 
   const totalVotes = tally.bullish + tally.bearish + tally.neutral;
@@ -166,9 +165,7 @@ export function CouncilScreen({
   const discovered = useSubgraphRows(agent, stream);
   const selRow = selected ? discovered.find((r) => normalizeSlug(r.nodeName) === selected) : undefined;
   const selLive = selected ? live.get(selected) : undefined;
-  const selToolRuns = selected
-    ? collectToolRuns(values).filter((r) => toolRunAgentSlug(r.agent) === selected)
-    : [];
+  const selNode = selected ? findMemberNode(topology, selected) : undefined;
   const unknownRuns = discovered
     .filter((r) => !MEMBER_SLUGS.has(normalizeSlug(r.nodeName)) && r.nodeName !== 'council_judge')
     .map((row) => ({
@@ -292,8 +289,7 @@ export function CouncilScreen({
             busy={busy}
             liveValues={selLive?.values}
             row={selRow}
-            toolRuns={selToolRuns}
-            tree={tree}
+            node={selNode}
             threadId={liveThreadId}
             onDismiss={() => setSelected(null)}
           />
@@ -303,19 +299,10 @@ export function CouncilScreen({
       {/* Safety net: discovered nodes the UI has no member metadata for yet. */}
       {unknownRuns?.length ? <SubagentActivity runs={unknownRuns} /> : null}
 
-      {/* Tool execution across every member (each row's `agent` field carries
-          the member's collect_data agent name). Rows join the provider-call
-          cache on expand. Older runs predate capture — say so. */}
-      <ToolRunsPanel
-        title="Tool execution"
-        mode="grouped"
-        runs={collectToolRuns(values)}
-        emptyMessage={
-          !busy && totalVotes > 0
-            ? 'No tool telemetry was recorded for this run — re-run the council to capture per-member tool calls.'
-            : undefined
-        }
-      />
+      {/* No run-wide tool roll-up here: a member's tool calls belong to that
+          member, and live under its row (tap a member → its namespace is read on
+          demand). Rebuilding a council-wide roll-up would mean walking all 19
+          namespaces eagerly for a summary nobody asked for. */}
 
       {judging || synthesis ? (
         <Animated.View entering={FadeInDown.duration(300)}>

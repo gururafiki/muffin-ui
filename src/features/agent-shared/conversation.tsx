@@ -29,14 +29,12 @@ import { palette } from '@/theme/colors';
 import {
   buildTurns,
   coerceMessages,
-  findRun,
   groupTimeline,
   isSignificant,
   tryParseJson,
   type ConversationMessage,
   type MessageActions,
   type Step,
-  type SubagentRuns,
   type ToolStepT,
   type ViewMode,
 } from './conversation-turns';
@@ -46,7 +44,6 @@ export type {
   ConversationMessage,
   MessageActions,
   SubagentRun,
-  SubagentRuns,
   ViewMode,
 } from './conversation-turns';
 
@@ -147,13 +144,11 @@ function SubAgentGroup({
   calls,
   last,
   defaultOpen,
-  subagentRuns,
 }: {
   name: string;
   calls: ToolStepT[];
   last: boolean;
   defaultOpen: boolean;
-  subagentRuns?: SubagentRuns;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const error = calls.some((c) => c.error);
@@ -179,22 +174,15 @@ function SubAgentGroup({
         ) : null}
         {open ? (
           <View className="mt-2 gap-3">
-            {calls.map((c, i) => {
-              const run = findRun(subagentRuns, brief(c));
-              return (
-                <View key={c.id + i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
-                  {calls.length > 1 ? <Text variant="label">Task {i + 1}</Text> : null}
-                  {brief(c) ? <Text variant="muted" className="text-xs">{brief(c)}</Text> : null}
-                  {/* Prefer the captured internal transcript (nested timeline); fall
-                      back to the tool result (final report) when not captured. */}
-                  {run?.messages?.length ? (
-                    <Conversation messages={run.messages} viewMode="verbose" subagentRuns={subagentRuns} />
-                  ) : (
-                    <ToolResult message={c.result} />
-                  )}
-                </View>
-              );
-            })}
+            {calls.map((c, i) => (
+              <View key={c.id + i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
+                {calls.length > 1 ? <Text variant="label">Task {i + 1}</Text> : null}
+                {brief(c) ? <Text variant="muted" className="text-xs">{brief(c)}</Text> : null}
+                {/* The sub-agent's own transcript lives in the Execution Tree, read
+                    from its LangGraph namespace; here we show what it returned. */}
+                <ToolResult message={c.result} />
+              </View>
+            ))}
           </View>
         ) : null}
       </Pressable>
@@ -205,11 +193,9 @@ function SubAgentGroup({
 function StepTimeline({
   steps,
   viewMode,
-  subagentRuns,
 }: {
   steps: Step[];
   viewMode: ViewMode;
-  subagentRuns?: SubagentRuns;
 }) {
   const shown = viewMode === 'verbose' ? steps : steps.filter(isSignificant);
   if (shown.length === 0) return null;
@@ -232,7 +218,6 @@ function StepTimeline({
             calls={n.calls}
             last={i === nodes.length - 1}
             defaultOpen={false}
-            subagentRuns={subagentRuns}
           />
         ) : (
           <StepRow key={'l' + i} step={n.step} last={i === nodes.length - 1} defaultOpen={false} />
@@ -254,7 +239,6 @@ export function Conversation({
   viewMode,
   busy,
   actions,
-  subagentRuns,
 }: {
   /** Persisted dicts or live `stream.messages` instances — both render. */
   messages: readonly ConversationMessage[];
@@ -263,7 +247,6 @@ export function Conversation({
   busy?: boolean;
   actions?: MessageActions;
   /** Captured sub-agent transcripts, keyed by run id (deep agents). */
-  subagentRuns?: SubagentRuns;
 }) {
   // Recomputed only when the message list changes — NOT on unrelated
   // re-renders (during token streaming the list identity changes anyway).
@@ -275,7 +258,7 @@ export function Conversation({
       {turns.map((turn, ti) => (
         <View key={ti} className="gap-3">
           {turn.human ? <HumanBubble message={turn.human} actions={actions} /> : null}
-          <StepTimeline key={viewMode} steps={turn.steps} viewMode={viewMode} subagentRuns={subagentRuns} />
+          <StepTimeline key={viewMode} steps={turn.steps} viewMode={viewMode} />
           {turn.answer ? <AnswerBlock message={turn.answer} actions={actions} /> : null}
           {busy && ti === turns.length - 1 ? (
             <View className="flex-row items-center gap-2 px-1">

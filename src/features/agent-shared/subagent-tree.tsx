@@ -17,25 +17,38 @@ import type { ExecNode } from '@/lib/agent/exec-tree';
 import type { SubagentRun } from './conversation-turns';
 import { NodeDetail } from './node-detail';
 import { SubagentActivity } from './subagent-activity';
+import { useRunTreeNode } from './use-run-tree';
 
 function toRuns(nodes: ExecNode[], threadId: string | undefined): SubagentRun[] {
   return nodes.map((node) => ({
     name: node.label,
     description: node.summary,
     status: node.status === 'error' ? 'error' : 'complete',
+    // `renderDetail` runs only once the row is open, so a node's namespace read
+    // and its children's rows are both deferred until someone asks for them.
     renderDetail: () => (
-      <View className="gap-3">
-        <NodeDetail threadId={threadId} detailNodeId={node.detailNodeId} />
-        {node.children.length > 0 ? <SubagentActivity runs={toRuns(node.children, threadId)} /> : null}
-      </View>
+      <SubagentTreeNodeDetail node={node} threadId={threadId} />
     ),
   }));
 }
 
+/** One expanded row: this node's own detail, then its children as further rows.
+ * Children come from the namespace read, so the recursion deepens by one level
+ * per expansion rather than being materialised up front. */
+function SubagentTreeNodeDetail({ node, threadId }: { node: ExecNode; threadId?: string }) {
+  const { data } = useRunTreeNode(threadId, node.namespace, !!node.namespace);
+  const children = data?.children.length ? data.children : node.children;
+  return (
+    <View className="gap-3">
+      <NodeDetail threadId={threadId} namespace={node.namespace} output={node.output} />
+      {children.length > 0 ? <SubagentActivity runs={toRuns(children, threadId)} /> : null}
+    </View>
+  );
+}
+
 /**
- * Recursive view of a run's execution forest. `nodes` comes from
- * `buildTopology(collectTopology(values))`; `threadId` is forwarded to each node's
- * lazy detail fetch.
+ * Recursive view of a run's execution forest. `nodes` is the root topology from
+ * `useRunTreeRoot`; each row fetches its own namespace on expand.
  */
 export function SubagentTree({ nodes, threadId }: { nodes: ExecNode[]; threadId?: string }) {
   if (nodes.length === 0) return null;

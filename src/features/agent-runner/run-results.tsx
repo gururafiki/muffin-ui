@@ -12,18 +12,14 @@ import { Conversation, type SubagentRun } from '@/features/agent-shared/conversa
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { HydrationCard } from '@/features/agent-shared/run-surface';
 import { SubagentActivity, SubagentPanelSkeleton } from '@/features/agent-shared/subagent-activity';
-import { SubagentTree } from '@/features/agent-shared/subagent-tree';
 import type { AgentDef } from '@/lib/agent/registry';
 import {
-  collectToolRuns,
   CriteriaResult,
   ResearchResult,
   StructuredOutput,
-  ToolRunsPanel,
   TradingResult,
   type Todo,
 } from '@/lib/agent/renderers';
-import type { ExecNode } from '@/lib/agent/exec-tree';
 
 const renderRunTranscript = (run: SubagentRun) => (
   <Conversation messages={run.messages ?? []} viewMode="verbose" />
@@ -34,13 +30,8 @@ const RESULT_RENDERERS: Record<
   (value: unknown, runs?: SubagentRun[], threadId?: string) => React.ReactNode
 > = {
   research: (value) => <ResearchResult value={value} />,
-  criteria: (value, runs, threadId) => (
-    <CriteriaResult
-      value={value}
-      subagentRuns={runs}
-      renderTranscript={renderRunTranscript}
-      renderTree={(nodes: ExecNode[]) => <SubagentTree nodes={nodes} threadId={threadId} />}
-    />
+  criteria: (value, runs) => (
+    <CriteriaResult value={value} subagentRuns={runs} renderTranscript={renderRunTranscript} />
   ),
   trading: (value) => <TradingResult value={value} />,
 };
@@ -109,7 +100,6 @@ export function RunResults({
   busy,
   byNode,
   subagentRuns,
-  tree,
   threadId,
 }: {
   agent: AgentDef;
@@ -120,9 +110,6 @@ export function RunResults({
   busy: boolean;
   byNode: ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
   subagentRuns: SubagentRun[];
-  /** The run's recursive sub-agent forest (`buildTopology(collectTopology(view))`) —
-   * rendered via `SubagentTree` instead of the flat `subagentRuns` panel when non-empty. */
-  tree: ExecNode[];
   threadId?: string;
 }) {
   return (
@@ -148,33 +135,15 @@ export function RunResults({
         )
       ) : null}
 
-      {/* Run-level tool execution: per-tool success/fail/cached counts, drill
-          down to each call's inputs/outputs/errors. Rows join the provider-call
-          cache (RunSurface's ToolCacheProvider) to show the full gathered
-          payload + size + timestamp on expand. Grows live for criteria — the
-          merged view's evaluations carry each worker's tool_runs. */}
-      <ToolRunsPanel
-        title="Tool execution"
-        mode="grouped"
-        runs={collectToolRuns(view)}
-        emptyMessage={
-          !busy
-            ? 'No tool telemetry was recorded for this run — older runs predate capture; re-run the agent to capture per-tool calls here.'
-            : undefined
-        }
-      />
-
-      {/* Sub-agent activity (deep agents like criteria) — captured transcripts.
-          The recursive tree (`AgentCaptureMiddleware`'s `subagent_tree`
-          channel) renders INSTEAD of the flat panel when the run captured
-          one; older runs (no captured tree) keep the flat panel as-is.
+      {/* Sub-agent activity as the live stream discovers it. Tool calls are NOT
+          rolled up here any more: they belong to the node that made them, and
+          that attribution lives in the Execution Tree, which reads each node's
+          own LangGraph namespace on expand. A run-wide roll-up would have to
+          walk every namespace eagerly to rebuild what the capture channel used
+          to flatten for it.
           `loadingHint` holds a panel skeleton through the discovery `/history`
           gap for agents that surface native subagents (node-based stages). */}
-      {tree.length > 0 ? (
-        <SubagentTree nodes={tree} threadId={threadId} />
-      ) : (
-        <SubagentActivity runs={subagentRuns} loadingHint={agent.stages?.some((s) => !!s.node) ?? false} />
-      )}
+      <SubagentActivity runs={subagentRuns} loadingHint={agent.stages?.some((s) => !!s.node) ?? false} />
     </>
   );
 }

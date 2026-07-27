@@ -16,14 +16,14 @@ import { Card, Chip, Screen, Skeleton, Text } from '@/components/ui';
 import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/run-gate';
 import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { AgentHero } from '@/features/agent-shared/agent-hero';
-import { Conversation, type MessageActions, type SubagentRuns, type ViewMode } from '@/features/agent-shared/conversation';
+import { Conversation, type MessageActions, type ViewMode } from '@/features/agent-shared/conversation';
 import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
 import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import type { AgentDef } from '@/lib/agent/registry';
-import { collectToolRuns, ToolRunsPanel, type Todo } from '@/lib/agent/renderers';
+import { type Todo } from '@/lib/agent/renderers';
 import { palette } from '@/theme/colors';
 import { InterruptCard } from './interrupt';
 
@@ -112,9 +112,8 @@ export function ChatScreen({
   const busy = stream.isLoading;
   // Conversation transcript (default) vs the generic Execution-tree view.
   const agentView = useAgentView(agent.id);
-  const values = stream.values as { todos?: Todo[]; subagent_runs?: SubagentRuns } | undefined;
+  const values = stream.values as { todos?: Todo[] } | undefined;
   const todos = values?.todos;
-  const subagentRuns = values?.subagent_runs;
   const chatStarted = !!initialThreadId || messages.length > 0 || busy;
   const signInRequired = useSignInRequiredToRun();
 
@@ -217,11 +216,7 @@ export function ChatScreen({
                 viewMode={viewMode}
                 busy={busy}
                 actions={actions}
-                subagentRuns={subagentRuns}
               />
-
-              {/* Tool execution — rows join the provider-call cache on expand. */}
-              <ToolRunsPanel title="Tool execution" mode="grouped" runs={collectToolRuns(values)} />
             </>
           )}
 
