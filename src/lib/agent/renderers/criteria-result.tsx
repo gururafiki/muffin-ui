@@ -10,7 +10,7 @@ import { Badge, Card, Chip, Collapsible, Text } from '@/components/ui';
 // nested-tree rendering are injected by the caller via `renderTranscript` /
 // `renderTree`.
 import type { SubagentRun } from '@/features/agent-shared/conversation-turns';
-import { buildForest, collectSubagentTree, type TreeRow } from '@/lib/agent/subagent-tree';
+import { buildTopology, collectTopology, type ExecNode } from '@/lib/agent/exec-tree';
 import { parseArray, zCriterionEvaluation, type CriterionEvaluation } from '@/lib/agent/schemas';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
@@ -86,16 +86,16 @@ export function CriterionDetails({
   transcript?: SubagentRun;
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
   /** Renders this criterion's own recursive sub-agent forest — injected by the
-   * caller (see the require-cycle note above); builds `TreeRow`s from
+   * caller (see the require-cycle note above); builds `ExecNode`s from
    * `c.subagent_tree` (`criterion_evaluations[i].subagent_tree`, the same
    * criterion-homed channel `collectToolRuns` uses for `tool_runs`). */
-  renderTree?: (rows: TreeRow[]) => React.ReactNode;
+  renderTree?: (nodes: ExecNode[]) => React.ReactNode;
 }) {
   const tone = toneForSignal(c.signal);
   const evidence = asStrings(c.evidence_summary);
   const sources = asSourceLines(c.data_sources);
   const limitations = asStrings(c.limitations);
-  const critTree = buildForest(collectSubagentTree({ subagent_tree: c.subagent_tree }));
+  const critTree = buildTopology(collectTopology({ subagent_tree: c.subagent_tree }));
 
   return (
         <View className="gap-3 pl-4 pt-2">
@@ -211,7 +211,7 @@ function CriterionRow({
   c: Criterion;
   transcript?: SubagentRun;
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
-  renderTree?: (rows: TreeRow[]) => React.ReactNode;
+  renderTree?: (nodes: ExecNode[]) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const tone = toneForSignal(c.signal);
@@ -275,7 +275,7 @@ export function CriteriaResult({
   renderTranscript?: (run: SubagentRun) => React.ReactNode;
   /** Renders a criterion's own recursive sub-agent forest — see the
    * require-cycle note on `CriterionDetails` above. */
-  renderTree?: (rows: TreeRow[]) => React.ReactNode;
+  renderTree?: (nodes: ExecNode[]) => React.ReactNode;
 }) {
   if (!value || typeof value !== 'object') return <JsonBlock value={value} />;
   const v = value as Dict;

@@ -23,7 +23,7 @@ import {
   TradingResult,
   type Todo,
 } from '@/lib/agent/renderers';
-import type { TreeRow } from '@/lib/agent/subagent-tree';
+import type { ExecNode } from '@/lib/agent/exec-tree';
 
 const renderRunTranscript = (run: SubagentRun) => (
   <Conversation messages={run.messages ?? []} viewMode="verbose" />
@@ -39,7 +39,7 @@ const RESULT_RENDERERS: Record<
       value={value}
       subagentRuns={runs}
       renderTranscript={renderRunTranscript}
-      renderTree={(rows: TreeRow[]) => <SubagentTree rows={rows} threadId={threadId} />}
+      renderTree={(nodes: ExecNode[]) => <SubagentTree nodes={nodes} threadId={threadId} />}
     />
   ),
   trading: (value) => <TradingResult value={value} />,
@@ -120,9 +120,9 @@ export function RunResults({
   busy: boolean;
   byNode: ReadonlyMap<string, readonly SubgraphDiscoverySnapshot[]>;
   subagentRuns: SubagentRun[];
-  /** The run's recursive sub-agent forest (`buildForest(collectSubagentTree(view))`) —
+  /** The run's recursive sub-agent forest (`buildTopology(collectTopology(view))`) —
    * rendered via `SubagentTree` instead of the flat `subagentRuns` panel when non-empty. */
-  tree: TreeRow[];
+  tree: ExecNode[];
   threadId?: string;
 }) {
   return (
@@ -171,7 +171,7 @@ export function RunResults({
           `loadingHint` holds a panel skeleton through the discovery `/history`
           gap for agents that surface native subagents (node-based stages). */}
       {tree.length > 0 ? (
-        <SubagentTree rows={tree} threadId={threadId} />
+        <SubagentTree nodes={tree} threadId={threadId} />
       ) : (
         <SubagentActivity runs={subagentRuns} loadingHint={agent.stages?.some((s) => !!s.node) ?? false} />
       )}

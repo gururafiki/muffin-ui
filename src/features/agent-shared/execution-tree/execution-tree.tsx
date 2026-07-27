@@ -19,7 +19,7 @@ import { Icon } from '@/components/icons';
 import { Skeleton, Text } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { palette } from '@/theme/colors';
-import { renderNodeOutput, ToolRunsPanel, type ToolRun } from '@/lib/agent/renderers';
+import { collectToolRuns, renderNodeOutput, ToolRunsPanel, type ToolRun } from '@/lib/agent/renderers';
 import { parseArray, zToolRun } from '@/lib/agent/schemas';
 import type { AgentDef } from '@/lib/agent/registry';
 import { Conversation } from '../conversation';
@@ -171,14 +171,34 @@ export function ExecutionTree({
   threadId?: string;
 }) {
   const nodes = buildExecTree(agent, values, busy, byNode);
-  if (nodes.length === 0) {
-    return <Text variant="muted" className="text-sm">No execution recorded for this run.</Text>;
-  }
+  // The run-level roll-up lives in the Overview too. Rendering it here as well means
+  // flipping the view never LOSES information — switching used to drop the only
+  // run-wide tool summary, which is part of why the missing per-stage tool calls went
+  // unnoticed for so long.
+  const runs = collectToolRuns(values);
+
   return (
-    <View className="gap-1">
-      {nodes.map((n) => (
-        <TreeNodeRow key={n.id} node={n} threadId={threadId} depth={0} />
-      ))}
+    <View className="gap-3">
+      {nodes.length === 0 ? (
+        <Text variant="muted" className="text-sm">
+          No execution recorded for this run.
+        </Text>
+      ) : (
+        <View className="gap-1">
+          {nodes.map((n) => (
+            <TreeNodeRow key={n.id} node={n} threadId={threadId} depth={0} />
+          ))}
+        </View>
+      )}
+      <ToolRunsPanel
+        title="Tool execution"
+        mode="grouped"
+        runs={runs}
+        // An explicit zero state: "this run made no tool calls" must be visually
+        // distinct from "the panel isn't wired up". The silent `null` on empty is
+        // exactly what hid the stage/tool-run join bug.
+        emptyMessage={busy ? 'No tool calls yet.' : 'This run made no tool calls.'}
+      />
     </View>
   );
 }
