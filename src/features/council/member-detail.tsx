@@ -7,7 +7,7 @@ import { SubagentStateDigest } from '@/features/agent-shared/subagent-activity';
 import { SubagentTree } from '@/features/agent-shared/subagent-tree';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { Markdown, StructuredOutput, ToolRunsPanel, type ToolRun } from '@/lib/agent/renderers';
-import type { TreeRow } from '@/lib/agent/subagent-tree';
+import type { ExecNode } from '@/lib/agent/exec-tree';
 import { palette } from '@/theme/colors';
 import { normalizeSlug, type MemberStep, type PersonaMeta } from './personas';
 import { signalTone, type PersonaSignal, type PersonaStage } from './types';
@@ -15,12 +15,12 @@ import { signalTone, type PersonaSignal, type PersonaStage } from './types';
 /**
  * The selected member's own root subtree: the row whose id's leading
  * `<name>:<uuid>` segment matches the persona/specialist slug (root ids are
- * always single-segment — see `buildForest`). `normalizeSlug` tolerates a
+ * always single-segment — see `buildTopology`). `normalizeSlug` tolerates a
  * differently-cased/hyphenated name the backend might emit for the same
  * member. `undefined` (old run / persona hasn't called tools yet — currently
  * shallow) means nothing renders.
  */
-function findMemberRow(tree: TreeRow[] | undefined, slug: string): TreeRow | undefined {
+function findMemberRow(tree: ExecNode[] | undefined, slug: string): ExecNode | undefined {
   return tree?.find((r) => normalizeSlug(r.id.split(':')[0]) === slug);
 }
 
@@ -84,7 +84,7 @@ export function MemberDetail({
   toolRuns: ToolRun[];
   /** The whole run's recursive sub-agent forest (`council-screen.tsx`) — this
    * member's own root subtree is picked out below. */
-  tree?: TreeRow[];
+  tree?: ExecNode[];
   threadId?: string;
   onDismiss: () => void;
 }) {
@@ -162,7 +162,7 @@ export function MemberDetail({
 
       <ToolRunsPanel title="Data collected" runs={toolRuns} mode="flat" />
 
-      {personaRow ? <SubagentTree rows={[personaRow]} threadId={threadId} /> : null}
+      {personaRow ? <SubagentTree nodes={[personaRow]} threadId={threadId} /> : null}
 
       <SubagentStateDigest values={digestValues} />
 

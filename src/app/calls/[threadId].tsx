@@ -18,7 +18,7 @@ import { SubagentTree } from '@/features/agent-shared/subagent-tree';
 import { getAgent } from '@/lib/agent/registry';
 import { collectToolRuns, CriterionDetails, isMessageArray, StructuredOutput, ToolRunsPanel, type Todo } from '@/lib/agent/renderers';
 import { parseArray, zCriterionEvaluation } from '@/lib/agent/schemas';
-import { buildForest, collectSubagentTree, type TreeRow } from '@/lib/agent/subagent-tree';
+import { buildTopology, collectTopology, type ExecNode } from '@/lib/agent/exec-tree';
 import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 
 /**
@@ -31,7 +31,7 @@ import { ToolCacheProvider } from '@/lib/agent/tool-cache';
  */
 function historicalRuns(
   values: Record<string, unknown> | undefined,
-  renderTree: (rows: TreeRow[]) => React.ReactNode,
+  renderTree: (nodes: ExecNode[]) => React.ReactNode,
 ): SubagentRun[] {
   const captured = values?.subagent_runs as SubagentRuns | undefined;
   const evals = parseArray(zCriterionEvaluation, values?.criterion_evaluations, 'criterion_evaluations');
@@ -121,8 +121,8 @@ export default function CallDetailRoute() {
             // Recursive sub-agent tree, straight from persisted state (the
             // AUGMENT — rendered instead of the flat panel when non-empty;
             // older threads with no captured tree keep the flat panel).
-            const renderTree = (rows: TreeRow[]) => <SubagentTree rows={rows} threadId={threadId} />;
-            const tree = buildForest(collectSubagentTree(values));
+            const renderTree = (nodes: ExecNode[]) => <SubagentTree nodes={nodes} threadId={threadId} />;
+            const tree = buildTopology(collectTopology(values));
             const activity = historicalRuns(values, renderTree);
             if (values && isMessageArray(values.messages)) {
               return (
@@ -142,7 +142,7 @@ export default function CallDetailRoute() {
                     <StructuredOutput value={values} />
                   </Card>
                   {tree.length > 0 ? (
-                    <SubagentTree rows={tree} threadId={threadId} />
+                    <SubagentTree nodes={tree} threadId={threadId} />
                   ) : (
                     <SubagentActivity runs={activity} />
                   )}

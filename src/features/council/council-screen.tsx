@@ -23,7 +23,7 @@ import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { parseArray, zPersonaSignal } from '@/lib/agent/schemas';
 import { collectToolRuns, ToolRunsPanel } from '@/lib/agent/renderers';
-import { buildForest, collectSubagentTree } from '@/lib/agent/subagent-tree';
+import { buildTopology, collectTopology } from '@/lib/agent/exec-tree';
 import { CouncilArena } from './council-arena';
 import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
@@ -153,7 +153,7 @@ export function CouncilScreen({
   // The whole run's recursive sub-agent forest (backend `AgentCaptureMiddleware`'s
   // `subagent_tree` channel) — computed once here; `MemberDetail` picks out the
   // selected persona's own root subtree by matching its id's leading slug.
-  const tree = useMemo(() => buildForest(collectSubagentTree(values)), [values]);
+  const tree = useMemo(() => buildTopology(collectTopology(values)), [values]);
   const judging = busy && Object.keys(signals).length >= members.length && !synthesis;
 
   const totalVotes = tally.bullish + tally.bearish + tally.neutral;

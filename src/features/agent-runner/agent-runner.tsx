@@ -23,7 +23,7 @@ import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
-import { buildForest, collectSubagentTree } from '@/lib/agent/subagent-tree';
+import { buildTopology, collectTopology } from '@/lib/agent/exec-tree';
 import { HydrationSkeleton, RunResults } from './run-results';
 import { SavePresetCard } from './save-preset-card';
 
@@ -98,10 +98,10 @@ export function AgentRunner({
   ];
 
   // Recursive sub-agent tree (backend `AgentCaptureMiddleware`'s `subagent_tree`
-  // channel, both top-level and criterion-homed — see `collectSubagentTree`).
+  // channel, both top-level and criterion-homed — see `collectTopology`).
   // Rendered INSTEAD of the flat `SubagentActivity` panel when non-empty;
   // older runs (no captured tree) keep the flat panel unchanged.
-  const tree = useMemo(() => buildForest(collectSubagentTree(view)), [view]);
+  const tree = useMemo(() => buildTopology(collectTopology(view)), [view]);
 
   const run = () => submitRun(agent.buildInput(draft), { overrides: buildOverrides(agent.advanced, advanced) });
 
