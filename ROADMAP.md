@@ -502,6 +502,52 @@ Built almost entirely by re-composing the M22 primitives:
   child (harmless; its transcript could fold into the parent); a full connecting rail line + elapsed
   timers are cosmetic polish; trees stay as shallow as agents actually nest (same M22 note).
 
+## ✅ Milestone 24 — Execution tree reads LangGraph's checkpoints, not a capture channel (2026-07-27)
+M22/M23 consumed `AgentCaptureMiddleware`'s `subagent_tree` channel + a `["subagent_detail",
+threadId]` Store offload. Both are **deleted**, backend included (muffin-agent #132): LangGraph
+already persists the whole execution record. `POST /threads/{id}/history` returns one snapshot per
+superstep with the `tasks[]` that ran in it; each task carries
+`{id, name, result, checkpoint:{checkpoint_ns}}`, and recursing on that namespace yields the child's
+supersteps, its tasks, and its `values.messages` — the transcript with its tool calls (verified on
+prod thread `019f81a0`: `market_analyst:<uuid>` → 13 messages, 10 tool calls).
+- **Reader** (`lib/agent/run-history.ts`) — `fetchNamespace` / `nodesFromSnapshots` /
+  `messagesFromSnapshots` / `toolRunsFromMessages` / `taskWrite`. **A node is drillable iff it is a
+  compiled agent/subgraph added via `add_node`**; a plain function node reports `checkpoint: null`
+  and is genuinely a leaf, which the UI now says out loud instead of showing an empty panel.
+- **Lazy by design** (`agent-shared/use-run-tree.ts`) — root topology once per thread, one namespace
+  per expanded row, cached forever once the thread settles. A criteria run has 27 namespaces.
+- **The double-nesting bug is now structurally impossible.** The old builder split `|`-joined ids and
+  *synthesized* the ancestor levels the backend never captured — a synthesized "Criterion evaluation"
+  wrapping a real child that took the same label from the builder's static agent name. Every level is
+  now one LangGraph actually recorded, so `collectTopology` / `buildTopology` / `collapseRedundant` /
+  `segmentName` are all gone. This also closes M23's "redundant single worker child" follow-up.
+- **Tool calls come from the transcript** — `AIMessage.tool_calls` paired with its `ToolMessage` by
+  `tool_call_id`; a call with no reply is kept as `pending` rather than dropped, so a cancelled run
+  doesn't silently lose it.
+- **Fan-out rows are named from `task.result`** (the channels a task wrote), so the 11 identical
+  `criterion_evaluation` nodes get their names from the ROOT history with no extra fetch.
+  Deliberately *not* index-paired against `values.criterion_evaluations` — parallel `Send` workers
+  complete out of order, so the labels would drift onto the wrong rows.
+- **Two deliberate removals.** (a) No run-wide "Tool execution" roll-up: a tool call belongs to the
+  node that made it, and a flat run-wide summary would mean walking every namespace eagerly.
+  (b) Overview vs Tree split cleanly — Overview answers what the run *concluded*, the Tree answers
+  what it *did*; criterion cards keep scores and evidence and lose their tool panel.
+- **Latency was ours, not LangGraph's.** History reads took 27.3s on criteria / 4.1s on trading.
+  Root cause: LangGraph Platform rebuilds a factory-registered graph on *every* API request, and each
+  agent factory opened a fresh MCP session to list tools — **23 round trips to build
+  `criteria_analysis`, 4 for `trading_decision`, ~1.1s each**. Caching tool discovery (muffin-agent
+  #131) cuts a build to one round trip. An earlier "upstream `langgraph-api` N+1" diagnosis was wrong
+  and the drafted issue was never filed.
+- **Verification** — `scripts/exectree-check.ts` rewritten around the history shape (fixed by
+  `langgraph_api/state.py` + the SDK's `ThreadTask`), 26 checks; `scripts/history-check.ts` confirms
+  end-to-end against the deployment. Backend guards the structural invariant in
+  `tests/integration/test_graph_observability.py`.
+- **Follow-ups:** per-tool **duration** is not recoverable from a transcript (messages carry no
+  timing) — see the muffin-agent roadmap; the council drill-down is only as deep as agents actually
+  nest, and today's evaluators still single-shot with zero tool calls (an agent-quality item, not a
+  UI one).
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
