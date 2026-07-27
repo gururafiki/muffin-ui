@@ -203,79 +203,66 @@ The whole app is organised around **"one graph → one screen"**:
   Card/Collapsible when the caller (`DebateDetail`, inside an already-expanded `SubAgentRunRow`)
   already owns the expand/collapse affordance — new stage/detail renderers should follow the same
   pattern rather than reaching for a bare `Collapsible`.
-  **Recursive sub-agent tree (Phase 2, M22):** the flat sub-agents panel (`useSubgraphRows`,
-  discovery-only — see the `muffin-ui-subagents-panel-discovery` memory) only ever shows one level
-  of compiled-subgraph invocations. `lib/agent/subagent-tree.ts`'s `collectSubagentTree(values)`
-  additionally gathers the backend `AgentCaptureMiddleware` **`subagent_tree`** channel — the
-  top-level map plus each `criterion_evaluations[i].subagent_tree` (the criteria-homing split
-  `collectToolRuns`/`collectSubagentTree` both use, since criterion workers write their state under
-  `criterion_evaluations[i]`, not the root). `buildForest(nodes)` reconstructs the actual execution
-  tree from `<name>:<uuid>`-segment ids joined by `|` (e.g.
-  `criterion_evaluation:<uuid>|evaluate:<uuid>`) — **parentage comes from splitting the id, never
-  from `parent_id`**, because a re-homed node's `parent_id` can point at an ancestor that was
-  stripped or lives in a different part of state; an uncaptured intermediate level (e.g. the
-  `criterion_evaluation` worker itself, which is never written as its own node — only its
-  `evaluate` child is) is synthesized as a placeholder `TreeRow` (`synthetic: true`) so no real node
-  is ever orphaned. `features/agent-shared/subagent-tree.tsx`'s `SubagentTree({ rows, threadId })`
-  is deliberately not a bespoke tree widget: each `TreeRow` maps to a `SubagentRun` and delegates to
-  the existing `SubagentActivity`/`SubAgentRunRow` for the row look and expand/collapse — a row's
-  `renderDetail` renders that node's own `NodeDetail` plus, when it has children, a nested
-  `SubagentActivity` of them, so recursion falls out of the existing component rather than a new
-  one. `features/agent-shared/use-subagent-detail.ts`'s `useSubagentDetail(threadId, nodeId,
-  enabled)` is a `useQuery` (`staleTime: Infinity`, keyed `['subagent-detail', threadId, nodeId]`)
-  that lazily fetches ONE node's heavy payload (`messages`/`tool_runs`/`output`) from the
-  `["subagent_detail", threadId]` Store namespace only when its row is expanded (`enabled = !
-  synthetic && hasDetail !== false`) — this keeps `thread.values` light; a synthetic placeholder row
-  renders no detail (its real children carry it), and a Store miss renders "No detail was recorded
-  for this step." rather than erroring. **Mount rule (additive everywhere, nothing removed):** every
-  surface computes `tree = buildForest(collectSubagentTree(values))` and renders `tree.length > 0 ?
-  <SubagentTree rows={tree} threadId={threadId} /> : <SubagentActivity ... />` — the existing flat
-  panel is the fallback, never deleted, so old/shallow threads look exactly as before. Mounted in
-  the generic runner (`run-results.tsx`), calls history (`app/calls/[threadId].tsx`, plus a
-  per-criterion subtree threaded into `historicalRuns()`), and council (`member-detail.tsx`, via
-  `findMemberRow(tree, slug)`). **Criteria is the one exception to a plain `tree` prop:**
-  `renderers/criteria-result.tsx` is part of the `renderers` barrel, and `SubagentTree` transitively
-  imports back into that same barrel (via `NodeDetail` -> `StructuredOutput`/`ToolRunsPanel`) — a
-  direct import would silently create the require cycle the file already dodges for `Conversation`
-  (Metro doesn't fail `tsc`/`expo export` on it, it just resolves to `undefined` at runtime). So
-  `CriterionDetails`/`CriterionRow`/`CriteriaResult` take an optional `renderTree?: (rows: TreeRow[])
-  => React.ReactNode` render-prop instead (parallel to the existing `renderTranscript`); each caller
-  builds the actual `<SubagentTree>` closure where the cycle is safe. Trees are only ever as deep as
-  the agents actually nested — today's evaluators single-shot, so a validated real thread renders
-  a shallow 2-level tree (`criterion_evaluation` -> `evaluate`); nothing in the reconstruction caps
-  the depth.
-  **Generic "Execution tree" view (M23):** an alternative, agent-agnostic drill-down offered beside
-  each surface's bespoke Overview via a persisted per-agent toggle (default Overview). It re-composes
-  the M22 primitives, no new capture channel. `features/agent-shared/execution-tree/`:
-  `plan-steps.ts`'s `buildExecTree(agent, values, busy, byNode)` assembles a shared
-  `ExecNode[]` ("plan-first hybrid") — graph agents use the registry `stages` (`resolveStages`, now
-  exported from `run-progress.tsx` along with `stageSnaps`/`ByNode`/`StageRow`), deep agents use the
-  `todos` plan, both joined to the `buildForest` topology by matching a stage's `node`/`active` to a
-  forest root's leading id segment; neither → the raw forest. The criteria **fan-out** stage
-  (`node === 'criterion_evaluation'`) is special-cased in `criterionChildren()` to build one **named**
-  node per `criterion_evaluations[i]` (the raw forest gives 11 indistinguishable "Criterion
-  Evaluation" rows) with the evaluation as eager `output` (the criterion card renders with no Store
-  fetch), the criterion's `tool_runs`, and — flattening the redundant synthetic `criterion_evaluation`
-  wrapper — the real worker node as the lazy transcript `detailNodeId`. `execution-tree.tsx` holds the
-  mutually-recursive `ExecutionTree`/`TreeNodeRow`/`NodeFacets` (one file, hoisted `function` decls,
-  same cycle-avoidance as `conversation.tsx`); each node's expanded `NodeFacets` shows the same four
-  facets at any depth — Result (`renderNodeOutput`), Steps (`Conversation` over the `useSubagentDetail`
-  transcript), Sub-agents (child `TreeNodeRow`s = the recursion), Tool-calls (`ToolRunsPanel`) —
-  omitting empties, lazily fetching heavy detail only on expand. **Two new UI-side renderer
-  registries** (JSX stays out of the registry) live in the `renderers/` barrel:
-  `renderNodeOutput(node, value, threadId)` (output-shape → component: criterion card / persona
-  verdict / debate / default `StructuredOutput`; unwraps a `{ evaluation }` wrapper so a wrapped
-  worker output still renders a card, not "—") and `renderToolOutput(toolName, payload)` — the **new
-  tool-name axis** (price/OHLCV/indicator → `TimeSeriesChart`, default = the pre-existing shape
-  heuristic), which is also wired back into `ToolRunRow` so every tool panel app-wide gains per-tool
-  pluggability and the duplicated chart/json/markdown branch collapses to one place. The toggle is
-  `components/ui/Segmented` (promoted from the Globe screen) bound to `agent-view-store.ts`
-  (`useAgentView(agentId)` / `setAgentView`, persisted `muffin.agentview.v1`) via `run-view-toggle.tsx`;
-  mounted **additively** on the runner, council, chat, and calls-history surfaces (calls resolves the
-  `AgentDef` from the server-owned `graph_id` via `getAgent(threadGraphId(thread))`) — `view === 'tree'`
-  branches `<ExecutionTree>` in place of the Overview body, never removing it, and old runs render the
-  tree's empty-state. Verified via `scripts/smoke-exectree.mjs` (structural gate) + a Playwright-MCP
-  drill-down against the real deployed criteria thread.
+  **The execution tree (M22/M23, rebuilt 2026-07-27).** ONE node model —
+  `lib/agent/exec-tree.ts`'s `ExecNode` — with two presentations. `SubagentTree`
+  (`features/agent-shared/subagent-tree.tsx`) renders it in the Overview's row idiom by mapping each
+  node to a `SubagentRun` and delegating to `SubagentActivity`/`SubAgentRunRow`; `ExecutionTree`
+  (`features/agent-shared/execution-tree/`) renders it as the rail-of-plan-steps drill-down behind
+  the per-agent toggle. They are two views of one tree, not two trees — the earlier
+  `lib/agent/subagent-tree.ts` (`TreeRow`, `buildForest`, `collectSubagentTree`) is **deleted**.
+  - **Topology.** `collectTopology(values)` gathers the backend `subagent_tree` channel — the
+    top-level map plus each `criterion_evaluations[i].subagent_tree` (criterion workers re-home their
+    capture under the evaluation, so a reader must union both). `buildTopology(nodes)` reconstructs
+    the forest from `<name>:<uuid>` id segments joined by `|`. **Parentage comes from splitting the
+    id, never from `parent_id`** — a re-homed node's `parent_id` can point at an ancestor that was
+    stripped. Uncaptured intermediate levels are synthesized from id prefixes, then
+    `collapseRedundant` **collapses any synthetic node with exactly one child into that child**: that
+    is what fixed the "Criterion evaluation > Criterion evaluation" double-nesting, where the
+    synthesized ancestor took its label from the id segment and its only real child took the same
+    string from the builder's static agent name. Safe because a synthetic node carries no detail.
+    Internal graph nodes (`*Middleware*`, `__start__`/`__end__`) are filtered — LangGraph compiles
+    each middleware hook into its own node and surfaces it as a task; that is plumbing.
+  - **Plan assembly.** `execution-tree/plan-steps.ts`'s `buildExecTree(agent, values, busy, byNode)`
+    is the plan-first hybrid: registry `stages` (or a deep agent's `todos`) joined to the topology;
+    neither → the raw forest. Stage→children, stage→status AND stage→tool-runs all use the SAME
+    `node`-then-`active` precedence (`stageMatches`). Using `node` alone for the tool-run join is
+    what made every stage that declares only `active` — all council stages, all four trading
+    analysts — show zero tool calls *by construction* (measured: 0/55 → 55/55 once fixed).
+  - **Output rendering is explicitly dispatched**, never shape-sniffed: `StageDef.outputKind`
+    (`'debate' | 'criterion' | 'persona' | 'report' | 'structured'`) drives `renderNodeOutput`, with
+    shape inference only as the fallback. The loose zod schemas accept *any* dict, so the old
+    inference plus a `/criter|evaluate/i` test against the **display label** made the stage named
+    "Define the criteria" render as an empty criterion card and drop its payload. `renderNodeOutput`
+    also handles a **bare array** of serialized BaseMessages — `stageOutput` extracts
+    `investment_debate_messages`, so the renderer sees a list, not a wrapper dict; only matching the
+    dict is why both trading debates rendered as raw JSON.
+  - **Lazy detail.** `use-subagent-detail.ts` fetches one node's heavy payload from the
+    `["subagent_detail", threadId]` Store namespace on expand; `NodeDetail` takes a single
+    `detailNodeId?` (undefined = nothing to fetch, covering both the synthetic and
+    backend-says-no-detail cases).
+  - **Require-cycle dodge (still load-bearing).** `renderers/criteria-result.tsx` is in the
+    `renderers` barrel and `SubagentTree` transitively imports back into it, so
+    `CriterionDetails`/`CriterionRow`/`CriteriaResult` take a `renderTree?: (nodes: ExecNode[]) =>
+    React.ReactNode` render-prop rather than importing it. Metro resolves such cycles to `undefined`
+    at runtime without failing `tsc` or `expo export`.
+  - **Verification.** `scripts/exectree-check.ts` (run with `npx tsx`) imports the REAL module and
+    asserts against four checked-in production threads under `scripts/fixtures/threads/`. It replaced
+    `exectree-check.mjs` + `buildforest-check.mjs`, which were hand-maintained JS *ports* of the
+    builders ("Keep in sync by hand", said their headers) and drifted by construction.
+
+  **Native history (`lib/agent/run-history.ts`) — the intended replacement for the capture channel.**
+  `POST /threads/{id}/history` returns one snapshot per superstep, each carrying the `tasks[]` that
+  ran in it; every task has `{id, name, checkpoint:{checkpoint_ns}}`, and passing that namespace back
+  to `getHistory` yields the child's supersteps and *its* tasks. So the whole tree is reachable by
+  recursion on a finished run, and each namespace's `values.messages` is that node's transcript with
+  its tool calls (verified on prod thread `019f81a0`: `market_analyst:<uuid>` → 13 messages, 10 tool
+  calls). **A node is drillable iff it is a compiled agent/subgraph added via `add_node`** — a plain
+  function node reports `checkpoint: null` and is genuinely a leaf. `useRunTreeRoot` /
+  `useRunTreeNode` (`features/agent-shared/use-run-tree.ts`) expose this lazily, because the endpoint
+  costs ~1s per namespace in the thread (criteria 27 ns → 27.3s; trading 7 ns → 4.1s) — an app-side
+  N+1, diagnosed in `muffin-agent/docs/backend-notes/2026-07-27-history-endpoint-namespace-n-plus-1.md`.
+  **Not yet wired to any screen**; the tree still reads `subagent_tree`. Wiring it is the prerequisite
+  for deleting `AgentCaptureMiddleware` backend-side.
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —
