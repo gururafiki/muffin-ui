@@ -68,12 +68,22 @@ export type ExecNode = {
   children: ExecNode[];
 };
 
-/** Middleware hooks compile to their own graph nodes and surface as tasks; they are
- * plumbing, never execution steps a reader cares about. */
+/**
+ * Plumbing that surfaces as tasks but is never an execution step a reader cares
+ * about: middleware hooks (LangChain compiles each into its own graph node), the
+ * graph sentinels, and `model`/`tools` — the two nodes of an agent's internal
+ * ReAct loop, which would otherwise render as a meaningless "Model, Tools,
+ * Model, Tools…" ladder under every agent. What those nodes actually did is in
+ * the transcript, rendered properly as turns and tool calls.
+ *
+ * Safe to match `tools` by exact name: muffin's deterministic `ToolNode`s are
+ * named for what they fetch (`fetch_ohlcv`, `fetch_news`), never `tools`.
+ */
 const INTERNAL_NODE = /Middleware|^__(start|end)__$/;
+const AGENT_LOOP_NODE = /^(model|tools)$/;
 
 export function isInternalNode(name: string): boolean {
-  return INTERNAL_NODE.test(name);
+  return INTERNAL_NODE.test(name) || AGENT_LOOP_NODE.test(name);
 }
 
 /** Title-case a snake/kebab node name for display. */

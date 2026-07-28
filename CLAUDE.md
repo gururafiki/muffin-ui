@@ -209,6 +209,27 @@ The whole app is organised around **"one graph → one screen"**:
   node to a `SubagentRun` and delegating to `SubagentActivity`/`SubAgentRunRow`; `ExecutionTree`
   (`features/agent-shared/execution-tree/`) renders it as the rail-of-plan-steps drill-down behind
   the per-agent toggle. Two views of one tree, not two trees.
+  - **A deep agent's `values.messages` is EMPTY — the transcript comes from `tasks[].result`.**
+    Measured on prod thread `019fa546` (2026-07-28): `ticker_classification` reports 31 snapshots with
+    `values.messages == []` while its tasks demonstrably ran 10 model turns and 8 tool calls; the same
+    holds for `criteria_definition` and every criterion `evaluate`. Only PLAIN agents (`synthesis`,
+    an `AgentState` not a `DeepAgentState`) populate the channel. `POST /state` — which applies
+    pending writes — returns 0 there too, so it is not a pending-write artefact; the mechanism is
+    **not established**. `messagesFromSnapshots` therefore reconstructs from each task's own writes
+    (first non-empty write per task, first-seen order) and takes whichever source is richer — never
+    both, since concatenating them would double every message for plain agents. Verified against that
+    thread: classification went 0 → 23 messages / 12 tool calls / 4 sub-agent delegations, and those
+    4 delegations match the `|tools:` namespaces the database holds.
+  - **`model` and `tools` are filtered from the tree.** They are the two nodes of an agent's internal
+    ReAct loop and would otherwise render a "Model, Tools, Model, Tools…" ladder under every agent.
+    What they did is in the transcript, rendered as turns and tool calls. Matching `tools` by exact
+    name is safe: muffin's deterministic `ToolNode`s are named for what they fetch (`fetch_ohlcv`).
+  - **deepagents `task` sub-agents are NOT drillable** — `POST /history` on
+    `<parent>|tools:<uuid>` returns **400 "Subgraph … not found"**, because `aget_state_history`
+    resolves namespaces via `get_subgraphs()`, which only knows `add_node`-registered subgraphs; a
+    `task` sub-agent runs inside a *tool*. Their checkpoints exist (295 of them on `019fa546`) but
+    cannot be fetched. The delegation and its returned report ARE in the parent's transcript, so
+    "which sub-agents ran, and what came back" is answerable; only their own step-by-step is lost.
   - **The tree comes from LangGraph's own checkpoints — there is no capture channel.**
     `lib/agent/run-history.ts`: `POST /threads/{id}/history` returns one snapshot per superstep, each
     carrying the `tasks[]` that ran in it; every task has `{id, name, result, checkpoint:{checkpoint_ns}}`,

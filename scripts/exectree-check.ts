@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 
 import { childrenForStage, walkTree, type ExecNode, type StageLike } from '../src/lib/agent/exec-tree';
 import {
+  messagesFromSnapshots,
   nodesFromSnapshots,
   taskWrite,
   toolRunsFromMessages,
@@ -78,6 +79,12 @@ type TaskSpec = {
   result?: unknown;
   error?: string | null;
 };
+
+/** An AIMessage carrying one tool call, in the serialized shape history returns. */
+function aiCall(id: string, name: string, args: Record<string, unknown> = {}) {
+  return { type: 'ai', content: '', tool_calls: [{ id, name, args }] };
+}
+const toolResult = (id: string, content = 'ok') => ({ type: 'tool', tool_call_id: id, content });
 
 /** One history snapshot carrying the given tasks, in the API's own shape. */
 function snapshot(tasks: TaskSpec[], values: Record<string, unknown> = {}): HistorySnapshot {
@@ -190,6 +197,66 @@ async function main(): Promise<void> {
     check('unanswered calls are kept as pending', runs.find((r) => r.tool === 'never_returned')?.status === 'pending');
     check('runs are attributed to the node', runs.every((r) => r.agent === 'market_analyst'));
     check('a transcript with no calls yields none', toolRunsFromMessages([{ type: 'ai', content: 'hi' }]).length === 0);
+  }
+
+  console.log('\ndeep agents — transcript comes from task writes, not values.messages');
+  {
+    // Measured on production thread 019fa546: every DEEP agent reports
+    // `values.messages == []` across all its snapshots while its tasks
+    // demonstrably ran model turns and tool calls. Only plain agents populate
+    // the channel. The writes are complete, so the transcript is reconstructed
+    // from them.
+    const snaps = history(
+      snapshot([{ id: 'p', name: '_InputPromptMiddleware.before_agent', result: { messages: [{ type: 'human', content: 'classify AAPL' }] } }], { messages: [] }),
+      snapshot([{ id: 'm1', name: 'model', result: { messages: [aiCall('c1', 'task', { subagent_type: 'equity-fundamentals' })] } }], { messages: [] }),
+      snapshot([{ id: 't1', name: 'tools', result: { messages: [toolResult('c1', 'report')] } }], { messages: [] }),
+      snapshot([{ id: 'm2', name: 'model', result: { messages: [{ type: 'ai', content: 'done' }] } }], { messages: [] }),
+    );
+    const msgs = messagesFromSnapshots(snaps) as { type?: string }[];
+    check('reconstructs a transcript from an empty messages channel', msgs.length === 4, `${msgs.length} messages`);
+    check('in execution order', msgs.map((m) => m.type).join(',') === 'human,ai,tool,ai');
+    // This is what makes "which sub-agents did it call" answerable: the `task`
+    // delegation is a real tool call in the reconstructed transcript.
+    const runs = toolRunsFromMessages(msgs);
+    check('the task delegation is visible as a tool call', runs.some((r) => r.tool === 'task'));
+    check('and it is paired with its result', runs.find((r) => r.tool === 'task')?.status === 'ok');
+  }
+
+  console.log('\nplain agents keep using values.messages (no doubling)');
+  {
+    const populated = [{ type: 'human', content: 'go' }, { type: 'ai', content: 'answer' }];
+    const snaps = history(
+      snapshot([{ id: 'm', name: 'model', result: { messages: [{ type: 'ai', content: 'answer' }] } }], { messages: populated }),
+    );
+    // Both sources overlap here; concatenating them would duplicate the AI turn.
+    check('richer source wins, never both', messagesFromSnapshots(snaps).length === 2);
+  }
+
+  console.log('\na task that never wrote its result is tolerated');
+  {
+    const snaps = history(
+      snapshot([{ id: 'm', name: 'model' }], { messages: [] }),                                   // pending: no result yet
+      snapshot([{ id: 'm', name: 'model', result: { messages: [{ type: 'ai', content: 'x' }] } }], { messages: [] }),
+    );
+    // First-seen order, first NON-EMPTY write — an early result-less occurrence
+    // must not shadow the real one.
+    check('a later snapshot supplies the missing write', messagesFromSnapshots(snaps).length === 1);
+  }
+
+  console.log('\nagent-internal loop nodes are not execution steps');
+  {
+    const snaps = history(
+      snapshot([
+        { id: '1', name: 'model' },
+        { id: '2', name: 'tools' },
+        { id: '3', name: 'collect_data', ns: 'collect_data:u1' },
+      ]),
+    );
+    const names = nodesFromSnapshots(snaps).map((n) => n.name);
+    // Without this filter every agent renders a "Model, Tools, Model, Tools…"
+    // ladder, which is noise: what they did is in the transcript.
+    check('model/tools filtered out', !names.includes('model') && !names.includes('tools'), names.join(','));
+    check('real sub-agents survive', names.includes('collect_data'));
   }
 
   console.log('\nstage → topology join');

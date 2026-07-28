@@ -101,14 +101,55 @@ export function taskWrite(result: unknown, channel: string): unknown {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * The messages each task WROTE, in execution order.
+ *
+ * This exists because `values.messages` is empty for every deep agent — measured
+ * on production thread 019fa546: `ticker_classification` reports 31 snapshots
+ * with `values.messages == []` while its tasks demonstrably ran 10 model turns
+ * and 8 tool calls. The same holds for `criteria_definition` and each criterion
+ * `evaluate`; only plain (non-deep) agents like `synthesis` populate the channel.
+ * Applying pending writes does not help — `POST /state` on that namespace also
+ * returns 0 messages.
+ *
+ * The per-task writes, though, are complete and ordered. They are also the more
+ * faithful record: they say which superstep produced which message.
+ *
+ * A task recurs across snapshots and the earliest occurrence may not carry its
+ * result yet, so the first NON-EMPTY write per task wins while first-seen order
+ * is preserved.
+ */
+function messagesFromTaskWrites(snapshots: HistorySnapshot[]): unknown[] {
+  const order: string[] = [];
+  const byTask = new Map<string, unknown[]>();
+  // getHistory is newest-first; execution order is the reverse.
+  for (const snap of [...snapshots].reverse()) {
+    for (const task of snap.tasks ?? []) {
+      if (!task?.id) continue;
+      if (!byTask.has(task.id)) {
+        order.push(task.id);
+        byTask.set(task.id, []);
+      }
+      const written = (task.result as { messages?: unknown } | undefined)?.messages;
+      if (Array.isArray(written) && written.length && byTask.get(task.id)!.length === 0) {
+        byTask.set(task.id, written);
+      }
+    }
+  }
+  return order.flatMap((id) => byTask.get(id) ?? []);
+}
+
 /** The messages a namespace recorded — its transcript, tool calls included. */
 export function messagesFromSnapshots(snapshots: HistorySnapshot[]): unknown[] {
-  let best: unknown[] = [];
+  let fromValues: unknown[] = [];
   for (const snap of snapshots) {
     const msgs = (snap.values as { messages?: unknown })?.messages;
-    if (Array.isArray(msgs) && msgs.length > best.length) best = msgs;
+    if (Array.isArray(msgs) && msgs.length > fromValues.length) fromValues = msgs;
   }
-  return best;
+  // Whichever is richer, never both: the two overlap for plain agents, and
+  // concatenating them would double every message.
+  const fromWrites = messagesFromTaskWrites(snapshots);
+  return fromWrites.length > fromValues.length ? fromWrites : fromValues;
 }
 
 /** The richest `values` a namespace recorded, for rendering its structured output. */
