@@ -71,7 +71,7 @@ export function useRunTreeNode(
       const snaps = await fetchNamespace(client, threadId as string, namespace);
       const messages = messagesFromSnapshots(snaps);
       return {
-        children: nodesFromSnapshots(snaps),
+        children: nodesFromSnapshots(snaps, namespace),
         messages,
         toolRuns: toolRunsFromMessages(messages, namespace?.split(':')[0]),
         values: latestValues(snaps),

@@ -222,7 +222,15 @@ The whole app is organised around **"one graph → one screen"**:
     `criteria_definition` 0 → 35, `valuation_methodology` 0 → 40, `synthesis` (plain) 5 → 5.
     The reconstruction was **removed rather than kept as a fallback** — it would mask a regression if
     that pin were dropped too early, and one authoritative source beats silently picking between two.
-  - **`model` and `tools` are filtered from the tree.** They are the two nodes of an agent's internal
+  - **A `tools` task that DELEGATED becomes a named sub-agent row.** A ToolNode task reports
+    `checkpoint: null`, but the sub-agent it spawned checkpoints under `<parent>|tools:<task id>` —
+    so the namespace is *derived*, not read. Pairing the `task` call (whose `args.subagent_type`
+    names the target) with its `ToolMessage` turns an anonymous "Tools" step into a named, drillable
+    row. Verified on prod thread `019fa546`: "Define the criteria" yields Discovery screening /
+    Economy macro / ETF index / Equity fundamentals / Data validation, whose namespaces match the
+    five `|tools:` namespaces in the database exactly. Only readable because muffin-agent pins the
+    deepagents fork (see above).
+  - **`model` and non-delegating `tools` are filtered from the tree.** They are the two nodes of an agent's internal
     ReAct loop and would otherwise render a "Model, Tools, Model, Tools…" ladder under every agent.
     What they did is in the transcript, rendered as turns and tool calls. Matching `tools` by exact
     name is safe: muffin's deterministic `ToolNode`s are named for what they fetch (`fetch_ohlcv`).

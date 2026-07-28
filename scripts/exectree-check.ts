@@ -244,6 +244,40 @@ async function main(): Promise<void> {
     check('real sub-agents survive', names.includes('collect_data'));
   }
 
+  console.log('\ndeep-agent sub-agents surface as named rows');
+  {
+    // A ToolNode task reports `checkpoint: null`, but the sub-agent it spawned
+    // checkpoints under `<parent>|tools:<task id>`. Pairing the `task` call
+    // (which names the sub-agent) with its ToolMessage turns an anonymous
+    // "Tools" step into a named, drillable row. Verified against prod thread
+    // 019fa546: "Define the criteria" yields 5 rows whose namespaces match the
+    // 5 `|tools:` namespaces in the database exactly.
+    const snaps = history(
+      snapshot([
+        { id: 'm1', name: 'model', result: { messages: [aiCall('c1', 'task', { subagent_type: 'equity-fundamentals' })] } },
+      ]),
+      snapshot([{ id: 't1', name: 'tools', result: { messages: [{ ...toolResult('c1', 'report'), name: 'task' }] } }]),
+      // An ordinary tool call through the same node — NOT a sub-agent.
+      snapshot([
+        { id: 'm2', name: 'model', result: { messages: [aiCall('c2', 'get_prices', { ticker: 'AAPL' })] } },
+      ]),
+      snapshot([{ id: 't2', name: 'tools', result: { messages: [toolResult('c2', '{...}')] } }]),
+    );
+    const nodes = nodesFromSnapshots(snaps, 'criteria_definition:u1');
+    check('one row per delegation', nodes.length === 1, nodes.map((n) => n.label).join(',') || '(none)');
+    check('named after the sub-agent, not "Tools"', nodes[0]?.label === 'Equity fundamentals', nodes[0]?.label ?? '-');
+    check(
+      'namespace derived as <parent>|tools:<task id>',
+      nodes[0]?.namespace === 'criteria_definition:u1|tools:t1',
+      nodes[0]?.namespace ?? '-',
+    );
+    // The plain tool call stays out of the tree; it is in the transcript.
+    check('ordinary tool calls do not become rows', !nodes.some((n) => n.name === 'get_prices'));
+    // At the root there is no parent segment to prefix.
+    const atRoot = nodesFromSnapshots(snaps);
+    check('root has no parent prefix', atRoot[0]?.namespace === 'tools:t1', atRoot[0]?.namespace ?? '-');
+  }
+
   console.log('\nstage → topology join');
   {
     const topology: ExecNode[] = [

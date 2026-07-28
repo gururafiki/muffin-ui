@@ -47,6 +47,66 @@ export async function fetchNamespace(
   })) as HistorySnapshot[];
 }
 
+type RawMessage = {
+  type?: string;
+  role?: string;
+  name?: string;
+  status?: string;
+  content?: unknown;
+  tool_calls?: { id?: string; name?: string; args?: unknown }[];
+  tool_call_id?: string;
+};
+
+/** `<parent>|<node>:<task id>` — how LangGraph composes a child namespace. */
+function childNamespace(parent: string | undefined, node: string, taskId: string): string {
+  const segment = `${node}:${taskId}`;
+  return parent ? `${parent}|${segment}` : segment;
+}
+
+/**
+ * Which tasks spawned a deep-agent sub-agent, and which sub-agent.
+ *
+ * A `task` tool call names its target in `args.subagent_type`; the matching
+ * `ToolMessage` tells us which tools-node task actually ran it. Pairing the two
+ * turns an anonymous "Tools" step into a named sub-agent row.
+ *
+ * Their checkpoints are only readable because muffin-agent pins a deepagents
+ * fork — upstream documents tool-invoked subgraphs as not statically
+ * discoverable, so `POST /history` on these namespaces 400s without it.
+ */
+function taskDelegations(snapshots: HistorySnapshot[]): Map<string, string> {
+  const subagentByCallId = new Map<string, string>();
+  for (const snap of snapshots) {
+    for (const task of snap.tasks ?? []) {
+      const written = (task.result as { messages?: unknown } | undefined)?.messages;
+      for (const m of (Array.isArray(written) ? written : []) as RawMessage[]) {
+        for (const call of m?.tool_calls ?? []) {
+          const type = (call.args as { subagent_type?: unknown } | undefined)?.subagent_type;
+          if (call.id && call.name === 'task' && typeof type === 'string') {
+            subagentByCallId.set(call.id, type);
+          }
+        }
+      }
+    }
+  }
+
+  const byTaskId = new Map<string, string>();
+  for (const snap of snapshots) {
+    for (const task of snap.tasks ?? []) {
+      if (!task?.id) continue;
+      const written = (task.result as { messages?: unknown } | undefined)?.messages;
+      for (const m of (Array.isArray(written) ? written : []) as RawMessage[]) {
+        const isToolMessage = m?.type === 'tool' || m?.role === 'tool';
+        const target = isToolMessage && m.tool_call_id
+          ? subagentByCallId.get(m.tool_call_id)
+          : undefined;
+        if (target) byTaskId.set(task.id, target);
+      }
+    }
+  }
+  return byTaskId;
+}
+
 /**
  * The child nodes that ran inside one namespace, in execution order.
  *
@@ -54,12 +114,37 @@ export async function fetchNamespace(
  * they are de-duplicated by task id, and a later snapshot may carry the result or
  * error an earlier one lacked.
  */
-export function nodesFromSnapshots(snapshots: HistorySnapshot[]): ExecNode[] {
+export function nodesFromSnapshots(
+  snapshots: HistorySnapshot[],
+  parentNamespace?: string,
+): ExecNode[] {
   const seen = new Map<string, ExecNode>();
+  const delegations = taskDelegations(snapshots);
   // getHistory returns newest-first; execution order is the reverse.
   for (const snap of [...snapshots].reverse()) {
     for (const task of snap.tasks ?? []) {
-      if (!task?.id || isInternalNode(task.name ?? '')) continue;
+      if (!task?.id) continue;
+      // A `tools` task that ran a deep-agent `task` delegation IS an execution
+      // step — the sub-agent it spawned. Every other `tools`/`model` task is
+      // ReAct-loop plumbing whose work is already in the transcript.
+      const delegatedTo = delegations.get(task.id);
+      if (delegatedTo) {
+        if (seen.has(task.id)) continue;
+        seen.set(task.id, {
+          // Derived, not reported: a ToolNode task has `checkpoint: null`, but
+          // the sub-agent checkpoints under `<parent>|<node>:<task id>` — the
+          // same `name:id` shape LangGraph builds namespaces from.
+          id: childNamespace(parentNamespace, task.name ?? 'tools', task.id),
+          label: humanise(delegatedTo),
+          name: delegatedTo,
+          kind: 'agent',
+          status: task.error ? 'error' : 'done',
+          namespace: childNamespace(parentNamespace, task.name ?? 'tools', task.id),
+          children: [],
+        });
+        continue;
+      }
+      if (isInternalNode(task.name ?? '')) continue;
       const existing = seen.get(task.id);
       if (existing) {
         if (task.error) existing.status = 'error';
@@ -136,15 +221,6 @@ export function latestValues(snapshots: HistorySnapshot[]): Record<string, unkno
   return {};
 }
 
-type RawMessage = {
-  type?: string;
-  role?: string;
-  name?: string;
-  status?: string;
-  content?: unknown;
-  tool_calls?: { id?: string; name?: string; args?: unknown }[];
-  tool_call_id?: string;
-};
 
 function messageText(content: unknown): string | undefined {
   if (typeof content === 'string') return content;
