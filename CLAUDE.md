@@ -226,12 +226,16 @@ The whole app is organised around **"one graph → one screen"**:
     ReAct loop and would otherwise render a "Model, Tools, Model, Tools…" ladder under every agent.
     What they did is in the transcript, rendered as turns and tool calls. Matching `tools` by exact
     name is safe: muffin's deterministic `ToolNode`s are named for what they fetch (`fetch_ohlcv`).
-  - **deepagents `task` sub-agents are NOT drillable** — `POST /history` on
-    `<parent>|tools:<uuid>` returns **400 "Subgraph … not found"**, because `aget_state_history`
-    resolves namespaces via `get_subgraphs()`, which only knows `add_node`-registered subgraphs; a
-    `task` sub-agent runs inside a *tool*. Their checkpoints exist (295 of them on `019fa546`) but
-    cannot be fetched. The delegation and its returned report ARE in the parent's transcript, so
-    "which sub-agents ran, and what came back" is answerable; only their own step-by-step is lost.
+  - **deepagents `task` sub-agents ARE drillable — via a fork pin.** `POST /history` on
+    `<parent>|tools:<uuid>` returned **400 "Subgraph … not found"**: namespace resolution only knows
+    `add_node`-registered subgraphs, and a `task` sub-agent runs inside a *tool*. This is upstream's
+    **documented, intentional** limitation ([View subgraph state](https://docs.langchain.com/oss/python/langgraph/use-subgraphs#view-subgraph-state):
+    *"does not work when a subgraph is called inside a tool function … e.g. the subagents pattern"*),
+    reported as a bug in deepagents#2629 and closed as not-supported. muffin-agent pins a fork that
+    declares the subagent graphs on the tools node (deepagents#5136 / #5132), so these namespaces now
+    resolve — verified on prod thread `019fa546`: two `|tools:` namespaces returned 40 snapshots with
+    53 and 42 messages. **That pin may never be upstreamed**; if it is ever dropped, these become
+    unreadable again and the tree must go back to treating them as leaves.
   - **The tree comes from LangGraph's own checkpoints — there is no capture channel.**
     `lib/agent/run-history.ts`: `POST /threads/{id}/history` returns one snapshot per superstep, each
     carrying the `tasks[]` that ran in it; every task has `{id, name, result, checkpoint:{checkpoint_ns}}`,
