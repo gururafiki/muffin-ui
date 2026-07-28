@@ -102,54 +102,29 @@ export function taskWrite(result: unknown, channel: string): unknown {
 }
 
 /**
- * The messages each task WROTE, in execution order.
+ * The messages a namespace recorded — its transcript, tool calls included.
  *
- * This exists because `values.messages` is empty for every deep agent — measured
- * on production thread 019fa546: `ticker_classification` reports 31 snapshots
- * with `values.messages == []` while its tasks demonstrably ran 10 model turns
- * and 8 tool calls. The same holds for `criteria_definition` and each criterion
- * `evaluate`; only plain (non-deep) agents like `synthesis` populate the channel.
- * Applying pending writes does not help — `POST /state` on that namespace also
- * returns 0 messages.
+ * Read straight from the channel. This briefly went through a reconstruction
+ * from `tasks[].result.messages`, because every DEEP agent reported
+ * `values.messages == []` while its tasks had demonstrably run model turns and
+ * tool calls. That was an upstream bug, not a fact about deep agents:
+ * `_prepare_state_snapshot` hydrated channels with `self.checkpointer` alone,
+ * but a subgraph from `get_subgraphs()` is compiled without one, so
+ * `DeltaChannel`s (which is what an agent's `messages` is) had no saver to
+ * replay their ancestor writes and silently came back empty.
  *
- * The per-task writes, though, are complete and ordered. They are also the more
- * faithful record: they say which superstep produced which message.
- *
- * A task recurs across snapshots and the earliest occurrence may not carry its
- * result yet, so the first NON-EMPTY write per task wins while first-seen order
- * is preserved.
+ * Fixed in langchain-ai/langgraph#8470, which muffin-agent pins a fork for
+ * until it ships. The reconstruction is deliberately NOT kept as a fallback: it
+ * would mask a regression if that pin were ever dropped too early, and reading
+ * one authoritative source beats silently choosing between two.
  */
-function messagesFromTaskWrites(snapshots: HistorySnapshot[]): unknown[] {
-  const order: string[] = [];
-  const byTask = new Map<string, unknown[]>();
-  // getHistory is newest-first; execution order is the reverse.
-  for (const snap of [...snapshots].reverse()) {
-    for (const task of snap.tasks ?? []) {
-      if (!task?.id) continue;
-      if (!byTask.has(task.id)) {
-        order.push(task.id);
-        byTask.set(task.id, []);
-      }
-      const written = (task.result as { messages?: unknown } | undefined)?.messages;
-      if (Array.isArray(written) && written.length && byTask.get(task.id)!.length === 0) {
-        byTask.set(task.id, written);
-      }
-    }
-  }
-  return order.flatMap((id) => byTask.get(id) ?? []);
-}
-
-/** The messages a namespace recorded — its transcript, tool calls included. */
 export function messagesFromSnapshots(snapshots: HistorySnapshot[]): unknown[] {
-  let fromValues: unknown[] = [];
+  let best: unknown[] = [];
   for (const snap of snapshots) {
     const msgs = (snap.values as { messages?: unknown })?.messages;
-    if (Array.isArray(msgs) && msgs.length > fromValues.length) fromValues = msgs;
+    if (Array.isArray(msgs) && msgs.length > best.length) best = msgs;
   }
-  // Whichever is richer, never both: the two overlap for plain agents, and
-  // concatenating them would double every message.
-  const fromWrites = messagesFromTaskWrites(snapshots);
-  return fromWrites.length > fromValues.length ? fromWrites : fromValues;
+  return best;
 }
 
 /** The richest `values` a namespace recorded, for rendering its structured output. */

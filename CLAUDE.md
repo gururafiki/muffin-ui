@@ -209,17 +209,19 @@ The whole app is organised around **"one graph → one screen"**:
   node to a `SubagentRun` and delegating to `SubagentActivity`/`SubAgentRunRow`; `ExecutionTree`
   (`features/agent-shared/execution-tree/`) renders it as the rail-of-plan-steps drill-down behind
   the per-agent toggle. Two views of one tree, not two trees.
-  - **A deep agent's `values.messages` is EMPTY — the transcript comes from `tasks[].result`.**
-    Measured on prod thread `019fa546` (2026-07-28): `ticker_classification` reports 31 snapshots with
-    `values.messages == []` while its tasks demonstrably ran 10 model turns and 8 tool calls; the same
-    holds for `criteria_definition` and every criterion `evaluate`. Only PLAIN agents (`synthesis`,
-    an `AgentState` not a `DeepAgentState`) populate the channel. `POST /state` — which applies
-    pending writes — returns 0 there too, so it is not a pending-write artefact; the mechanism is
-    **not established**. `messagesFromSnapshots` therefore reconstructs from each task's own writes
-    (first non-empty write per task, first-seen order) and takes whichever source is richer — never
-    both, since concatenating them would double every message for plain agents. Verified against that
-    thread: classification went 0 → 23 messages / 12 tool calls / 4 sub-agent delegations, and those
-    4 delegations match the `|tools:` namespaces the database holds.
+  - **Transcripts come from the namespace's own `values.messages`.** They briefly came from
+    `tasks[].result.messages` instead, because every DEEP agent reported an empty channel while its
+    tasks had demonstrably run model turns and tool calls. That was an **upstream bug**, not a fact
+    about deep agents: `_prepare_state_snapshot` hydrated channels with `self.checkpointer` alone,
+    but a subgraph from `get_subgraphs()` is compiled without one (the parent supplies it via
+    `CONFIG_KEY_CHECKPOINTER`), so `DeltaChannel`s — which is what an agent's `messages` is, while a
+    plain agent's is a `BinaryOperatorAggregate` — had no saver to replay their ancestor writes and
+    silently came back empty. Diagnosed and fixed in
+    [langchain-ai/langgraph#8470](https://github.com/langchain-ai/langgraph/issues/8470); muffin-agent
+    pins a fork until it ships. Verified on prod thread `019fa546`: `ticker_classification` 0 → 23,
+    `criteria_definition` 0 → 35, `valuation_methodology` 0 → 40, `synthesis` (plain) 5 → 5.
+    The reconstruction was **removed rather than kept as a fallback** — it would mask a regression if
+    that pin were dropped too early, and one authoritative source beats silently picking between two.
   - **`model` and `tools` are filtered from the tree.** They are the two nodes of an agent's internal
     ReAct loop and would otherwise render a "Model, Tools, Model, Tools…" ladder under every agent.
     What they did is in the transcript, rendered as turns and tool calls. Matching `tools` by exact

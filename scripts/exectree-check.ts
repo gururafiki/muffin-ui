@@ -199,48 +199,33 @@ async function main(): Promise<void> {
     check('a transcript with no calls yields none', toolRunsFromMessages([{ type: 'ai', content: 'hi' }]).length === 0);
   }
 
-  console.log('\ndeep agents — transcript comes from task writes, not values.messages');
+  console.log('\ntranscripts come from the namespace\'s own messages channel');
   {
-    // Measured on production thread 019fa546: every DEEP agent reports
-    // `values.messages == []` across all its snapshots while its tasks
-    // demonstrably ran model turns and tool calls. Only plain agents populate
-    // the channel. The writes are complete, so the transcript is reconstructed
-    // from them.
+    // Read straight from `values.messages`. This briefly went through a
+    // reconstruction from task writes because every deep agent reported an
+    // empty channel — an upstream bug (langchain-ai/langgraph#8470), since
+    // fixed, where a nested subgraph had no saver to replay its DeltaChannel.
     const snaps = history(
-      snapshot([{ id: 'p', name: '_InputPromptMiddleware.before_agent', result: { messages: [{ type: 'human', content: 'classify AAPL' }] } }], { messages: [] }),
-      snapshot([{ id: 'm1', name: 'model', result: { messages: [aiCall('c1', 'task', { subagent_type: 'equity-fundamentals' })] } }], { messages: [] }),
-      snapshot([{ id: 't1', name: 'tools', result: { messages: [toolResult('c1', 'report')] } }], { messages: [] }),
-      snapshot([{ id: 'm2', name: 'model', result: { messages: [{ type: 'ai', content: 'done' }] } }], { messages: [] }),
+      snapshot([{ id: 'p', name: '_InputPromptMiddleware.before_agent' }], {
+        messages: [{ type: 'human', content: 'classify AAPL' }],
+      }),
+      snapshot([{ id: 'm1', name: 'model' }], {
+        messages: [
+          { type: 'human', content: 'classify AAPL' },
+          aiCall('c1', 'task', { subagent_type: 'equity-fundamentals' }),
+          toolResult('c1', 'report'),
+        ],
+      }),
     );
     const msgs = messagesFromSnapshots(snaps) as { type?: string }[];
-    check('reconstructs a transcript from an empty messages channel', msgs.length === 4, `${msgs.length} messages`);
-    check('in execution order', msgs.map((m) => m.type).join(',') === 'human,ai,tool,ai');
-    // This is what makes "which sub-agents did it call" answerable: the `task`
-    // delegation is a real tool call in the reconstructed transcript.
+    check('richest snapshot wins', msgs.length === 3, `${msgs.length} messages`);
+    check('order preserved', msgs.map((m) => m.type).join(',') === 'human,ai,tool');
+    // This is what makes "which sub-agents did it call" answerable: a `task`
+    // delegation is a real tool call in the transcript.
     const runs = toolRunsFromMessages(msgs);
     check('the task delegation is visible as a tool call', runs.some((r) => r.tool === 'task'));
     check('and it is paired with its result', runs.find((r) => r.tool === 'task')?.status === 'ok');
-  }
-
-  console.log('\nplain agents keep using values.messages (no doubling)');
-  {
-    const populated = [{ type: 'human', content: 'go' }, { type: 'ai', content: 'answer' }];
-    const snaps = history(
-      snapshot([{ id: 'm', name: 'model', result: { messages: [{ type: 'ai', content: 'answer' }] } }], { messages: populated }),
-    );
-    // Both sources overlap here; concatenating them would duplicate the AI turn.
-    check('richer source wins, never both', messagesFromSnapshots(snaps).length === 2);
-  }
-
-  console.log('\na task that never wrote its result is tolerated');
-  {
-    const snaps = history(
-      snapshot([{ id: 'm', name: 'model' }], { messages: [] }),                                   // pending: no result yet
-      snapshot([{ id: 'm', name: 'model', result: { messages: [{ type: 'ai', content: 'x' }] } }], { messages: [] }),
-    );
-    // First-seen order, first NON-EMPTY write — an early result-less occurrence
-    // must not shadow the real one.
-    check('a later snapshot supplies the missing write', messagesFromSnapshots(snaps).length === 1);
+    check('an empty channel yields nothing', messagesFromSnapshots(history(snapshot([], { messages: [] }))).length === 0);
   }
 
   console.log('\nagent-internal loop nodes are not execution steps');
