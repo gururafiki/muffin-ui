@@ -35,13 +35,17 @@ function tryParse(text?: string): unknown {
 /**
  * One expandable tool-run row: header line → args, output, error on tap.
  *
- * When the row joins to its cached payload (`useToolCache` by `args_hash`) it
- * shows the FULL data the run gathered — size + timestamp in the header, and the
- * complete content run through the chart / JSON / markdown renderers on expand
- * (the capped `output_preview` never parsed as a chart). Rows with no cache
- * entry — errors, non-cacheable tools, `task` delegations, or historical runs
- * predating `args_hash` — fall back to the previews. This folds the former
- * "Data gathered" panel into "Tool execution".
+ * `output_preview` now carries the FULL content, read from the transcript rather
+ * than a capped copy in graph state, so charts and JSON render from it directly.
+ * The cache join (`useToolCache` by `args_hash`) is therefore no longer needed to
+ * see the output — it only adds the payload's size and age to the header. Rows
+ * with no cache entry (errors, non-cacheable tools, `task` delegations) simply
+ * omit those. This folds the former "Data gathered" panel into "Tool execution".
+ *
+ * Known gap: a result that exceeded the agent's size limit is replaced in the
+ * transcript by a "Tool result too large…" pointer and carries no `args_hash`,
+ * so neither path shows the payload. It lives in that namespace's `files`
+ * channel (the filesystem offload) — recoverable, but not wired up.
  */
 function ToolRunRow({ run }: { run: ToolRun }) {
   const [open, setOpen] = useState(false);

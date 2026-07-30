@@ -197,6 +197,30 @@ async function main(): Promise<void> {
     check('unanswered calls are kept as pending', runs.find((r) => r.tool === 'never_returned')?.status === 'pending');
     check('runs are attributed to the node', runs.every((r) => r.agent === 'market_analyst'));
     check('a transcript with no calls yields none', toolRunsFromMessages([{ type: 'ai', content: 'hi' }]).length === 0);
+
+    // The field NAMES are ToolRunsPanel's contract. Emitting `output`/`args`
+    // instead of `output_preview`/`args_preview` left every SUCCESSFUL call
+    // rendering blank while errors rendered fine — `error` was the one name that
+    // matched — and `zToolRun` is a looseObject, so it passed validation mutely.
+    const ok = runs.find((r) => r.tool === 'get_indicators');
+    check('a successful call carries output_preview', !!ok?.output_preview, JSON.stringify(ok?.output_preview ?? null));
+    check('args land in args_preview as JSON', ok?.args_preview === '{"ticker":"NVDA"}', ok?.args_preview ?? '-');
+    check('the panel can parse those args', JSON.parse(ok?.args_preview ?? 'null')?.ticker === 'NVDA');
+    const bad = runs.find((r) => r.tool === 'get_news');
+    check('an errored call keeps error and leaves output empty', !!bad?.error && bad?.output_preview === '');
+    check('`task` rows are flagged as delegations', toolRunsFromMessages([
+      aiCall('d1', 'task', { subagent_type: 'x' }),
+      { ...toolResult('d1', 'report'), name: 'task' },
+    ])[0]?.is_subagent_call === true);
+
+    // Cache metadata rides on the message, so nothing needs a Store lookup and
+    // no Python-compatible arg hashing is required.
+    const withCache = toolRunsFromMessages([
+      aiCall('h1', 'get_prices', { ticker: 'AAPL' }),
+      { ...toolResult('h1', '{...}'), additional_kwargs: { cache: { hit: true, args_hash: 'abc123def456', byte_size: 2048 } } },
+    ])[0];
+    check('args_hash is read off the message', withCache?.args_hash === 'abc123def456', withCache?.args_hash ?? '-');
+    check('cache_hit is read off the message', withCache?.cache_hit === true);
   }
 
   console.log('\ntranscripts come from the namespace\'s own messages channel');

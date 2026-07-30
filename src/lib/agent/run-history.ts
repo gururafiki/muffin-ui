@@ -55,6 +55,10 @@ type RawMessage = {
   content?: unknown;
   tool_calls?: { id?: string; name?: string; args?: unknown }[];
   tool_call_id?: string;
+  /** `ToolResultCacheMiddleware` stamps this on every cacheable tool result. */
+  additional_kwargs?: {
+    cache?: { hit?: boolean; args_hash?: string; byte_size?: number };
+  };
 };
 
 /** `<parent>|<node>:<task id>` — how LangGraph composes a child namespace. */
@@ -242,6 +246,29 @@ function messageText(content: unknown): string | undefined {
  *
  * A call with no matching `ToolMessage` is still reported (status `pending`): the run
  * may have been cancelled mid-call, and silently dropping it would hide that.
+ *
+ * **Field names are the panel's contract, not ours.** `ToolRunsPanel` reads
+ * `args_preview` / `output_preview` / `error`. Emitting `args`/`output` instead
+ * left successful calls rendering blank while errors rendered fine — `error` was
+ * the one name that happened to match. `zToolRun` is a `looseObject`, so the
+ * wrong keys passed validation silently.
+ *
+ * `output_preview` carries the **full** content, not a preview. The name is
+ * historical: the old capture channel capped it because it lived in graph state,
+ * and the panel notes a capped value "never parsed as a chart". Read from the
+ * transcript on demand there is no storage cost, so charts and JSON now render.
+ *
+ * Everything here comes from the transcript — **nothing needs the tool cache**.
+ * `ToolResultCacheMiddleware` never truncates a `ToolMessage`; it returns the
+ * full content and attaches `additional_kwargs.cache =
+ * {hit, tool_name, args_hash, byte_size}`. So the cache's `args_hash` is read
+ * off the message rather than recomputed — which also avoids reproducing
+ * Python's `json.dumps(args, sort_keys=True)` from JS, where the separators,
+ * `ensure_ascii` escaping and float formatting (`1.0` vs `1`) all differ and a
+ * mismatched hash would silently miss.
+ *
+ * The panel still uses that hash to join the Store entry for a payload's size
+ * and age, but no longer *depends* on it to show the output.
  */
 export function toolRunsFromMessages(messages: unknown[], agent?: string): ToolRun[] {
   const results = new Map<string, RawMessage>();
@@ -254,14 +281,27 @@ export function toolRunsFromMessages(messages: unknown[], agent?: string): ToolR
   for (const m of messages as RawMessage[]) {
     for (const call of m?.tool_calls ?? []) {
       const result = call.id ? results.get(call.id) : undefined;
+      // `status` on a ToolMessage is LangChain's own success/error flag.
+      const status = !result ? 'pending' : result.status === 'error' ? 'error' : 'ok';
+      const text = result ? messageText(result.content) : undefined;
+      const cache = result?.additional_kwargs?.cache;
       runs.push({
         tool: call.name,
         agent,
-        args: call.args,
-        // `status` on a ToolMessage is LangChain's own success/error flag.
-        status: !result ? 'pending' : result.status === 'error' ? 'error' : 'ok',
-        output: result ? messageText(result.content) : undefined,
-        error: result?.status === 'error' ? messageText(result.content) : undefined,
+        // Renders the row as "delegated to subagent" rather than a bare `task`.
+        is_subagent_call: call.name === 'task',
+        status,
+        // Straight off the message — see the note above on why this is not
+        // recomputed from the args.
+        args_hash: cache?.args_hash,
+        cache_hit: cache?.hit,
+        // Stringified so the panel's `tryParse` can render it as a JSON block
+        // instead of one long line of text.
+        args_preview: call.args === undefined ? '' : JSON.stringify(call.args),
+        // Errors carry their content in `error`; keeping it out of the output
+        // slot stops the same text rendering twice.
+        output_preview: status === 'error' ? '' : (text ?? ''),
+        error: status === 'error' ? text : undefined,
       });
     }
   }
