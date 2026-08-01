@@ -174,7 +174,7 @@ export function CriterionDetails({
           ) : null}
 
           {/* This card is the criterion's RESULT. What the worker did to reach it —
-              its transcript, tool calls and sub-agents — lives in the Execution Tree,
+              its transcript, tool calls and sub-agents — lives in the Timeline view,
               read from that worker's own LangGraph namespace. */}
 
           {transcript?.messages?.length && renderTranscript ? (

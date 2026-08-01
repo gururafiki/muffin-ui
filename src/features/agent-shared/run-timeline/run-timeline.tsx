@@ -13,11 +13,12 @@
  * version preferred a hand-written `AgentDef.stages` recipe per agent, so an
  * unregistered graph fell back to an unlabelled topology dump.
  */
-import { useMemo } from 'react';
-import { View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
 import { Skeleton, SpineRow, Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 import { pendingNodes, planFromGraph, useAssistantGraph } from '@/lib/agent/run-graph';
 import { formatDuration, type Lane, type RunNode } from '@/lib/agent/run-node';
 import { LaneList, NodeRow, useLiveOverlay, type TimelineCtx } from './run-card';
@@ -35,9 +36,17 @@ function longest(lanes: Lane[]): number {
   return max;
 }
 
+/** Spine-shaped placeholders plus a line that says what is happening — an unlabelled
+ * skeleton reads the same as an empty run, which is the confusion being fixed. */
 function RunTimelineSkeleton() {
   return (
     <View className="gap-2.5">
+      <View className="flex-row items-center gap-2">
+        <ActivityIndicator size="small" color={palette.frosting[400]} />
+        <Text variant="muted" className="text-xs">
+          Reading this run…
+        </Text>
+      </View>
       {[0, 1, 2].map((i) => (
         <View key={i} className="flex-row items-center gap-3">
           <Skeleton className="h-[18px] w-[18px] rounded-pill" />
@@ -49,15 +58,50 @@ function RunTimelineSkeleton() {
   );
 }
 
+/**
+ * Counts up to `value` over ~500ms, so the run summary lands with a little life instead
+ * of snapping into place. Driven by an interval rather than a Reanimated shared value
+ * because the number itself is rendered text, not a style.
+ *
+ * `progress` only ever moves from the interval callback — an external clock, never a
+ * synchronous write in the effect body — which is the same shape as `useElapsedLabel`
+ * (`run-progress.tsx`) and what keeps React-Compiler purity rules satisfied.
+ */
+function useCountUp(value: number, enabled: boolean): number {
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const start = Date.now();
+    const id = setInterval(() => {
+      const p = Math.min(1, (Date.now() - start) / 500);
+      setProgress(p);
+      if (p >= 1) clearInterval(id);
+    }, 40);
+    return () => clearInterval(id);
+  }, [enabled]);
+  return enabled ? Math.round(value * progress) : value;
+}
+
 /** One line of honest run-level accounting above the spine. */
-function TimelineSummary({ lanes, pending, busy }: { lanes: Lane[]; pending: RunNode[]; busy: boolean }) {
+function TimelineSummary({
+  lanes,
+  pending,
+  busy,
+  animate,
+}: {
+  lanes: Lane[];
+  pending: RunNode[];
+  busy: boolean;
+  animate: boolean;
+}) {
   const nodes = lanes.flatMap((l) => l.nodes);
   const failed = nodes.filter((n) => n.status === 'error').length;
   const fans = lanes.filter((l) => l.parallel).length;
   const total = lanes.reduce((sum, l) => sum + (l.durationMs ?? 0), 0);
+  const steps = useCountUp(nodes.length, animate);
 
   const parts = [
-    `${nodes.length} step${nodes.length === 1 ? '' : 's'}`,
+    `${steps} step${steps === 1 ? '' : 's'}`,
     fans > 0 ? `${fans} parallel` : undefined,
     pending.length > 0 && busy ? `${pending.length} to go` : undefined,
     failed > 0 ? `${failed} failed` : undefined,
@@ -65,7 +109,7 @@ function TimelineSummary({ lanes, pending, busy }: { lanes: Lane[]; pending: Run
   ].filter(Boolean);
 
   return (
-    <Text variant="muted" className="text-xs">
+    <Text variant="muted" className="text-xs tabular-nums">
       {parts.join(' · ')}
     </Text>
   );
@@ -111,7 +155,9 @@ export function RunTimeline({
 
   const body = (
     <View className="gap-2">
-      <TimelineSummary lanes={lanes} pending={pending} busy={busy} />
+      {/* Count-up only on a settled run: while busy the step count genuinely grows, and
+          re-animating from zero on every new lane would read as a glitch. */}
+      <TimelineSummary lanes={lanes} pending={pending} busy={busy} animate={!reduced && !busy} />
       <View>
         <LaneList lanes={lanes} ctx={ctx} trailing={pending.length > 0} />
         {/* The road ahead. Only ever shown while a run is live — on a finished thread a

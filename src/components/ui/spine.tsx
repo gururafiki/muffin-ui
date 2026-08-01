@@ -1,5 +1,12 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { cn } from '@/lib/cn';
 import { StatusDot, type DotStatus } from './status-dot';
@@ -17,6 +24,27 @@ import { StatusDot, type DotStatus } from './status-dot';
  * Three separate copies of this line existed before, each with its own offsets.
  */
 const RAIL = { position: 'absolute' as const, top: 22, bottom: -12, width: 2 };
+
+/**
+ * The rail segment below a row. On the branch that is currently running it breathes, so
+ * the eye is drawn down the spine to where the work actually is — the one place on a
+ * long timeline that is still changing.
+ */
+function Rail({ active }: { active?: boolean }) {
+  const pulse = useSharedValue(1);
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    if (!active || reduced) return;
+    pulse.value = withRepeat(withTiming(0.35, { duration: 900 }), -1, true);
+  }, [active, reduced, pulse]);
+  const style = useAnimatedStyle(() => ({ opacity: active ? pulse.value : 1 }));
+  return (
+    <Animated.View
+      style={[RAIL, style]}
+      className={active ? 'bg-butter-400' : 'bg-frosting-200 dark:bg-night-border'}
+    />
+  );
+}
 
 export function SpineRow({
   status,
@@ -38,7 +66,7 @@ export function SpineRow({
   return (
     <View className={cn('flex-row', className)}>
       <View style={{ width: gutter }} className="items-center">
-        {!last ? <View style={RAIL} className="bg-frosting-200 dark:bg-night-border" /> : null}
+        {!last ? <Rail active={status === 'active'} /> : null}
         <View className="z-10 h-[22px] items-center justify-center">
           {marker ?? <StatusDot status={status} />}
         </View>

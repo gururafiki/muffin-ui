@@ -84,7 +84,7 @@ export function AgentRunner({
 
   // Sub-agent rows: the subgraph invocations discovered on the live stream
   // (criteria stages/workers, trading analysts) with their statuses and scoped
-  // transcript detail. The recursive tree lives in the Execution Tree view,
+  // transcript detail. The recursive tree lives in the Timeline view,
   // which reads each node's own LangGraph namespace on expand.
   const discovered = useSubgraphRows(agent, stream);
   const subagentRuns: SubagentRun[] = discovered.map((row) => ({

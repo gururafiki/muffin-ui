@@ -53,12 +53,16 @@ export function TodoList({ todos, title = 'To-dos' }: { todos: Todo[]; title?: s
 
   return (
     <Card tone="muted" className="gap-2">
-      <View className="flex-row items-center justify-between">
-        <Text variant="label">{title}</Text>
-        <Text variant="muted" className="text-xs">
-          {done}/{todos.length} done
-        </Text>
-      </View>
+      {/* `title=""` suppresses the header entirely — used where the caller's own facet
+          heading already names and counts the plan. */}
+      {title ? (
+        <View className="flex-row items-center justify-between">
+          <Text variant="label">{title}</Text>
+          <Text variant="muted" className="text-xs">
+            {done}/{todos.length} done
+          </Text>
+        </View>
+      ) : null}
       <View className="gap-1.5">
         {todos.map((t, i) => (
           <TodoRow key={i} todo={t} />

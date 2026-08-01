@@ -24,7 +24,7 @@ import { ToolCacheProvider } from '@/lib/agent/tool-cache';
  * the thread's persisted values (one cheap `threads.get`).
  *
  * These are *results*, not execution. What each worker did to reach its verdict —
- * transcript, tool calls, sub-agents — is in the Execution Tree, which reads that
+ * transcript, tool calls, sub-agents — is in the Timeline view, which reads that
  * worker's own LangGraph namespace on demand.
  */
 function historicalRuns(values: Record<string, unknown> | undefined): SubagentRun[] {

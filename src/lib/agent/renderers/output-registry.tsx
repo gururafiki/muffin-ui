@@ -9,6 +9,7 @@ import {
 } from '@/features/multi-agent/debate';
 import { parseOr, zCriterionEvaluation, zPersonaSignal } from '@/lib/agent/schemas';
 import { taskWrite } from '@/lib/agent/run-history';
+import { CriterionDetails } from './criteria-result';
 import { Markdown } from './markdown';
 import { StructuredOutput } from './structured';
 import { Verdict } from './widgets';
@@ -17,10 +18,17 @@ type Dict = Record<string, unknown>;
 
 /**
  * Renders the **Output** facet of a timeline node — its structured verdict/result ONLY.
- * Input, plan, transcript and sub-steps are separate facets. Keeping this to output
- * dispatch also sidesteps the require cycle `criteria-result.tsx` has with the timeline
- * (see the renderers barrel's note) — hence the lean inline criterion card instead of
- * reusing `CriterionDetails`.
+ * Input, plan, transcript and sub-steps are separate facets.
+ *
+ * ## One component per payload type, shared with the Overview
+ *
+ * The renderers here are the SAME components the Overview uses, so the two views cannot
+ * drift apart. This file used to carry a lean, duplicated criterion card, justified by a
+ * require cycle `criteria-result.tsx` supposedly had with the execution tree. That cycle
+ * does not exist: `criteria-result.tsx`'s only `@/features` import is an erased
+ * `import type`, nothing under `renderers/` imports the timeline, and this module already
+ * imports three siblings directly. The duplicate simply lost the evidence checklist,
+ * data-source chips, sub-criteria dots, limitations and the "no live data" warning.
  *
  * ## Dispatch is on the STATE CHANNEL, not on the payload's shape
  *
@@ -155,34 +163,14 @@ function renderCriterion(value: unknown): React.ReactNode {
       ? (value as { evaluation: unknown }).evaluation
       : value;
   const c = parseOr(zCriterionEvaluation, unwrapped, 'exec.criterion');
+  // The guard stays OUT here rather than inside the component: `renderNodeOutput` relies
+  // on a `null` return to fall through to the next candidate renderer, and
+  // `CriterionDetails` always renders something.
   if (!c || !hasCriterionShape(unwrapped)) return null;
   return (
     <View className="gap-3">
-      <Verdict signal={c.signal} confidence={c.confidence} summary={c.reasoning} />
-      {c.counterargument ? (
-        <View className="gap-1">
-          <Text variant="label">Counterargument</Text>
-          <Markdown value={c.counterargument} />
-        </View>
-      ) : null}
-      {c.evidence_summary ? (
-        <View className="gap-1">
-          <Text variant="label">Evidence</Text>
-          <StructuredOutput value={c.evidence_summary} />
-        </View>
-      ) : null}
-      {c.limitations ? (
-        <View className="gap-1">
-          <Text variant="label">Limitations</Text>
-          <StructuredOutput value={c.limitations} />
-        </View>
-      ) : null}
-      {c.sub_criteria ? (
-        <View className="gap-1">
-          <Text variant="label">Sub-criteria</Text>
-          <StructuredOutput value={c.sub_criteria} />
-        </View>
-      ) : null}
+      <Verdict signal={c.signal} confidence={c.confidence} />
+      <CriterionDetails c={c} />
     </View>
   );
 }

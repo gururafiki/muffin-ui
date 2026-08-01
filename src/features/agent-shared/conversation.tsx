@@ -97,14 +97,27 @@ function planUpdate(call: { name?: string; args?: Record<string, unknown> }): To
   return isTodoList(call.args?.todos) ? call.args.todos : undefined;
 }
 
-function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defaultOpen: boolean }) {
+function StepRow({
+  step,
+  last,
+  defaultOpen,
+  autoOpenFinalOutput = true,
+}: {
+  step: Step;
+  last: boolean;
+  defaultOpen: boolean;
+  /** A structured-output tool call is an agent's final answer, so a chat transcript
+   * expands it on sight. The run timeline shows the same payload in its own Output
+   * facet, so there it stays folded rather than printing the whole thing twice. */
+  autoOpenFinalOutput?: boolean;
+}) {
   const meta =
     step.kind === 'think'
       ? { label: 'Thinking', icon: 'thinking' as IconName, sublabel: undefined, isSubagent: false, isFinalOutput: false }
       : step.kind === 'nudge'
         ? { label: 'System: retry nudge', icon: 'warning' as IconName, sublabel: undefined, isSubagent: false, isFinalOutput: false }
         : toolStepMeta(step.call.name ?? 'tool', step.call.args ?? {});
-  const [open, setOpen] = useState(defaultOpen || !!meta.isFinalOutput);
+  const [open, setOpen] = useState(defaultOpen || (autoOpenFinalOutput && !!meta.isFinalOutput));
   const error = step.kind === 'tool' && step.error;
 
   return (
@@ -222,10 +235,12 @@ function StepTimeline({
   steps,
   viewMode,
   renderSubagent,
+  autoOpenFinalOutput,
 }: {
   steps: Step[];
   viewMode: ViewMode;
   renderSubagent?: SubagentResolver;
+  autoOpenFinalOutput?: boolean;
 }) {
   const shown = viewMode === 'verbose' ? steps : steps.filter(isSignificant);
   if (shown.length === 0) return null;
@@ -251,7 +266,13 @@ function StepTimeline({
             renderSubagent={renderSubagent}
           />
         ) : (
-          <StepRow key={'l' + i} step={n.step} last={i === nodes.length - 1} defaultOpen={false} />
+          <StepRow
+            key={'l' + i}
+            step={n.step}
+            last={i === nodes.length - 1}
+            defaultOpen={false}
+            autoOpenFinalOutput={autoOpenFinalOutput}
+          />
         ),
       )}
     </Card>
@@ -271,6 +292,7 @@ export function Conversation({
   busy,
   actions,
   renderSubagent,
+  autoOpenFinalOutput,
 }: {
   /** Persisted dicts or live `stream.messages` instances — both render. */
   messages: readonly ConversationMessage[];
@@ -280,6 +302,9 @@ export function Conversation({
   actions?: MessageActions;
   /** Expands a `task` step into that sub-agent's own run (see `SubagentResolver`). */
   renderSubagent?: SubagentResolver;
+  /** See `StepRow` — the run timeline sets this false because it renders the same
+   * structured output in its own Output facet. */
+  autoOpenFinalOutput?: boolean;
 }) {
   // Recomputed only when the message list changes — NOT on unrelated
   // re-renders (during token streaming the list identity changes anyway).
@@ -291,7 +316,13 @@ export function Conversation({
       {turns.map((turn, ti) => (
         <View key={ti} className="gap-3">
           {turn.human ? <HumanBubble message={turn.human} actions={actions} /> : null}
-          <StepTimeline key={viewMode} steps={turn.steps} viewMode={viewMode} renderSubagent={renderSubagent} />
+          <StepTimeline
+            key={viewMode}
+            steps={turn.steps}
+            viewMode={viewMode}
+            renderSubagent={renderSubagent}
+            autoOpenFinalOutput={autoOpenFinalOutput}
+          />
           {turn.answer ? <AnswerBlock message={turn.answer} actions={actions} /> : null}
           {busy && ti === turns.length - 1 ? (
             <View className="flex-row items-center gap-2 px-1">

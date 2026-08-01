@@ -599,6 +599,47 @@ next month renders correctly with no UI change.
   panels still use the registry recipe and were left untouched; long timelines are unvirtualized.
 
 
+## ✅ Milestone 26 — Timeline polish: per-facet loading, no duplicate output, honest plans (2026-08-01)
+Review of a fresh run turned up five defects. Two were **facts about the data, not UI bugs** — those
+are now reported honestly rather than papered over.
+
+- **Per-facet loading.** The card used to show one skeleton, gated on knowing *nothing* — but a
+  fan-out member already carries its `output` from the parent's `task.result`, so the guard was
+  false, the card rendered instantly and then silently grew seconds later. Each facet now holds a
+  labelled `FacetSkeleton` in its final place, and `NodeRow` swaps its chevron for a spinner while
+  its namespace is in flight (same TanStack query key as the body, so it costs no extra request).
+  The root skeleton gained a "Reading this run…" line — an unlabelled skeleton read as an empty run.
+- **Input prompts render as markdown** once expanded; collapsed they stay a clamped plain `Text`,
+  because `Markdown` returns a `Fragment` and cannot take `numberOfLines`. (The old code's comment
+  claimed markdown; the code did not do it.)
+- **No more duplicate criterion card** (`isPassThrough`). The criterion worker subgraph is
+  `evaluate` → `package`, and `package`'s only write is `criterion_evaluations` — the payload the
+  criterion row already shows, so every criterion rendered twice. A **leaf** writing the **same
+  channel** as its parent (`TimelineCtx.parentOutputChannel`) is a terminal pass-through: the row and
+  its duration stay, the repeated card becomes a one-liner. Derived from two channel names the API
+  reported — no per-graph knowledge.
+- **Stale plans are labelled, not hidden** (`isPlanStale`). On prod thread `019faada` the
+  ticker-classification agent wrote four todos at superstep 5 and **never called `write_todos`
+  again**, so the checkpoint still says "1 of 4" long after the node succeeded. A finished node with
+  unfinished todos now says when the plan was last written instead of showing a progress fraction
+  that reads like a stalled run.
+- **The criterion card is the Overview's `CriterionDetails`** — evidence checklist, data-source
+  chips, sub-criteria tone dots, limitations, "no live data" warning, folded raw reasoning. The lean
+  duplicate it replaced was justified by a require cycle that **does not exist**:
+  `criteria-result.tsx`'s only `@/features` import is an erased `import type`, nothing under
+  `renderers/` imports the timeline, and `output-registry.tsx` already imports three siblings
+  directly. The comment even pointed at a "renderers barrel note" that has never existed
+  (`git log -S cycle` on the barrel returns nothing). One component per payload type now, shared by
+  both views, so they cannot drift apart again.
+- **Motion:** card bodies fade out as well as in (collapse used to snap), lanes stagger in as the
+  spine draws downward (capped at 8), the rail below a running step breathes, and the run summary
+  counts up on a settled run. All gated on `useReducedMotion`. Reanimated **layout transitions** were
+  deliberately avoided — unreliable on RN-Web, and this repo's gate is a headless browser.
+- **Follow-up for muffin-agent:** deep agents do not maintain their `todos`. `TodoListMiddleware`
+  gives them `write_todos` but nothing in the prompts requires marking items complete, so a plan is
+  written once and abandoned. The UI now says so; the agent-side fix belongs in muffin-agent.
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

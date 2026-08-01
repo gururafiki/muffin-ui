@@ -17,7 +17,7 @@ function cap(s: string): string {
  * output payload (usually the joined cache text, or the capped
  * `output_preview`). Used both by `ToolRunRow` (every existing
  * `ToolRunsPanel`, app-wide) and, from Task 3, a node's tool-call facet in the
- * Execution Tree view.
+ * Timeline view.
  */
 export function renderToolOutput(toolName: string | undefined, payload: unknown): React.ReactNode {
   const series = parseTimeSeries(payload);

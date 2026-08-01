@@ -87,7 +87,7 @@ function SubgraphDetailSkeleton() {
  * replayable), so the scoped channels stay empty. The row falls back to what
  * checkpointed state DID keep: the criterion evaluation (workers) and the
  * stage's structured output (registry `StageDef.output`). The full transcript
- * and tool calls of a finished node live in the Execution Tree, which reads
+ * and tool calls of a finished node live in the Timeline view, which reads
  * that node's own LangGraph namespace.
  */
 export function SubgraphDetail({
@@ -159,7 +159,7 @@ export function SubgraphDetail({
       {/* Live transcript — the Steps timeline includes every tool call. The
           `busy` footer keeps it clear more is still streaming in. On a finished
           thread there is no replayable stream; that run's transcript and tool
-          calls come from its own namespace in the Execution Tree. */}
+          calls come from its own namespace in the Timeline view. */}
       {messages.length > 0 ? (
         <Conversation messages={messages} viewMode="verbose" busy={row.status === 'running'} />
       ) : null}

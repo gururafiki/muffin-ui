@@ -27,8 +27,8 @@
  * the branches someone actually opened.
  */
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
 import {
@@ -43,8 +43,15 @@ import {
   statusLabel,
 } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { renderNodeOutput, TodoList, ToolRunsPanel, isTodoList, type Todo } from '@/lib/agent/renderers';
-import { formatDuration, laneStatus, type Lane, type RunNode } from '@/lib/agent/run-node';
+import { Markdown, renderNodeOutput, TodoList, ToolRunsPanel, isTodoList, type Todo } from '@/lib/agent/renderers';
+import {
+  formatDuration,
+  isPassThrough,
+  isPlanStale,
+  laneStatus,
+  type Lane,
+  type RunNode,
+} from '@/lib/agent/run-node';
 import { palette } from '@/theme/colors';
 import { Conversation } from '../conversation';
 import { coerceMessages, type ConversationMessage } from '../conversation-turns';
@@ -61,6 +68,12 @@ export type TimelineCtx = {
   live: LiveOverlay;
   /** Guards against a pathological graph recursing without end. */
   depth: number;
+  /**
+   * The state channel the PARENT card reports as its output. A leaf child writing the
+   * same channel only produced that output, so its card must not repeat it — see
+   * `isPassThrough`.
+   */
+  parentOutputChannel?: string;
 };
 
 const MAX_DEPTH = 8;
@@ -80,6 +93,7 @@ function resolve(node: RunNode, ctx: TimelineCtx): RunNode {
  * supersteps bracketed into a fan.
  */
 export function LaneList({ lanes, ctx, trailing }: { lanes: Lane[]; ctx: TimelineCtx; trailing?: boolean }) {
+  const reduced = useReducedMotion();
   return (
     <View>
       {lanes.map((lane, i) => {
@@ -88,16 +102,25 @@ export function LaneList({ lanes, ctx, trailing }: { lanes: Lane[]; ctx: Timelin
         // repeating it on all ten rows says nothing the header has not already said.
         // Live members DO get individual timing from discovery, and keep it.
         const sharedDuration = lane.nodes.every((n) => resolve(n, ctx).durationMs === lane.durationMs);
-        return lane.parallel ? (
-          <ParallelFan key={lane.step} last={last} header={<FanHeader lane={lane} ctx={ctx} />}>
+        const row = lane.parallel ? (
+          <ParallelFan last={last} header={<FanHeader lane={lane} ctx={ctx} />}>
             {lane.nodes.map((n) => (
               <NodeRow key={n.id} node={n} ctx={ctx} bare hideDuration={sharedDuration} />
             ))}
           </ParallelFan>
         ) : (
-          <SpineRow key={lane.step} status={resolve(lane.nodes[0], ctx).status} last={last}>
+          <SpineRow status={resolve(lane.nodes[0], ctx).status} last={last}>
             <NodeRow node={lane.nodes[0]} ctx={ctx} />
           </SpineRow>
+        );
+        if (reduced) return <View key={lane.step}>{row}</View>;
+        // Staggered so the spine draws itself downward rather than appearing at once.
+        // Capped: a 19-wide council fan is ONE lane, but a long pipeline should not take
+        // a second to finish arriving.
+        return (
+          <Animated.View key={lane.step} entering={FadeInDown.duration(220).delay(Math.min(i, 8) * 45)}>
+            {row}
+          </Animated.View>
         );
       })}
     </View>
@@ -155,6 +178,10 @@ export function NodeRow({
   // by not offering a chevron beats an empty panel that reads as a bug.
   const expandable = node.status !== 'pending' && ctx.depth < MAX_DEPTH;
   const duration = formatDuration(node.durationMs);
+  // Same query key as the body's — TanStack Query dedupes it, so this costs no extra
+  // request and lets the ROW show that its content is still arriving. Without it a row
+  // that opens into a slow namespace looks identical to one that opened into nothing.
+  const { isFetching } = useRunTimeline(ctx.threadId, node.namespace, open && !!node.namespace, ctx.busy);
 
   return (
     <View className={cn('rounded-crumb', node.status === 'error' && 'bg-bearish/5')}>
@@ -183,7 +210,9 @@ export function NodeRow({
         {duration && node.durationMs && !hideDuration ? (
           <DurationBar ms={node.durationMs} maxMs={ctx.maxMs} label={duration} />
         ) : null}
-        {expandable ? (
+        {open && isFetching ? (
+          <ActivityIndicator size="small" color={palette.frosting[400]} />
+        ) : expandable ? (
           <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} color={palette.frosting[400]} weight="bold" />
         ) : null}
       </Pressable>
@@ -198,24 +227,39 @@ export function NodeRow({
 
 /** A titled facet of a card. Consistent labelling is what makes the four sections
  * scannable once you have seen them once. */
-function Facet({ label, children }: { label: string; children: React.ReactNode }) {
+function Facet({ label, children, meta }: { label: string; children: React.ReactNode; meta?: string }) {
   return (
     <View className="gap-1">
-      <Text variant="label">{label}</Text>
+      <View className="flex-row items-center gap-2">
+        <Text variant="label">{label}</Text>
+        {meta ? <Text variant="muted" className="text-[11px]">{meta}</Text> : null}
+      </View>
       {children}
     </View>
   );
 }
 
-/** Skeleton shaped like the card that will replace it, so nothing jumps on arrival. */
-function CardSkeleton() {
+/**
+ * A facet that hasn't arrived yet, keeping its real heading and roughly its final
+ * height.
+ *
+ * The card used to be all-or-nothing: one skeleton, shown only when NOTHING was known
+ * yet. But a fan-out member already carries its `output` from the parent's `task.result`,
+ * so the guard was false, the card rendered instantly, and then silently grew several
+ * seconds later when its namespace landed — with nothing on screen ever saying "still
+ * loading". Placeholders that hold their heading and their place fix both halves: it is
+ * visibly loading, and nothing jumps when it resolves.
+ */
+function FacetSkeleton({ label, lines = 2 }: { label: string; lines?: number }) {
+  const widths = ['w-full', 'w-4/5', 'w-3/5'];
   return (
-    <View className="gap-2">
-      <Skeleton className="h-3 w-14" />
-      <Skeleton className="h-3.5 w-full" />
-      <Skeleton className="h-3.5 w-4/5" />
-      <Skeleton className="h-3 w-14" />
-      <Skeleton className="h-3.5 w-3/5" />
+    <View className="gap-1">
+      <Text variant="label">{label}</Text>
+      <View className="gap-1.5">
+        {Array.from({ length: lines }, (_, i) => (
+          <Skeleton key={i} className={cn('h-3.5', widths[i % widths.length])} />
+        ))}
+      </View>
     </View>
   );
 }
@@ -229,16 +273,26 @@ export function RunCardBody({ node, ctx }: { node: RunNode; ctx: TimelineCtx }) 
   const detail: RunTimelineDetail | undefined = data;
   const input = node.input ?? detail?.input;
   const plan = detail?.plan ?? [];
-  const latestPlan = plan.at(-1)?.todos;
+  const latestRevision = plan.at(-1);
+  const latestPlan = latestRevision?.todos;
   const output = node.output;
   const hasNamespace = !!node.namespace;
+  // This node only wrote the channel its parent already shows — keep the row and its
+  // duration, drop the duplicated card. See `isPassThrough`.
+  const passThrough = isPassThrough(node, ctx.parentOutputChannel);
+  // Anything below inherits THIS node's channel as its parent channel. Depth is NOT
+  // bumped here — `NodeRow` already did that on the way in, and incrementing twice per
+  // visual level would halve how far `MAX_DEPTH` lets a reader drill.
+  const childCtx: TimelineCtx = { ...ctx, parentOutputChannel: node.outputChannel };
 
-  if (isPending && hasNamespace && input == null && output == null) return <CardSkeleton />;
+  // Still reading this namespace: show what is already known and hold a labelled place
+  // for each facet that is still coming, so the card never silently grows.
+  const loading = isPending && hasNamespace;
 
   const hasTimeline = (detail?.messages.length ?? 0) > 0 || (detail?.lanes.length ?? 0) > 0;
   const hasBody = input != null || latestPlan != null || hasTimeline || output != null;
 
-  if (!hasBody) {
+  if (!hasBody && !loading) {
     return (
       <Text variant="muted" className="text-xs">
         {hasNamespace
@@ -251,18 +305,24 @@ export function RunCardBody({ node, ctx }: { node: RunNode; ctx: TimelineCtx }) 
   }
 
   return (
-    <Animated.View entering={FadeIn.duration(180)}>
+    <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
       <Card tone="muted" className="gap-3">
         {input ? (
           <Facet label="Input">
             <InputBlock text={input} />
           </Facet>
+        ) : loading ? (
+          <FacetSkeleton label="Input" />
         ) : null}
 
         {isTodoList(latestPlan) ? (
-          <Facet label="Plan">
-            <TodoList todos={latestPlan as Todo[]} title={planTitle(latestPlan as Todo[])} />
-          </Facet>
+          <PlanFacet
+            todos={latestPlan as Todo[]}
+            status={node.status}
+            revisedAtStep={latestRevision?.step}
+          />
+        ) : loading ? (
+          <FacetSkeleton label="Plan" lines={3} />
         ) : null}
 
         {hasTimeline && detail ? (
@@ -270,40 +330,95 @@ export function RunCardBody({ node, ctx }: { node: RunNode; ctx: TimelineCtx }) 
             {/* When Input came from the transcript's own opening human message, the
                 transcript must not repeat it — otherwise a 2,000-character system brief
                 renders twice, back to back, before any of the actual work. */}
-            <NodeTimeline node={node} detail={detail} ctx={ctx} skipLeadingHuman={input === detail.input} />
+            <NodeTimeline node={node} detail={detail} ctx={childCtx} skipLeadingHuman={input === detail.input} />
           </Facet>
+        ) : loading ? (
+          <FacetSkeleton label="Timeline" lines={3} />
         ) : null}
 
         {output != null ? (
-          <Facet label="Output">{renderNodeOutput(node.outputChannel, output)}</Facet>
+          passThrough ? (
+            <Facet label="Output">
+              <Text variant="muted" className="text-xs">
+                Wrote the result shown above.
+              </Text>
+            </Facet>
+          ) : (
+            <Facet label="Output">{renderNodeOutput(node.outputChannel, output)}</Facet>
+          )
         ) : null}
       </Card>
     </Animated.View>
   );
 }
 
-function planTitle(todos: Todo[]): string {
-  const done = todos.filter((t) => /completed|done/i.test(t.status ?? '')).length;
-  return done === todos.length ? 'Plan · all done' : `Plan · step ${Math.min(done + 1, todos.length)} of ${todos.length}`;
+/**
+ * The agent's plan, with an honest header.
+ *
+ * A finished node whose todos still show unfinished items means the agent stopped
+ * calling `write_todos`, not that the run stalled — so the header says when the plan was
+ * last written rather than reporting a progress fraction that reads like a stuck run.
+ */
+function PlanFacet({
+  todos,
+  status,
+  revisedAtStep,
+}: {
+  todos: Todo[];
+  status: RunNode['status'];
+  revisedAtStep?: number;
+}) {
+  const done = todos.filter((t) => /^(completed|done)$/i.test((t.status ?? '').trim())).length;
+  const stale = isPlanStale(todos, status);
+  // The facet heading carries the state; `TodoList`'s own title would repeat the word
+  // "Plan" directly beneath it.
+  const meta = stale
+    ? `${done}/${todos.length} done · last written at step ${revisedAtStep ?? '?'}`
+    : done === todos.length
+      ? 'all done'
+      : `step ${Math.min(done + 1, todos.length)} of ${todos.length}`;
+
+  return (
+    <Facet label="Plan" meta={meta}>
+      <TodoList todos={todos} title="" />
+      {stale ? (
+        <Text variant="muted" className="text-[11px]">
+          This step finished without revising its plan again — the agent stopped updating it, so the
+          remaining items may well have been done.
+        </Text>
+      ) : null}
+    </Facet>
+  );
 }
 
-/** The prompt a node was handed. Models routinely emit markdown here, so it is rendered
- * as markdown rather than as a flat string — and capped, because a deep agent's brief
- * can run to thousands of characters that nobody wants above the actual work. */
+/**
+ * The prompt a node was handed.
+ *
+ * Collapsed it is a clamped plain `Text`, expanded it is real markdown. The split is
+ * forced by `Markdown`, which returns a `Fragment` of elements and so cannot take
+ * `numberOfLines` — and the clamp matters, because a deep agent's brief runs to
+ * thousands of characters that would otherwise bury the actual work.
+ */
 function InputBlock({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const long = text.length > 320;
   return (
-    <Pressable disabled={!long} onPress={() => setOpen((o) => !o)}>
-      <Text variant="muted" className="text-xs" numberOfLines={open || !long ? undefined : 4}>
-        {text}
-      </Text>
-      {long ? (
-        <Text variant="muted" className="mt-0.5 text-[11px] text-frosting-500">
-          {open ? 'Show less' : 'Show full prompt'}
+    <View className="gap-1">
+      {open || !long ? (
+        <Markdown value={text} />
+      ) : (
+        <Text variant="muted" className="text-xs" numberOfLines={4}>
+          {text}
         </Text>
+      )}
+      {long ? (
+        <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button">
+          <Text variant="muted" className="text-[11px] text-frosting-500">
+            {open ? 'Show less' : 'Show full prompt'}
+          </Text>
+        </Pressable>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 
@@ -346,6 +461,9 @@ function NodeTimeline({
           messages={messages}
           viewMode="verbose"
           busy={node.status === 'active'}
+          // The final structured output IS this node's Output facet, rendered right
+          // below — auto-expanding it here printed the whole payload twice.
+          autoOpenFinalOutput={false}
           renderSubagent={(callId) => {
             const child = byCallId.get(callId);
             return child ? <RunCardBody node={child} ctx={{ ...ctx, depth: ctx.depth + 1 }} /> : undefined;

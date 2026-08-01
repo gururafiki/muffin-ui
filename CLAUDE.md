@@ -221,9 +221,29 @@ The whole app is organised around **"one graph → one screen"**:
     branch not taken, not work still to come.
   - **Four facets per node: Input · Plan · Timeline · Output.** `RunCardBody` recurses — anything in
     a Timeline that is itself an agent or subgraph expands the same way. Input is the namespace's
-    first human message (or a sub-agent's `task` brief), and is dropped from the transcript below it
-    so a 2,000-character system prompt doesn't render twice. Plan is `values.todos` — already fetched
-    by the old hook and then discarded.
+    first human message (or a sub-agent's `task` brief), rendered as **markdown once expanded** and
+    as a clamped plain `Text` while collapsed (`Markdown` returns a `Fragment`, so it cannot take
+    `numberOfLines` — hence the two modes), and dropped from the transcript below it so a
+    2,000-character system prompt doesn't render twice. Plan is `values.todos`.
+  - **Loading is per facet, not all-or-nothing.** A card shows whatever it already has (a fan-out
+    member carries its `output` from the parent's `task.result`) and holds a labelled
+    `FacetSkeleton` in place for each facet still being fetched — the old single skeleton was gated
+    on knowing *nothing*, so those cards rendered instantly and then silently grew. `NodeRow` also
+    swaps its chevron for a spinner while its namespace is in flight, reading the SAME query key as
+    the body so TanStack Query dedupes it to one request.
+  - **A terminal pass-through node does not repeat its parent's output** (`isPassThrough`). Graphs
+    often end a subgraph with a small node whose only job is to write the channel the parent
+    reports — muffin's criterion worker is `evaluate` → `package`, and `package` writes
+    `criterion_evaluations` and nothing else, so every criterion rendered its card twice. Detected
+    from two channel names the API already reported (a **leaf** writing the **same channel** as its
+    parent, via `TimelineCtx.parentOutputChannel`), so there is no per-graph knowledge. The row and
+    its duration stay; only the duplicated payload is replaced by a one-liner.
+  - **A plan the agent abandoned is reported, not hidden** (`isPlanStale`). Deep agents keep their
+    plan in `values.todos` but nothing forces them to keep it current — on prod thread `019faada`
+    the ticker-classification agent wrote four todos at superstep 5 and never called `write_todos`
+    again, so the checkpoint still reads "1 of 4" long after the node finished. When a **finished**
+    node still has unfinished todos the header says when the plan was last written instead of a
+    progress fraction that reads like a stalled run. (The agent-side fix is a muffin-agent item.)
   - **Two kinds of node, because there are two kinds of node.** A pipeline/graph node has no
     `messages` channel at all (muffin-agent's graph-authoring rule keeps parent state off
     `AgentState`), so its timeline IS its child supersteps. An agent node HAS a transcript, and its

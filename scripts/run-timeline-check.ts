@@ -33,6 +33,8 @@ import {
   durationBetween,
   formatDuration,
   isInternalNode,
+  isPassThrough,
+  isPlanStale,
   laneStatus,
   walkLanes,
 } from '../src/lib/agent/run-node';
@@ -297,6 +299,52 @@ async function main(): Promise<void> {
         { source: 'b', target: 'a', conditional: true },
       ],
     }).length === 2);
+  }
+
+  console.log('\nterminal pass-through nodes do not repeat their parent\'s output');
+  {
+    // Mirrors the criteria worker subgraph: `evaluate` (a real agent, drillable) then
+    // `package`, whose only write is the channel the PARENT already reports. Rendering
+    // package's output showed every criterion's card twice.
+    const lanes = lanesFromSnapshots(history(
+      snapshot(0, null, [{ id: 'e', name: 'evaluate', ns: 'evaluate:u1', result: { evaluation: { criterion_name: 'ROIC' } } }]),
+      snapshot(1, null, [{ id: 'p', name: 'package', result: { criterion_evaluations: [{ criterion_name: 'ROIC' }] } }]),
+    ));
+    const evaluate = lanes[0].nodes[0];
+    const pkg = lanes[1].nodes[0];
+    check('the packaging node is a leaf', !pkg.namespace);
+    check('and records the parent\'s channel', pkg.outputChannel === 'criterion_evaluations', pkg.outputChannel ?? '-');
+    check('it is detected as a pass-through', isPassThrough(pkg, 'criterion_evaluations'));
+    // The row itself must stay — it ran, and its duration is real.
+    check('the row is still present', lanes.length === 2 && !!pkg.label);
+    // Guards against over-firing: a node doing real work of its own is never suppressed.
+    check('a drillable node is never a pass-through', !isPassThrough(evaluate, 'criterion_evaluations'));
+    check('a different channel is not a pass-through', !isPassThrough(pkg, 'synthesis'));
+    check('no parent channel means no suppression', !isPassThrough(pkg, undefined));
+  }
+
+  console.log('\na plan the agent stopped maintaining is reported, not hidden');
+  {
+    // Measured on prod thread 019faada: ticker_classification wrote 4 todos at superstep
+    // 5 and never called write_todos again, so the checkpoint still says 1-of-4 long
+    // after the node finished successfully.
+    const abandoned = [
+      { content: 'Collect data', status: 'in_progress' },
+      { content: 'Validate', status: 'pending' },
+    ];
+    const finished = [
+      { content: 'Collect data', status: 'completed' },
+      { content: 'Validate', status: 'done' },
+    ];
+    check('a finished node with unfinished todos is stale', isPlanStale(abandoned, 'done'));
+    check('an errored node counts too', isPlanStale(abandoned, 'error'));
+    // A running node mid-plan is not stale — it is simply not finished.
+    check('a running node is never stale', !isPlanStale(abandoned, 'active'));
+    check('a pending node is never stale', !isPlanStale(abandoned, 'pending'));
+    check('a fully completed plan is not stale', !isPlanStale(finished, 'done'));
+    check('both "completed" and "done" count as finished', !isPlanStale(finished, 'error'));
+    check('an empty plan is not stale', !isPlanStale([], 'done'));
+    check('a missing status counts as unfinished', isPlanStale([{}], 'done'));
   }
 
   console.log('\nthe deep-agent plan, and how it evolved');

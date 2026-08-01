@@ -196,3 +196,38 @@ export function laneStatus(lane: Lane): RunStatus {
   if (lane.nodes.length > 0 && lane.nodes.every((n) => n.status === 'pending')) return 'pending';
   return 'done';
 }
+
+/**
+ * Is this node the one that merely produced its parent's output?
+ *
+ * A graph often ends a subgraph with a small node whose entire job is to write the
+ * channel the parent reports — muffin's criterion worker is `evaluate` → `package`,
+ * where `package` writes `criterion_evaluations` and nothing else. Rendering its output
+ * repeats the parent's card verbatim, so every criterion showed its evaluation twice.
+ *
+ * Detected from two channel names the API already reported, so there is no per-graph
+ * knowledge here: a **leaf** (no namespace of its own — it did not do independent work
+ * worth drilling into) writing the **same channel** the parent reports. The row itself
+ * is kept, because it is a node LangGraph really executed and its duration is real; only
+ * the duplicated payload is suppressed.
+ */
+export function isPassThrough(node: RunNode, parentOutputChannel: string | undefined): boolean {
+  return !node.namespace && !!node.outputChannel && node.outputChannel === parentOutputChannel;
+}
+
+/**
+ * A plan the agent stopped maintaining.
+ *
+ * Deep agents keep their plan in `values.todos` via `write_todos`, but nothing forces
+ * them to keep it current — on production thread `019faada` the ticker-classification
+ * agent wrote four todos at superstep 5 and never called `write_todos` again, so the
+ * checkpoint still says "1 of 4" long after the node finished successfully.
+ *
+ * That is a fact about the agent, not a bug in the page, so the UI reports it rather
+ * than hiding it or implying the run stalled. True only once the node has actually
+ * finished — a running node with unfinished todos is simply mid-plan.
+ */
+export function isPlanStale(todos: { status?: string }[], nodeStatus: RunStatus): boolean {
+  if (nodeStatus !== 'done' && nodeStatus !== 'error') return false;
+  return todos.some((t) => !/^(completed|done)$/i.test((t.status ?? '').trim()));
+}

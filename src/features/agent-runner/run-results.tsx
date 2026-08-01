@@ -137,7 +137,7 @@ export function RunResults({
 
       {/* Sub-agent activity as the live stream discovers it. Tool calls are NOT
           rolled up here any more: they belong to the node that made them, and
-          that attribution lives in the Execution Tree, which reads each node's
+          that attribution lives in the Timeline view, which reads each node's
           own LangGraph namespace on expand. A run-wide roll-up would have to
           walk every namespace eagerly to rebuild what the capture channel used
           to flatten for it.

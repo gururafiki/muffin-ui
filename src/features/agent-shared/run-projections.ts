@@ -118,7 +118,7 @@ export function useSubgraphRows(agent: AgentDef, stream: RunStream): SubgraphRow
       // History detail for the node's rows: its stage's persisted output. Tool
       // calls are NOT attached here — while live the scoped transcript already
       // shows each one with its real `ToolMessage.status`, and on history they
-      // come from the node's own namespace via the Execution Tree.
+      // come from the node's own namespace via the Timeline view.
       const output = stage ? stageOutput(stage, values) : undefined;
       snaps.forEach((snap, i) => {
         let label = stage?.node === node ? stage.label : titleCase(node);

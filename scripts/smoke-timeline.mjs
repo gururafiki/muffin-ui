@@ -73,6 +73,13 @@ const base = `http://localhost:${port}`;
 const history = await fetch(`${base}/api/threads/${TID}/history`, {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ limit: 40 }),
 }).then((r) => r.json());
+if (!Array.isArray(history)) {
+  // Usually a bad/blank thread id — note that zsh does NOT word-split an unquoted
+  // `$var`, so `set -- $pair` in a shell loop silently passes nothing.
+  console.error(`history for thread "${TID}" was not a list — got: ${JSON.stringify(history).slice(0, 200)}`);
+  server.close();
+  process.exit(2);
+}
 // A `tools` task that DELEGATED to a deep-agent sub-agent is a real step, named after
 // the sub-agent — the same rescue `lanesFromSnapshots` performs. Without it a pure deep
 // agent like stock_evaluation looks like it has no steps at all, because every one of
