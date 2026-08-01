@@ -17,7 +17,7 @@ import { SignInToRunNotice, useSignInRequiredToRun } from '@/features/account/ru
 import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { AgentHero } from '@/features/agent-shared/agent-hero';
 import { Conversation, type MessageActions, type ViewMode } from '@/features/agent-shared/conversation';
-import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
+import { RunTimeline } from '@/features/agent-shared/run-timeline/run-timeline';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
 import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
@@ -201,14 +201,8 @@ export function ChatScreen({
               </Card>
             </View>
           ) : null}
-          {agentView === 'tree' ? (
-            <ExecutionTree
-              agent={agent}
-              values={(values ?? {}) as Record<string, unknown>}
-              busy={busy}
-              byNode={stream.subgraphsByNode}
-              threadId={liveThreadId}
-            />
+          {agentView === 'timeline' ? (
+            <RunTimeline graphId={agent.id} busy={busy} threadId={liveThreadId} />
           ) : (
             <>
               <Conversation

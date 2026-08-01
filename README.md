@@ -81,13 +81,27 @@ One graph → one screen. Lists the five deployed agents and your saved presets.
   merge → synthesise), with sub-rows streaming in (e.g. "3/13 criteria").
 - **Result widget** — a tailored renderer (see [Result renderers](#result-renderers)),
   identical whether streaming live or reopened from history.
-- **Data gathered** (collapsible) — every provider/tool call the run made (from the tool-
-  result cache), success/failure badges, expandable to the raw payload; a **time-series
-  chart** draws automatically when a payload is price/indicator data.
 - **Sub-agents** — a soft panel of the compiled subgraphs a run delegated to (analysts, the
   bull/bear + risk debate conferences, criteria workers, council members), each an avatar row you
   tap to expand into its own detail (a nested timeline, a debate conversation, or the structured
   output + tool calls a finished run kept).
+
+#### Overview ↔ Timeline
+Every run page carries a toggle. **Overview** answers *what the run concluded*; **Timeline**
+answers *what it did* — and is built entirely from the LangGraph API, so any graph renders
+without UI changes:
+
+- **Parallel work looks parallel.** Steps that shared a LangGraph superstep are bracketed as
+  "N in parallel"; sequential steps run down a single spine. A criteria run shows its two-way
+  branch and its ten-wide criterion fan-out; the council shows all 19 members in one bracket.
+- **Real durations** per step, from checkpoint timestamps, with a bar drawn against the run's
+  longest step — so "16m 32s of a 22m run went to classification" is visible at a glance.
+- **Live status** — running steps pulse, failed ones are flagged, and while a run is in flight
+  the steps it hasn't reached yet are listed ahead of it.
+- **Every step opens into Input · Plan · Timeline · Output**, recursively: a sub-agent or
+  subgraph inside a timeline expands into its own full card. Tool calls (with inputs, outputs,
+  errors and a **time-series chart** when the payload is price/indicator data) live on the step
+  that made them.
 
 #### Chat agents (Stock Evaluation)
 Deep-agent evaluation runs as a **multi-turn chat**:

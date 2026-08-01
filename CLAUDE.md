@@ -155,44 +155,26 @@ The whole app is organised around **"one graph → one screen"**:
     blocks (`<Skeleton>` primitive in `ui/`). Since M21 a finished-thread reopen hydrates from
     `thread.values` (~110ms, see the Live vs history doctrine above), so these skeletons now only
     flash on reopen; the 28–70s wait remains only for the busy/live-hydration `getState` path.
-- **`renderers/`** — pluggable rendering keyed on output shape (messages / structured / research /
-  json / timeline). New dashboards/charts are added by registering renderers, not editing call sites.
-  `tool-runs.tsx` renders backend `AgentCaptureMiddleware` output: `collectToolRuns(values)` gathers
-  top-level `tool_runs` + each `criterion_evaluations[i].tool_runs`, read off the values view so live
-  and post-refresh render identically. The shared **`ToolRunsPanel`** (M19 — replaces the former
-  `ToolRunList`/`ToolRunsSummary` split, which had drifted apart in styling across four
-  near-identical call sites by accident, not design) is one `Card`+`Collapsible` envelope over the
-  same `ToolRunRow`s: `mode="flat"` (one row per call — "Tool calls" per subagent, "Data collection"
-  per criterion, "Data collected" per council member) or `mode="grouped"` (per-tool ok/failed/cached
-  stats — "Tool execution", once per run) is the only difference. Capture is unconditional backend-side — a graph opts
-  in by declaring the `tool_runs` state channel. `criteria-result.tsx` badges evaluations whose
-  backend truthing flag says no tools ran (`data_collected: false` → "no live data").
-  **Cache join (folds in the former "Data gathered" panel):** `tool-runs.tsx` rows expand to the FULL
-  gathered payload — `lib/agent/tool-cache.tsx`'s `ToolCacheProvider` (mounted via `RunSurface`)
-  fetches the run's provider-call cache (`store.searchItems(['cache'])`, one global query key,
-  polls 10s while busy — paused in background via the `focusManager`/`AppState` wiring) and
-  exposes `useToolCache()`, an exact `(tool, args_hash) → CachedItem` lookup (the store KEY *is*
-  `get_args_hash(args)`, so it equals the backend `tool_runs.args_hash` — no client rehashing, no
-  cross-run bleed). A matched row shows size + `cachedAt` in its header and runs the full content
-  through the chart / JSON / markdown renderers (the capped `output_preview` never parsed as a chart);
-  unmatched rows (errors, non-cacheable tools, `task` delegations, or runs predating `args_hash`) fall
-  back to previews. Rows outside the provider (subgraph-detail live view) get no join → preview-only.
-  The old `collected-data.tsx` / `CollectedData` panel and its ±60s time-window heuristic were removed.
-  Limitation: the `searchItems(['cache'], { limit: 100 })` cap can miss a payload in a very large
-  global cache → that row degrades to preview (ROADMAP: switch to targeted `store.getItem` per key).
+- **`renderers/`** — pluggable rendering. New dashboards/charts are added by registering renderers,
+  not editing call sites. Two registries, both keyed on something the API actually tells us:
+  `renderNodeOutput` on the **state channel** a node wrote (see the run-timeline notes below), and
+  `renderToolOutput` on the **tool name**. `criteria-result.tsx` badges evaluations whose backend
+  truthing flag says no tools ran (`data_collected: false` → "no live data").
+  **`ToolRunsPanel`** (M19) is one `Card`+`Collapsible` envelope over `ToolRunRow`s, mounted per
+  timeline node ("Tool calls"). Runs are reconstructed from the node's transcript
+  (`toolRunsFromMessages`), so **nothing here needs the Store**: `output_preview` carries the full
+  tool result, and `additional_kwargs.cache` rides on the `ToolMessage` for the `cached` badge.
+  M25 removed both the `useToolCache()` size/age join (a muffin-specific side-read, plus a 100-item
+  query per surface) and the `mode="grouped"` run-wide roll-up (shipped unmounted since M24 —
+  rebuilding it would mean eagerly walking every namespace).
+  `lib/agent/tool-cache.tsx` survives only for `safeParse` and the wealth surfaces.
   **Panel surfaces:** the three live screens (generic runner, council, chat) mount
   **`<RunSurface stream threadId>`** (`features/agent-shared/run-surface.tsx`) — it owns the
   cross-cutting wiring (`ToolCacheProvider` + `RunStreamProvider`), with `RunErrorCard` /
-  `HydrationCard` for the shared error/hydration markup; each surface then renders
-  `<ToolRunsPanel title="Tool execution" mode="grouped" runs={collectToolRuns(values)} />` where its
-  layout wants it.
-  `app/calls/[threadId].tsx` (history — no live stream, `busy={false}`, one cache fetch) mounts
-  the `ToolCacheProvider` sub-slice directly. The panel populates
-  only for graphs that surface `tool_runs` (criteria_analysis / trading_decision / research /
-  stock_evaluation / council — the 13 personas since muffin-agent #109, the 4 ReAct specialists
-  since #116; `technicals`/`sentiment` fetch via `cached_invoke` which bypasses capture, so they
-  never contribute records) — it renders `null` otherwise, except when the caller passes
-  `emptyMessage` (council does, for finished runs predating capture). Council records carry
+  `HydrationCard` for the shared error/hydration markup. `app/calls/[threadId].tsx` (history — no
+  live stream, `busy={false}`) has no `RunStreamProvider` at all, which is why anything wanting live
+  data asks for it through `useOptionalRunStream()` and degrades to checkpoint history. Council
+  records carry
   `agent: "<slug>_data_collection"` — join via `toolRunAgentSlug()` (`features/council/personas.ts`),
   and `useSubgraphRows` accepts the suffixed form too. The council screen itself is member-unified
   (M15): `COUNCIL_MEMBERS` = 13 personas + 6 optional specialists in one arena grid, one
@@ -203,12 +185,56 @@ The whole app is organised around **"one graph → one screen"**:
   Card/Collapsible when the caller (`DebateDetail`, inside an already-expanded `SubAgentRunRow`)
   already owns the expand/collapse affordance — new stage/detail renderers should follow the same
   pattern rather than reaching for a bare `Collapsible`.
-  **The execution tree (M22/M23, rebuilt on native history 2026-07-27).** ONE node model —
-  `lib/agent/exec-tree.ts`'s `ExecNode` — with two presentations. `SubagentTree`
-  (`features/agent-shared/subagent-tree.tsx`) renders it in the Overview's row idiom by mapping each
-  node to a `SubagentRun` and delegating to `SubagentActivity`/`SubAgentRunRow`; `ExecutionTree`
-  (`features/agent-shared/execution-tree/`) renders it as the rail-of-plan-steps drill-down behind
-  the per-agent toggle. Two views of one tree, not two trees.
+  **The run timeline (M25, 2026-08-01 — replaces the M22–M24 execution tree).**
+  `features/agent-shared/run-timeline/` + `lib/agent/{run-node,run-history,run-graph}.ts`. One
+  recursive component behind the per-agent toggle, deriving its ENTIRE structure from the LangGraph
+  API so any graph — the five registered today or one written next month — renders correctly with
+  no UI change.
+  - **Structure is API-derived, never a per-graph table.** Three sources compose:
+    `POST /threads/{id}/history` (what ran, in which superstep, how long, what's next),
+    `GET /assistants/{id}/graph` (the compiled DAG → steps not yet reached), and
+    `stream.subgraphs` / `stream.subagents` (live status + wall-clock). The previous builder
+    preferred a hand-written `AgentDef.stages` recipe per agent, so an unregistered graph rendered
+    as an unlabelled topology dump. **`AgentDef.stages` still drives the Overview's `RunProgress`
+    and the result renderers — the timeline just ignores it.** (`StageDef.outputKind` was deleted;
+    it existed only for the old tree's output dispatch.)
+  - **Supersteps are the unit: `Lane[]`, not a flat node list.** Everything sharing a
+    `metadata.step` ran **in parallel**; successive steps ran **sequentially**. The old model
+    flattened supersteps away, so a 10-way fan-out and a 10-step sequence rendered identically.
+    Verified on prod thread `019faada` (criteria/AMZN): lanes `0:1 1:1 2:2∥ 3:1 4:10∥ 5:1` —
+    `criteria_definition ∥ valuation_methodology`, then a 10-wide `Send` fan-out. Trading
+    `019f81a0` gives `1:4∥` (the four analysts); council `019f901f` gives one **19-wide** lane.
+    A sequential lane renders on the spine (`SpineRow`); a parallel one renders as a bracketed
+    `ParallelFan` with an "N in parallel" header — deliberately a *different shape*, so the
+    distinction survives a glance.
+  - **Timing comes from checkpoint `created_at` deltas.** Consecutive snapshot timestamps give each
+    superstep's wall-clock (`019faada`: ticker_classification 16m32s, the parallel pair 46s, the ten
+    workers 4m17s, synthesis 43s). `DurationBar` draws each against the run's longest step,
+    square-rooted so a 7ms step is still visible. **Per-TOOL duration remains unavailable** — messages
+    carry no timing, and adding it would need a backend change this deliberately does without. A
+    fan's members share one lane wall-clock, so their identical durations are suppressed on the rows
+    and shown once on the header.
+  - **`pending` and `active` exist at last.** History alone cannot tell "finished" from "still
+    running", so `lanesFromSnapshots(snaps, ns, busy)` marks only the NEWEST superstep active, and
+    `next` (never read before) names what runs now. Steps the DAG declares but the run hasn't
+    reached render as pending — **only while busy**: on a finished thread a node that never ran was a
+    branch not taken, not work still to come.
+  - **Four facets per node: Input · Plan · Timeline · Output.** `RunCardBody` recurses — anything in
+    a Timeline that is itself an agent or subgraph expands the same way. Input is the namespace's
+    first human message (or a sub-agent's `task` brief), and is dropped from the transcript below it
+    so a 2,000-character system prompt doesn't render twice. Plan is `values.todos` — already fetched
+    by the old hook and then discarded.
+  - **Two kinds of node, because there are two kinds of node.** A pipeline/graph node has no
+    `messages` channel at all (muffin-agent's graph-authoring rule keeps parent state off
+    `AgentState`), so its timeline IS its child supersteps. An agent node HAS a transcript, and its
+    children are `task` delegations that also appear in it as tool calls — so the transcript is the
+    timeline and each delegation expands into that sub-agent's own card, joined exactly by `task`
+    tool-call id (`RunNode.toolCallId`). Rendering both would say everything twice.
+  - **`stream.subagents` is now read** (it never was). That is a live, recursive deep-agent
+    sub-agent tree with `taskInput`, `parentId`, `depth`, status and real timestamps —
+    `stock_evaluation`, a pure deep agent, previously had zero live sub-agent visibility.
+    `use-live-overlay.ts` matches discovery on the **namespace**, not the node name, so live status
+    reaches any depth and tells the ten members of a fan-out apart.
   - **Transcripts come from the namespace's own `values.messages`.** They briefly came from
     `tasks[].result.messages` instead, because every DEEP agent reported an empty channel while its
     tasks had demonstrably run model turns and tool calls. That was an **upstream bug**, not a fact
@@ -254,10 +280,12 @@ The whole app is organised around **"one graph → one screen"**:
     function node reports `checkpoint: null` and is genuinely a leaf, so the UI says so rather than
     offering an empty drill-down. Internal nodes (`*Middleware*`, `__start__`/`__end__`) are
     filtered: LangGraph compiles each middleware hook into its own node and surfaces it as a task.
-  - **Everything below the root is lazy.** `useRunTreeRoot` / `useRunTreeNode`
-    (`features/agent-shared/use-run-tree.ts`) read one namespace per expanded row, cached forever
-    once the thread settles. A criteria run has 27 namespaces; walking them eagerly would cost 27
-    round trips for data nobody asked to see.
+  - **Everything below the root is lazy.** `useRunTimeline(threadId, namespace, enabled, busy)`
+    (`run-timeline/use-run-timeline.ts`) reads one namespace per expanded card, cached forever once
+    the thread settles. A criteria run has 27 namespaces; walking them eagerly would cost 27 round
+    trips for data nobody asked to see. Root and child use the SAME hook (root = the namespace-less
+    case) — the old `useRunTreeRoot`/`useRunTreeNode` split meant the root could never grow the
+    facets its children had, which is why the top level was so much thinner than its branches.
   - **Why the double-nesting bug is now structurally impossible.** The old builder read the
     `subagent_tree` channel, split `|`-joined `<name>:<uuid>` ids, and *synthesized* the ancestor
     levels the backend never captured — a synthesized "Criterion evaluation" wrapping a real child
@@ -269,35 +297,44 @@ The whole app is organised around **"one graph → one screen"**:
     reply is kept as `pending` (a cancelled run must not silently lose it). There is deliberately
     **no run-wide tool roll-up** any more — a tool call belongs to the node that made it, and
     rebuilding a flat summary would mean walking every namespace eagerly.
-  - **Fan-out rows are named from `task.result`.** The 11 criteria workers are all the same graph
-    node, so the raw topology gives 11 identical labels. Each task's `result` carries the channels it
-    wrote (`taskWrite`), so the criterion's name is available from the ROOT history without fetching
-    each worker. Deliberately **not** index-paired against `values.criterion_evaluations`: parallel
-    `Send` workers complete out of order and the labels would drift onto the wrong rows.
-  - **Plan assembly.** `execution-tree/plan-steps.ts`'s `buildExecTree(agent, values, busy, topology,
-    byNode)` is the plan-first hybrid: registry `stages` (or a deep agent's `todos`) joined to the
-    topology; neither → the raw topology. `topology` is *injected* so the module stays pure and
-    directly testable. Stage→children and stage→status use the SAME `node`-then-`active` precedence
-    (`stageMatches`); using `node` alone is what made every stage declaring only `active` — all
-    council stages, all four trading analysts — show zero tool calls by construction.
-  - **Output rendering is explicitly dispatched**, never shape-sniffed: `StageDef.outputKind`
-    (`'debate' | 'criterion' | 'persona' | 'report' | 'structured'`) drives `renderNodeOutput`, with
-    shape inference only as the fallback. The loose zod schemas accept *any* dict, so the old
-    inference plus a `/criter|evaluate/i` test against the **display label** made the stage named
-    "Define the criteria" render as an empty criterion card and drop its payload. `renderNodeOutput`
-    also handles a **bare array** of serialized BaseMessages — `stageOutput` extracts
-    `investment_debate_messages`, so the renderer sees a list, not a wrapper dict; only matching the
-    dict is why both trading debates rendered as raw JSON.
-  - **Overview vs Tree is a deliberate split.** Overview answers *what the run concluded* (headline
-    result, criterion cards, the council arena); the Execution Tree answers *what the run did*.
-    That is why criterion cards no longer carry a tool panel and the surfaces no longer carry a
-    run-wide roll-up: that content has one correct home now.
-  - **Verification.** `scripts/exectree-check.ts` (`npx tsx`) imports the REAL modules. Its topology
-    fixtures are synthetic — the snapshot shape is fixed by `langgraph_api/state.py`'s
-    `state_snapshot_to_thread_state` and the SDK's `ThreadTask` — which keeps it runnable offline and
-    lets it cover cases a captured fixture can't hold (an errored task, a tool call that never got a
-    reply). `scripts/history-check.ts` confirms the same end-to-end against the deployment (needs CF
-    Access credentials).
+  - **Fan-out members name themselves from `task.result`.** Ten criteria workers are all the same
+    graph node, so the raw topology gives ten identical labels. Each task's `result` carries the
+    channels it wrote (`taskWrite`), so the criterion's name is available from the PARENT history
+    without fetching each worker. Deliberately **not** index-paired against the parent's aggregated
+    channel: parallel `Send` workers complete out of order and labels would drift onto wrong rows.
+    **`relabelFanOut` applies this ONLY to same-node members of one superstep** — run against every
+    node it renamed `merge_criteria` to "Revenue Growth (3Y CAGR)", the first criterion in the list
+    it merely collected (caught on `019faada` before the guard existed).
+  - **Output rendering dispatches on the STATE CHANNEL**, not on the payload's shape and not on a
+    per-graph declaration. A task's `result` keys ARE the channels it wrote (verified:
+    `criterion_evaluation → criterion_evaluations`, `synthesis → synthesis`), and a channel name is
+    exactly as specific as the payload it names. `CHANNEL_RENDERERS` in `renderers/output-registry.tsx`
+    maps `criterion_evaluations` / `persona_signals` / the two debate channels to bespoke cards; an
+    unknown channel from a future graph falls through to `StructuredOutput` rather than being
+    mis-rendered. (`metadata.writes` looks like the right source but comes back **empty** over the
+    API — read `task.result` keys instead.) Shape sniffing is only a last resort behind a strict
+    discriminator: the loose zod schemas accept *any* dict, which is how the stage named "Define the
+    criteria" once rendered as an empty criterion card and dropped its payload.
+  - **Overview vs Timeline is a deliberate split.** Overview answers *what the run concluded*
+    (headline result, criterion cards, the council arena); the Timeline answers *what the run did*.
+    The persisted toggle (`agent-view-store.ts`) renamed `'tree'` → `'timeline'` at **version 2**
+    with a migration — retyping a persisted field requires one, or an existing user restores a value
+    matching no `Segmented` option and sees an unselected toggle.
+  - **Tool calls need NOTHING but the transcript.** `ToolRunRow` no longer joins the LangGraph Store
+    for a payload's size and age (`useToolCache` by `args_hash`): that was a muffin-specific
+    side-read a graph-agnostic timeline has no business depending on, it cost a 100-item query per
+    surface, and `output_preview` already carries the full result. `ToolRunsPanel`'s dead
+    `mode="grouped"` roll-up (shipped unmounted since M24) is deleted with it.
+  - **Verification.** `scripts/run-timeline-check.ts` (`npx tsx`, offline, no credentials) imports
+    the REAL modules over synthetic snapshots — the shape is fixed by `langgraph_api/state.py`'s
+    `state_snapshot_to_thread_state` and the SDK's `ThreadTask`, which keeps it runnable offline and
+    lets it cover cases a captured fixture can't hold (an errored task, an unanswered tool call, a
+    transcript rewritten by summarisation). `scripts/history-check.ts` asserts the same end-to-end
+    against the deployment, including `getGraph` for all five graphs.
+    `scripts/smoke-timeline.mjs [threadId] [graphId]` is the browser gate; it clicks rows via their
+    `role="button"` + `aria-label` (which RN-Web renders from `accessibilityRole`/`accessibilityLabel`)
+    rather than walking up from a text node — the latter used to hit "Start a new run" and blank the
+    page. All three need `CF_ACCESS_CLIENT_ID` / `_SECRET` except the first.
 
 ### Auth (optional accounts) — `src/lib/auth/` + `src/features/account/`
 Supabase (self-hosted, part of the muffin stack) provides **optional** user accounts —

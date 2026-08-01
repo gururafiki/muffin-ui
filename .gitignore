@@ -47,3 +47,6 @@ example
 
 # Headless subagent-tree-smoke screenshot artifact (scripts/smoke-subagent-tree.mjs)
 /smoke-subagent-tree.png
+
+# Headless run-timeline smoke screenshots (scripts/smoke-timeline.mjs) — one pair per graph
+/smoke-timeline-*.png

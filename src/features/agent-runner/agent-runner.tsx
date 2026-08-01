@@ -14,7 +14,7 @@ import { useSignInRequiredToRun } from '@/features/account/run-gate';
 import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { AgentHero } from '@/features/agent-shared/agent-hero';
 import { type SubagentRun } from '@/features/agent-shared/conversation';
-import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
+import { RunTimeline } from '@/features/agent-shared/run-timeline/run-timeline';
 import { mergeLiveEvaluations, useCriterionEvents, useSubgraphRows } from '@/features/agent-shared/run-projections';
 import { RunRecap } from '@/features/agent-shared/run-recap';
 import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
@@ -164,14 +164,8 @@ export function AgentRunner({
           {stream.isThreadLoading ? (
             /* Reopened thread, state fetch in flight — hold the layout's shape. */
             <HydrationSkeleton agent={agent} />
-          ) : agentView === 'tree' ? (
-            <ExecutionTree
-              agent={agent}
-              values={view}
-              busy={busy}
-              byNode={stream.subgraphsByNode}
-              threadId={liveThreadId}
-            />
+          ) : agentView === 'timeline' ? (
+            <RunTimeline graphId={agent.id} busy={busy} threadId={liveThreadId} />
           ) : (
             <RunResults
               agent={agent}

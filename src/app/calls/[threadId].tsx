@@ -11,7 +11,7 @@ import {
 import { useCall } from '@/features/agent-calls/use-calls';
 import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { Conversation, type SubagentRun } from '@/features/agent-shared/conversation';
-import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
+import { RunTimeline } from '@/features/agent-shared/run-timeline/run-timeline';
 import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
 import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
 import { getAgent } from '@/lib/agent/registry';
@@ -96,13 +96,8 @@ export default function CallDetailRoute() {
 
           {agent ? <RunViewToggle agentId={agent.id} /> : null}
 
-          {agentView === 'tree' && agent ? (
-            <ExecutionTree
-              agent={agent}
-              values={(thread.values ?? {}) as Record<string, unknown>}
-              busy={false}
-              threadId={threadId}
-            />
+          {agentView === 'timeline' && agent ? (
+            <RunTimeline graphId={agent.id} busy={false} threadId={threadId} />
           ) : (
           <>
           {(() => {

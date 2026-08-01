@@ -548,6 +548,57 @@ prod thread `019f81a0`: `market_analyst:<uuid>` → 13 messages, 10 tool calls).
   UI one).
 
 
+## ✅ Milestone 25 — The run Timeline: graph-agnostic, parallel-aware, four facets per node (2026-08-01)
+M24 made the tree read LangGraph's checkpoints, but it still got its *plan* from a hand-written
+`AgentDef.stages` recipe per agent, flattened every superstep into one list, showed no timing, and
+could never render a node as running or pending. The rewrite
+(`features/agent-shared/run-timeline/` + `lib/agent/{run-node,run-graph}.ts`) is **UI-only, LangGraph
+API only** — no muffin-agent change, no per-graph logic, no Store side-reads — so a graph registered
+next month renders correctly with no UI change.
+
+- **Structure is API-derived.** `GET /assistants/{id}/graph` supplies the compiled DAG (steps not yet
+  reached, in topological order); `POST /threads/{id}/history` supplies what ran; `stream.subgraphs` /
+  `stream.subagents` supply live status and wall-clock. `AgentDef.stages` survives for the Overview's
+  `RunProgress` and the result renderers only; `StageDef.outputKind` is deleted.
+- **Supersteps became the unit — `Lane[]`, not a flat list.** Tasks sharing a `metadata.step` ran in
+  parallel; successive steps ran sequentially. Verified on prod: criteria `019faada` →
+  `0:1 1:1 2:2∥ 3:1 4:10∥ 5:1`; trading `019f81a0` → a 4-wide analyst lane; council `019f901f` → one
+  **19-wide** lane; deep-agent `019f9e96` → a 9-wide sub-agent fan. Sequential steps sit on a spine,
+  parallel ones in a bracketed `ParallelFan` — a deliberately different shape.
+- **Timing at last**, from consecutive checkpoint `created_at` (criteria/AMZN: ticker_classification
+  16m32s of a 22m18s run). `DurationBar` is relative-to-longest and square-rooted, not a time axis:
+  history has one timestamp per superstep, so a Gantt would draw ten identical bars for a fan-out and
+  imply precision that does not exist.
+- **`pending` / `active` exist.** `next` (never read before) names what runs now; DAG steps the run
+  hasn't reached render pending **while busy only** — on a finished thread an unrun node was a branch
+  not taken, not work still to come.
+- **Four facets per node — Input · Plan · Timeline · Output — recursively.** A pipeline node's
+  timeline is its child supersteps; an agent node's is its transcript, with each `task` delegation
+  expanding into that sub-agent's own card (joined by tool-call id, so the delegation and the
+  sub-agent are one row, not two). Plan updates render as the resulting checklist, since a
+  `write_todos` call's arguments *are* the new plan.
+- **`stream.subagents` is now read** — it never was, anywhere. Live, recursive deep-agent sub-agents
+  with `taskInput`, `parentId`, `depth` and real timestamps; `stock_evaluation` had no live
+  sub-agent visibility at all before. Discovery is matched on **namespace**, not node name, so live
+  status reaches any depth and tells fan-out members apart.
+- **Output rendering dispatches on the state channel** (`task.result` keys — `metadata.writes` comes
+  back empty over the API), so custom cards stay reachable while an unknown channel falls through to
+  `StructuredOutput` instead of being mis-rendered.
+- **Removed:** `exec-tree.ts`, `execution-tree/`, `subagent-tree.tsx`, `node-detail.tsx`,
+  `use-run-tree.ts`, `zTreeNode`, `fetchTreeEagerly`, `ToolRunsPanel mode="grouped"`, and the
+  `useToolCache()` size/age join on tool rows. Toggle renamed `tree` → `timeline`
+  (`agent-view-store` **version 2** + migration).
+- **Bug caught in verification:** label-from-payload must apply ONLY to fan-out members — run against
+  every node it renamed `merge_criteria` to "Revenue Growth (3Y CAGR)", the first criterion in the
+  list it merely collected. `relabelFanOut` now guards it, with a regression assertion.
+- **Verification:** `scripts/run-timeline-check.ts` (90 offline structural checks),
+  `scripts/history-check.ts` (live, incl. `getGraph` for all five graphs),
+  `scripts/smoke-timeline.mjs [thread] [graph]` (browser; clicks by `role`/`aria-label`).
+- **Follow-ups:** per-**tool** duration is still unavailable (messages carry no timing — it would need
+  a backend change, deliberately out of scope); the Overview's `RunProgress` / `SubagentActivity`
+  panels still use the registry recipe and were left untouched; long timelines are unvirtualized.
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

@@ -26,3 +26,14 @@ export function useRunStreamContext(): AnyStream {
   if (!stream) throw new Error('useRunStreamContext must be used inside a RunStreamProvider');
   return stream;
 }
+
+/**
+ * The surface's stream handle, or `null` where there is none.
+ *
+ * The run timeline renders on the live run surfaces AND on the Calls history route,
+ * which has no stream at all. Rather than fork the component tree, everything that
+ * benefits from live data asks for it optionally and degrades to checkpoint history.
+ */
+export function useOptionalRunStream(): AnyStream | null {
+  return use(RunStreamContext);
+}

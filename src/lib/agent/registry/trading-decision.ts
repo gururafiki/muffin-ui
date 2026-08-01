@@ -34,10 +34,10 @@ export const tradingDecision: AgentDef = {
   // debate, judge, portfolio decision), not just one field.
   resultRenderer: 'trading',
   stages: [
-    { key: 'market', label: 'Market & technicals', icon: 'markets', done: (v) => has(v, 'market_report'), node: 'market_analyst', active: /market_analyst/i, output: 'market_report', outputKind: 'report' },
-    { key: 'fundamentals', label: 'Fundamentals', icon: 'criteria', done: (v) => has(v, 'fundamentals_report'), node: 'fundamentals_analyst', active: /fundamentals_analyst/i, output: 'fundamentals_report', outputKind: 'report' },
-    { key: 'news', label: 'News', icon: 'research', done: (v) => has(v, 'news_report'), node: 'news_analyst', active: /news_analyst/i, output: 'news_report', outputKind: 'report' },
-    { key: 'sentiment', label: 'Social sentiment', icon: 'sparkle', done: (v) => has(v, 'sentiment_report'), node: 'social_analyst', active: /social_analyst|sentiment/i, output: 'sentiment_report', outputKind: 'report' },
+    { key: 'market', label: 'Market & technicals', icon: 'markets', done: (v) => has(v, 'market_report'), node: 'market_analyst', active: /market_analyst/i, output: 'market_report' },
+    { key: 'fundamentals', label: 'Fundamentals', icon: 'criteria', done: (v) => has(v, 'fundamentals_report'), node: 'fundamentals_analyst', active: /fundamentals_analyst/i, output: 'fundamentals_report' },
+    { key: 'news', label: 'News', icon: 'research', done: (v) => has(v, 'news_report'), node: 'news_analyst', active: /news_analyst/i, output: 'news_report' },
+    { key: 'sentiment', label: 'Social sentiment', icon: 'sparkle', done: (v) => has(v, 'sentiment_report'), node: 'social_analyst', active: /social_analyst|sentiment/i, output: 'sentiment_report' },
     {
       // Both debates are real conference subgraphs (muffin-agent #117),
       // so they're discovered as sub-agent rows. Their turns live in a
@@ -57,11 +57,10 @@ export const tradingDecision: AgentDef = {
           ? { bull: v.investment_bull_responses, bear: v.investment_bear_responses }
           : undefined),
       detail: 'debate',
-      outputKind: 'debate',
     },
     { key: 'judge', label: 'The judge rules', icon: 'council', done: (v) => has(v, 'investment_judge'), active: /judge/i, output: 'investment_judge' },
     { key: 'trader', label: 'Trader drafts the plan', icon: 'trading', done: (v) => has(v, 'trader'), active: /trader/i, output: 'trader' },
-    { key: 'risk', label: 'Risk debate', icon: 'warning', node: 'risk_debate', done: (v) => has(v, 'risk_debate_messages') || has(v, 'portfolio_decision'), active: /risk|debator/i, output: 'risk_debate_messages', detail: 'debate', outputKind: 'debate' },
+    { key: 'risk', label: 'Risk debate', icon: 'warning', node: 'risk_debate', done: (v) => has(v, 'risk_debate_messages') || has(v, 'portfolio_decision'), active: /risk|debator/i, output: 'risk_debate_messages', detail: 'debate' },
     { key: 'portfolio', label: 'Portfolio call', icon: 'portfolio', done: (v) => has(v, 'portfolio_decision'), active: /portfolio/i, output: 'portfolio_decision' },
   ],
   advanced: [

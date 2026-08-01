@@ -10,7 +10,7 @@ import { useSignInRequiredToRun } from '@/features/account/run-gate';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { useAgentView } from '@/features/agent-shared/agent-view-store';
 import { AgentHero } from '@/features/agent-shared/agent-hero';
-import { ExecutionTree } from '@/features/agent-shared/execution-tree/execution-tree';
+import { RunTimeline } from '@/features/agent-shared/run-timeline/run-timeline';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { useSubgraphRows } from '@/features/agent-shared/run-projections';
 import { RunRecap } from '@/features/agent-shared/run-recap';
@@ -22,7 +22,7 @@ import { useRunStream } from '@/features/agent-shared/use-run-stream';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { parseArray, zPersonaSignal } from '@/lib/agent/schemas';
-import { useRunTreeRoot } from '@/features/agent-shared/use-run-tree';
+import { useRunTimeline } from '@/features/agent-shared/run-timeline/use-run-timeline';
 import { CouncilArena } from './council-arena';
 import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
@@ -152,7 +152,7 @@ export function CouncilScreen({
   // checkpoints. `MemberDetail` picks out the selected member's node; expanding
   // it reads that member's namespace for its transcript, tool calls and
   // sub-agents.
-  const { data: topology } = useRunTreeRoot(liveThreadId, busy);
+  const { data: rootRun } = useRunTimeline(liveThreadId, undefined, true, busy);
   const judging = busy && Object.keys(signals).length >= members.length && !synthesis;
 
   const totalVotes = tally.bullish + tally.bearish + tally.neutral;
@@ -165,7 +165,7 @@ export function CouncilScreen({
   const discovered = useSubgraphRows(agent, stream);
   const selRow = selected ? discovered.find((r) => normalizeSlug(r.nodeName) === selected) : undefined;
   const selLive = selected ? live.get(selected) : undefined;
-  const selNode = selected ? findMemberNode(topology, selected) : undefined;
+  const selNode = selected ? findMemberNode(rootRun?.lanes, selected) : undefined;
   const unknownRuns = discovered
     .filter((r) => !MEMBER_SLUGS.has(normalizeSlug(r.nodeName)) && r.nodeName !== 'council_judge')
     .map((row) => ({
@@ -253,14 +253,8 @@ export function CouncilScreen({
         <RunProgress agent={agent} values={values} busy={busy} byNode={stream.subgraphsByNode} />
       ) : null}
 
-      {agentView === 'tree' ? (
-        <ExecutionTree
-          agent={agent}
-          values={values ?? {}}
-          busy={busy}
-          byNode={stream.subgraphsByNode}
-          threadId={liveThreadId}
-        />
+      {agentView === 'timeline' ? (
+        <RunTimeline graphId={agent.id} busy={busy} threadId={liveThreadId} />
       ) : (
         <>
       {busy || totalVotes > 0 ? (

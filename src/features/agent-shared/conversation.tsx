@@ -87,6 +87,16 @@ function RailNode({ icon, error, last }: { icon: IconName; error?: boolean; last
   );
 }
 
+/**
+ * A `write_todos` call's arguments ARE the new plan, so a plan update can render as the
+ * resulting checklist rather than as a JSON blob of the same data. This is what makes
+ * "show the actual state after each update" free — no extra fetch, no diffing.
+ */
+function planUpdate(call: { name?: string; args?: Record<string, unknown> }): Todo[] | undefined {
+  if (!/write_todos|todo/i.test(call.name ?? '')) return undefined;
+  return isTodoList(call.args?.todos) ? call.args.todos : undefined;
+}
+
 function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defaultOpen: boolean }) {
   const meta =
     step.kind === 'think'
@@ -122,6 +132,10 @@ function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defau
               <Markdown value={step.text} />
             ) : meta.isFinalOutput ? (
               <StructuredOutput value={step.call.args} />
+            ) : planUpdate(step.call) ? (
+              // The plan as it stood after this update — the checklist itself, not the
+              // raw arguments that produced it.
+              <TodoList todos={planUpdate(step.call) as Todo[]} title="Plan after this update" />
             ) : (
               <>
                 {step.call.args && Object.keys(step.call.args).length > 0 && !meta.isSubagent ? (
@@ -139,16 +153,27 @@ function StepRow({ step, last, defaultOpen }: { step: Step; last: boolean; defau
 
 const RAIL = { position: 'absolute' as const, top: 14, bottom: -10, width: 2 };
 
+/**
+ * Renders one sub-agent delegation's own run, given the `task` tool-call id that
+ * spawned it. The run timeline supplies this so a "Delegating to a sub-agent" step
+ * expands into that sub-agent's full execution — its input, plan, timeline and output —
+ * instead of only the text it handed back. Absent (plain chat views), the group falls
+ * back to showing the returned result.
+ */
+export type SubagentResolver = (callId: string) => React.ReactNode | undefined;
+
 function SubAgentGroup({
   name,
   calls,
   last,
   defaultOpen,
+  renderSubagent,
 }: {
   name: string;
   calls: ToolStepT[];
   last: boolean;
   defaultOpen: boolean;
+  renderSubagent?: SubagentResolver;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const error = calls.some((c) => c.error);
@@ -174,15 +199,18 @@ function SubAgentGroup({
         ) : null}
         {open ? (
           <View className="mt-2 gap-3">
-            {calls.map((c, i) => (
-              <View key={c.id + i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
-                {calls.length > 1 ? <Text variant="label">Task {i + 1}</Text> : null}
-                {brief(c) ? <Text variant="muted" className="text-xs">{brief(c)}</Text> : null}
-                {/* The sub-agent's own transcript lives in the Execution Tree, read
-                    from its LangGraph namespace; here we show what it returned. */}
-                <ToolResult message={c.result} />
-              </View>
-            ))}
+            {calls.map((c, i) => {
+              // Its own run, when the caller can resolve it (the run timeline joins by
+              // `task` tool-call id); otherwise what it handed back.
+              const own = renderSubagent?.(c.id);
+              return (
+                <View key={c.id + i} className="gap-1 border-l-2 border-frosting-100 pl-3 dark:border-night-border">
+                  {calls.length > 1 ? <Text variant="label">Task {i + 1}</Text> : null}
+                  {brief(c) && !own ? <Text variant="muted" className="text-xs">{brief(c)}</Text> : null}
+                  {own ?? <ToolResult message={c.result} />}
+                </View>
+              );
+            })}
           </View>
         ) : null}
       </Pressable>
@@ -193,9 +221,11 @@ function SubAgentGroup({
 function StepTimeline({
   steps,
   viewMode,
+  renderSubagent,
 }: {
   steps: Step[];
   viewMode: ViewMode;
+  renderSubagent?: SubagentResolver;
 }) {
   const shown = viewMode === 'verbose' ? steps : steps.filter(isSignificant);
   if (shown.length === 0) return null;
@@ -218,6 +248,7 @@ function StepTimeline({
             calls={n.calls}
             last={i === nodes.length - 1}
             defaultOpen={false}
+            renderSubagent={renderSubagent}
           />
         ) : (
           <StepRow key={'l' + i} step={n.step} last={i === nodes.length - 1} defaultOpen={false} />
@@ -239,6 +270,7 @@ export function Conversation({
   viewMode,
   busy,
   actions,
+  renderSubagent,
 }: {
   /** Persisted dicts or live `stream.messages` instances — both render. */
   messages: readonly ConversationMessage[];
@@ -246,7 +278,8 @@ export function Conversation({
   viewMode: ViewMode;
   busy?: boolean;
   actions?: MessageActions;
-  /** Captured sub-agent transcripts, keyed by run id (deep agents). */
+  /** Expands a `task` step into that sub-agent's own run (see `SubagentResolver`). */
+  renderSubagent?: SubagentResolver;
 }) {
   // Recomputed only when the message list changes — NOT on unrelated
   // re-renders (during token streaming the list identity changes anyway).
@@ -258,7 +291,7 @@ export function Conversation({
       {turns.map((turn, ti) => (
         <View key={ti} className="gap-3">
           {turn.human ? <HumanBubble message={turn.human} actions={actions} /> : null}
-          <StepTimeline key={viewMode} steps={turn.steps} viewMode={viewMode} />
+          <StepTimeline key={viewMode} steps={turn.steps} viewMode={viewMode} renderSubagent={renderSubagent} />
           {turn.answer ? <AnswerBlock message={turn.answer} actions={actions} /> : null}
           {busy && ti === turns.length - 1 ? (
             <View className="flex-row items-center gap-2 px-1">

@@ -4,26 +4,29 @@ import { Icon } from '@/components/icons';
 import { Badge, Card, Collapsible, Text } from '@/components/ui';
 import type { SubgraphRow } from '@/features/agent-shared/run-projections';
 import { SubagentStateDigest } from '@/features/agent-shared/subagent-activity';
-import { SubagentTree } from '@/features/agent-shared/subagent-tree';
+import { RunCardBody } from '@/features/agent-shared/run-timeline/run-card';
+import { useLiveOverlay } from '@/features/agent-shared/run-timeline/use-live-overlay';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { Markdown, StructuredOutput } from '@/lib/agent/renderers';
-import type { ExecNode } from '@/lib/agent/exec-tree';
+import type { Lane, RunNode } from '@/lib/agent/run-node';
 import { palette } from '@/theme/colors';
 import { normalizeSlug, type MemberStep, type PersonaMeta } from './personas';
 import { signalTone, type PersonaSignal, type PersonaStage } from './types';
 
 /**
- * The selected member's node in the run's root topology — matched on the graph
- * node name, since each persona/specialist is a compiled subgraph added via
- * `add_node`. `normalizeSlug` tolerates a differently-cased/hyphenated name the
- * backend might emit for the same member.
+ * The selected member's node in the run's root lanes — matched on the graph node name,
+ * since each persona/specialist is a compiled subgraph added via `add_node`.
+ * `normalizeSlug` tolerates a differently-cased/hyphenated name the backend might emit
+ * for the same member.
  *
- * That node owns a LangGraph namespace, so expanding it reads the member's own
- * transcript, the tool calls inside it, and the sub-agents it ran (`collect_data`
- * and below) — the drill-down that was previously invisible.
+ * All 19 members share ONE superstep (verified on production: the council root is a
+ * single 19-wide lane), so this searches across lanes rather than assuming a position.
+ *
+ * That node owns a LangGraph namespace, so expanding it reads the member's own input,
+ * transcript, tool calls and sub-agents.
  */
-export function findMemberNode(tree: ExecNode[] | undefined, slug: string): ExecNode | undefined {
-  return tree?.find((r) => normalizeSlug(r.name ?? '') === slug);
+export function findMemberNode(lanes: Lane[] | undefined, slug: string): RunNode | undefined {
+  return lanes?.flatMap((l) => l.nodes).find((n) => normalizeSlug(n.name) === slug);
 }
 
 /** Which of the member's inner steps a live stage sits on. */
@@ -82,12 +85,13 @@ export function MemberDetail({
   busy: boolean;
   liveValues?: Record<string, unknown>;
   row?: SubgraphRow;
-  /** This member's node in the run's root topology (`council-screen.tsx`). */
-  node?: ExecNode;
+  /** This member's node in the run's root lanes (`council-screen.tsx`). */
+  node?: RunNode;
   threadId?: string;
   onDismiss: () => void;
 }) {
   const dark = useColorScheme() === 'dark';
+  const live = useLiveOverlay(busy);
   // A committed verdict settles the timeline even when the live stage lags
   // (history threads never stream stages at all).
   const states = stepStates(meta.steps, stage, !!signal && !busy);
@@ -155,10 +159,12 @@ export function MemberDetail({
         </Collapsible>
       ) : null}
 
-      {/* What this member actually did: its transcript, the tool calls inside it,
-          and the sub-agents it ran — read from its own LangGraph namespace when
-          the row is expanded, so a 19-member council costs nothing until asked. */}
-      {node ? <SubagentTree nodes={[node]} threadId={threadId} /> : null}
+      {/* What this member actually did: its input, transcript, the tool calls inside it,
+          and the sub-agents it ran — read from its own LangGraph namespace, and only
+          once this card is open, so a 19-member council costs nothing until asked. */}
+      {node ? (
+        <RunCardBody node={node} ctx={{ threadId, busy, maxMs: node.durationMs ?? 0, live, depth: 1 }} />
+      ) : null}
 
       <SubagentStateDigest values={digestValues} />
 

@@ -16,6 +16,13 @@ type CollapsibleProps = {
   /** Node rendered in place of `meta` (e.g. a spinner or badge). */
   headerRight?: ReactNode;
   defaultOpen?: boolean;
+  /**
+   * Controlled open state. Supply with `onOpenChange` when something outside the
+   * header decides whether this is open — the timeline auto-expands whichever step is
+   * running, which an uncontrolled `useState` cannot express.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** Indentation depth for nested sections (sub-agents). */
   depth?: number;
   className?: string;
@@ -26,6 +33,8 @@ type CollapsibleProps = {
  * Minimal expandable section: a pressable header with a rotating chevron over
  * animated-free show/hide content. Used for the run-timeline steps, nested
  * sub-agent sections, and verbose tool blocks.
+ *
+ * Uncontrolled by default; pass `open` + `onOpenChange` to drive it from outside.
  */
 export function Collapsible({
   title,
@@ -34,17 +43,24 @@ export function Collapsible({
   meta,
   headerRight,
   defaultOpen = false,
+  open: controlledOpen,
+  onOpenChange,
   depth = 0,
   className,
   children,
 }: CollapsibleProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
 
   return (
     <View
       className={cn('rounded-crumb', depth > 0 && 'border-l-2 border-frosting-100 pl-2 dark:border-night-border', className)}>
       <Pressable
-        onPress={() => setOpen((o) => !o)}
+        onPress={() => setOpen(!open)}
         className="flex-row items-center gap-2 py-1.5 active:opacity-70">
         <Icon
           name={open ? 'chevron-down' : 'chevron-right'}
