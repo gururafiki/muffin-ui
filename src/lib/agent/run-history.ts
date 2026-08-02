@@ -442,6 +442,37 @@ export function latestValues(snapshots: HistorySnapshot[]): Record<string, unkno
   return {};
 }
 
+/**
+ * The state a namespace was invoked with — LangGraph's `__start__` task writes exactly
+ * the channels the caller handed down, so its `result` IS the node's input.
+ *
+ * Verified on the criterion worker of thread `019faada`: `__start__` writes
+ * `{ticker, query, criterion, classification}` — the criterion definition and the
+ * upstream classification the worker was asked to score against. That was being thrown
+ * away, because `__start__` is filtered from the lanes as an internal node, so a pipeline
+ * node's card could only ever show what it produced and never what it was given.
+ *
+ * Applies to any subgraph, not just muffin's: every LangGraph subgraph gets a `__start__`
+ * task, and its writes are the inputs by construction.
+ */
+export function inputStateFromSnapshots(
+  snapshots: HistorySnapshot[],
+): Record<string, unknown> | undefined {
+  for (const snap of inExecutionOrder(snapshots)) {
+    for (const task of snap.tasks ?? []) {
+      if (task.name !== '__start__') continue;
+      const result = task.result;
+      if (result && typeof result === 'object' && !Array.isArray(result)) {
+        const dict = result as Record<string, unknown>;
+        // `messages` is the transcript, rendered as the Input prompt / Timeline already.
+        const rest = Object.fromEntries(Object.entries(dict).filter(([k]) => k !== 'messages'));
+        if (Object.keys(rest).length > 0) return rest;
+      }
+    }
+  }
+  return undefined;
+}
+
 /** The first human message in a namespace — the prompt this node was handed. */
 export function inputFromMessages(messages: unknown[]): string | undefined {
   for (const m of messages as RawMessage[]) {

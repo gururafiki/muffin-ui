@@ -26,9 +26,10 @@
  * it when it opens (`useRunTimeline`), so a 27-namespace criteria run only ever pays for
  * the branches someone actually opened.
  */
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
+import { useId, useState } from 'react';
+import { ActivityIndicator, Pressable, useColorScheme, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeOut as FadeOutAnim, useReducedMotion } from 'react-native-reanimated';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { Icon } from '@/components/icons';
 import {
@@ -43,7 +44,15 @@ import {
   statusLabel,
 } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { Markdown, renderNodeOutput, TodoList, ToolRunsPanel, isTodoList, type Todo } from '@/lib/agent/renderers';
+import {
+  Markdown,
+  renderNodeOutput,
+  StructuredOutput,
+  TodoList,
+  ToolRunsPanel,
+  isTodoList,
+  type Todo,
+} from '@/lib/agent/renderers';
 import {
   formatDuration,
   isPassThrough,
@@ -257,12 +266,7 @@ function FacetSkeleton({ label, lines = 2 }: { label: string; lines?: number }) 
       <Text variant="label">{label}</Text>
       <View className="gap-1.5">
         {Array.from({ length: lines }, (_, i) => (
-          // `Skeleton`'s default fill is `bg-frosting-100 dark:bg-night-surface-muted`,
-          // which is EXACTLY the muted card these sit on in dark mode — the bars were
-          // rendering and pulsing, perfectly invisible, so an expanded sub-agent looked
-          // like a heading with nothing under it. One step further from the card fill in
-          // both themes.
-          <Skeleton key={i} className={cn('h-3.5 bg-frosting-200 dark:bg-night-border', widths[i % widths.length])} />
+          <Skeleton key={i} className={cn('h-3.5', widths[i % widths.length])} />
         ))}
       </View>
     </View>
@@ -277,6 +281,7 @@ export function RunCardBody({ node, ctx }: { node: RunNode; ctx: TimelineCtx }) 
 
   const detail: RunTimelineDetail | undefined = data;
   const input = node.input ?? detail?.input;
+  const inputState = detail?.inputState;
   const plan = detail?.plan ?? [];
   const latestRevision = plan.at(-1);
   const latestPlan = latestRevision?.todos;
@@ -295,7 +300,7 @@ export function RunCardBody({ node, ctx }: { node: RunNode; ctx: TimelineCtx }) 
   const loading = isPending && hasNamespace;
 
   const hasTimeline = (detail?.messages.length ?? 0) > 0 || (detail?.lanes.length ?? 0) > 0;
-  const hasBody = input != null || latestPlan != null || hasTimeline || output != null;
+  const hasBody = input != null || inputState != null || latestPlan != null || hasTimeline || output != null;
 
   if (!hasBody && !loading) {
     return (
@@ -310,11 +315,19 @@ export function RunCardBody({ node, ctx }: { node: RunNode; ctx: TimelineCtx }) 
   }
 
   return (
-    <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
+    <Animated.View entering={FadeIn.duration(180)} exiting={FadeOutAnim.duration(120)}>
       <Card tone="muted" className="gap-3">
         {input ? (
           <Facet label="Input">
             <InputBlock text={input} />
+          </Facet>
+        ) : inputState ? (
+          // A pipeline node has no transcript and so no prompt — but LangGraph's
+          // `__start__` task writes exactly the channels it was handed, so THAT is its
+          // input (a criterion worker's is its criterion definition + the upstream
+          // classification).
+          <Facet label="Input">
+            <StructuredOutput value={inputState} />
           </Facet>
         ) : loading ? (
           <FacetSkeleton label="Input" />
@@ -396,26 +409,32 @@ function PlanFacet({
   );
 }
 
+const COLLAPSED_PROMPT_HEIGHT = 150;
+
 /**
- * The prompt a node was handed.
+ * The prompt a node was handed, **always rendered as markdown**.
  *
- * Collapsed it is a clamped plain `Text`, expanded it is real markdown. The split is
- * forced by `Markdown`, which returns a `Fragment` of elements and so cannot take
- * `numberOfLines` — and the clamp matters, because a deep agent's brief runs to
- * thousands of characters that would otherwise bury the actual work.
+ * A long brief is clipped to a fixed height and faded out at the bottom rather than
+ * swapped for plain text. The earlier version showed raw markdown source until you
+ * expanded it — `Markdown` returns a `Fragment` and so cannot take `numberOfLines`, and
+ * the shortcut was to clamp a plain `Text` instead. Clipping the rendered output sidesteps
+ * that entirely: headings, tables and code fences are formatted from the first glance, and
+ * the fade signals there is more without a hard cut mid-sentence.
  */
 function InputBlock({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-  const long = text.length > 320;
+  const dark = useColorScheme() === 'dark';
+  // Cheap proxy for "taller than the clamp" — measuring the markdown would need a layout
+  // pass, and a wrong guess here only ever adds a redundant "Show more".
+  const long = text.length > 400;
+  const fade = dark ? palette.night.surfaceMuted : palette.crust;
+
   return (
     <View className="gap-1">
-      {open || !long ? (
+      <View style={open || !long ? undefined : { maxHeight: COLLAPSED_PROMPT_HEIGHT, overflow: 'hidden' }}>
         <Markdown value={text} />
-      ) : (
-        <Text variant="muted" className="text-xs" numberOfLines={4}>
-          {text}
-        </Text>
-      )}
+        {long && !open ? <FadeOut color={fade} /> : null}
+      </View>
       {long ? (
         <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button">
           <Text variant="muted" className="text-[11px] text-frosting-500">
@@ -423,6 +442,25 @@ function InputBlock({ text }: { text: string }) {
           </Text>
         </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+/** Bottom-edge fade over clipped content, drawn with `react-native-svg` so it works on
+ * web and native alike (there is no gradient dependency in this app). */
+function FadeOut({ color }: { color: string }) {
+  const id = useId();
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 56 }}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={color} stopOpacity="0" />
+            <Stop offset="1" stopColor={color} stopOpacity="1" />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
     </View>
   );
 }

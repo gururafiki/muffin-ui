@@ -231,6 +231,20 @@ The whole app is organised around **"one graph → one screen"**:
     on knowing *nothing*, so those cards rendered instantly and then silently grew. `NodeRow` also
     swaps its chevron for a spinner while its namespace is in flight, reading the SAME query key as
     the body so TanStack Query dedupes it to one request.
+    **`Skeleton` puts its `className` on an inner plain `View`** — NativeWind classes do not reach a
+    Reanimated `Animated.View` (the caveat `agent-hero.tsx` documents), so the primitive used to
+    render a class-less box: no height, no background. Verified in the browser, where the bars
+    carried no class attribute and their container measured 6px, i.e. the flex gaps alone. **Every
+    skeleton in the app was invisible**, not just the timeline's.
+  - **A node's Input comes from `__start__` when it has no transcript.** LangGraph's `__start__` task
+    writes exactly the channels the caller handed down, so its `result` IS the node's input
+    (`inputStateFromSnapshots`). A criterion worker therefore shows the criterion definition and the
+    upstream classification it was asked to score against — data that was being discarded because
+    `__start__` is filtered from the lanes as plumbing. Generic: every LangGraph subgraph has one.
+    A prompt-bearing node still prefers its first human message, rendered as **markdown, always**,
+    clipped to a fixed height with an SVG fade rather than swapped for raw source (`Markdown` returns
+    a `Fragment` and cannot take `numberOfLines`, which is what the old plain-text clamp worked
+    around at the cost of showing unformatted markdown until expanded).
   - **A terminal pass-through node does not repeat its parent's output** (`isPassThrough`). Graphs
     often end a subgraph with a small node whose only job is to write the channel the parent
     reports — muffin's criterion worker is `evaluate` → `package`, and `package` writes

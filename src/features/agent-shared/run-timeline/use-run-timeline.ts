@@ -18,6 +18,7 @@ import { makeClient } from '@/lib/agent/client';
 import {
   fetchNamespace,
   inputFromMessages,
+  inputStateFromSnapshots,
   lanesFromSnapshots,
   latestValues,
   messagesFromSnapshots,
@@ -53,6 +54,9 @@ export type RunTimelineDetail = {
   toolRuns: ToolRun[];
   /** The prompt this node was handed — its first human message. */
   input?: string;
+  /** The state this node was invoked with (`__start__`'s writes), for pipeline nodes
+   * that have no transcript and therefore no prompt. */
+  inputState?: Record<string, unknown>;
   /** Node names LangGraph says run next inside this namespace. */
   pending: string[];
   values: Record<string, unknown>;
@@ -108,6 +112,7 @@ export function useRunTimeline(
         messages,
         toolRuns: toolRunsFromMessages(messages, namespace?.split(':')[0]),
         input: inputFromMessages(messages),
+        inputState: inputStateFromSnapshots(snaps),
         pending: pendingFromSnapshots(snaps),
         values: latestValues(snaps),
       };

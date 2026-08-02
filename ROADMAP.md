@@ -644,11 +644,23 @@ are now reported honestly rather than papered over.
     missed because the earlier smokes only ever expanded nodes that DO have namespaces. The hook now
     blanks its result when it was not enabled; `smoke-timeline.mjs` expands a `checkpoint: null` node
     and fails if a sibling label then appears twice (verified to fail with the bug reintroduced).
-  - **The loading skeletons were invisible.** `Skeleton`'s default fill is
-    `dark:bg-night-surface-muted` — exactly the muted card they sit on — so an expanded sub-agent
-    showed a "Plan"/"Timeline" heading with nothing beneath it while its namespace loaded. Bars now
-    sit one step off the card fill in both themes. The Plan skeleton was dropped entirely: only deep
-    agents have a plan, so reserving space for one promises something most nodes never show.
+  - **`Skeleton` rendered nothing at all — app-wide.** It passed its `className` to a Reanimated
+    `Animated.View`, which NativeWind classes do not reach (the caveat `agent-hero.tsx` documents),
+    so every skeleton in the app was a class-less, zero-height, transparent box. Confirmed in the
+    browser: the bars carried no class attribute and their container measured 6px — the flex gaps
+    alone. The `className` now goes on an inner plain `View` and the `Animated.View` carries only the
+    animated opacity. Bars measure 14px with a real fill. This also un-breaks the hydration, calls
+    and sub-agent skeletons, which had been invisible since they were written. The Plan skeleton was
+    dropped: only deep agents have a plan, so holding space for one promises what most nodes never show.
+  - **A node's Input now comes from `__start__` when it has no transcript.** LangGraph's `__start__`
+    task writes exactly the channels the caller handed down, so its `result` IS the node's input —
+    it was being discarded because `__start__` is filtered from the lanes as plumbing. A criterion
+    worker now shows the criterion definition (name, target range, weight, assessment guidance, data
+    requirements) and the upstream classification it was scoring against, instead of only its verdict.
+  - **Input prompts render as markdown always**, clipped to a fixed height with an SVG fade and a
+    "Show full prompt" toggle. Previously they showed raw markdown source until expanded, because
+    `Markdown` returns a `Fragment` and cannot take `numberOfLines`; clipping the *rendered* output
+    sidesteps that and formats headings/tables/code from the first glance.
 - **Follow-up for muffin-agent:** deep agents do not maintain their `todos`. `TodoListMiddleware`
   gives them `write_todos` but nothing in the prompts requires marking items complete, so a plan is
   written once and abandoned. The UI now says so; the agent-side fix belongs in muffin-agent.
