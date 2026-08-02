@@ -155,10 +155,28 @@ The whole app is organised around **"one graph → one screen"**:
     blocks (`<Skeleton>` primitive in `ui/`). Since M21 a finished-thread reopen hydrates from
     `thread.values` (~110ms, see the Live vs history doctrine above), so these skeletons now only
     flash on reopen; the 28–70s wait remains only for the busy/live-hydration `getState` path.
-- **`renderers/`** — pluggable rendering. New dashboards/charts are added by registering renderers,
-  not editing call sites. Two registries, both keyed on something the API actually tells us:
-  `renderNodeOutput` on the **state channel** a node wrote (see the run-timeline notes below), and
-  `renderToolOutput` on the **tool name**. `criteria-result.tsx` badges evaluations whose backend
+- **`renderers/`** — pluggable rendering, in **two layers**. New dashboards/charts are added by
+  registering renderers, not editing call sites. Two registries, both keyed on something the API
+  actually tells us: `renderNodeOutput` on the **state channel** a node wrote (see the run-timeline
+  notes below), and `renderToolOutput` on the **tool name**.
+  - **Layer 1 — the semantic baseline (`structured.tsx` + `fields.tsx`).** Reads FIELD MEANING, not
+    just type: a 0..1 `confidence` is a `Gauge`, `signal`/`rating` a toned `SignalPill`, `weight` a
+    `WeightBar`, `*_pct` a `DeltaValue`, `limitations`/`key_risks` a `CaveatList`,
+    `key_findings`/`catalysts` a `CheckList`, categorical strings a `Badge`, prose `Markdown`.
+    Fields are **ranked** so the headline leads, and **empty fields are dropped entirely** (the old
+    renderer printed "SUB SECTOR" with a blank under it). The rules key on naming conventions and
+    value shapes, never on a model registry, so a graph written next month is legible for free.
+  - **Layer 2 — hero cards (`cards.tsx`)** for the payloads that carry a run's headline:
+    `ClassificationCard`, `CriteriaDefinitionCard`, `MethodologyCard`, `SynthesisCard`,
+    `DecisionTicketCard`, `JudgeCard`, `TradePlanCard`, `OutcomesCard`, `CouncilVerdictCard`,
+    `StrategyGridCard`, `EvidenceCard`. They are built from the same `fields.tsx` presenters, so the
+    two layers cannot drift into looking like different products.
+  - **Every card returns `null` when the payload does not match**, and `CHANNEL_RENDERERS` calls
+    cards as **plain functions** (`ClassificationCard({ value })`), never as `<Card />`. That is
+    load-bearing: `renderNodeOutput` chains on `if (view) return view`, and a JSX *element* is
+    always truthy — an element whose component returned `null` would end the chain and render
+    nothing. Safe because no card calls a hook in its own body; `Markdown`/`Collapsible` are child
+    elements it merely constructs. `criteria-result.tsx` badges evaluations whose backend
   truthing flag says no tools ran (`data_collected: false` → "no live data").
   **`ToolRunsPanel`** (M19) is one `Card`+`Collapsible` envelope over `ToolRunRow`s, mounted per
   timeline node ("Tool calls"). Runs are reconstructed from the node's transcript

@@ -9,6 +9,20 @@ import {
 } from '@/features/multi-agent/debate';
 import { parseOr, zCriterionEvaluation, zPersonaSignal } from '@/lib/agent/schemas';
 import { taskWrite } from '@/lib/agent/run-history';
+import {
+  ClassificationCard,
+  CouncilVerdictCard,
+  CriteriaDefinitionCard,
+  DecisionTicketCard,
+  EvidenceCard,
+  JudgeCard,
+  MethodologyCard,
+  OutcomesCard,
+  isStrategyGrid,
+  StrategyGridCard,
+  SynthesisCard,
+  TradePlanCard,
+} from './cards';
 import { CriterionDetails } from './criteria-result';
 import { Markdown } from './markdown';
 import { StructuredOutput } from './structured';
@@ -49,12 +63,41 @@ type Dict = Record<string, unknown>;
  * a "—" verdict, silently dropping the entire `criteria_definition` payload. Only a
  * strict discriminator (`hasCriterionShape`) is allowed to promote an unnamed payload.
  */
+/**
+ * Channel → renderer.
+ *
+ * The card entries **call the card as a plain function**, not as `<Card value={v} />`.
+ * That is load-bearing: `renderNodeOutput` uses `if (view) return view` to fall through
+ * to the next candidate, and a JSX *element* is always truthy — so an element whose
+ * component returns `null` internally would end the chain and render nothing. Calling
+ * them returns the `null` and the fallthrough works. Safe because no card calls a hook in
+ * its own body; the hook-using pieces (`Markdown`, `Collapsible`) are child elements it
+ * merely constructs, exactly like the long-standing `renderCriterion` / `renderDebate`.
+ */
 const CHANNEL_RENDERERS: Record<string, (value: unknown) => React.ReactNode> = {
+  // criteria_analysis
+  classification: (v) => ClassificationCard({ value: v }),
+  criteria_definition: (v) => CriteriaDefinitionCard({ value: v }),
+  merged_criteria: (v) => CriteriaDefinitionCard({ value: v }),
+  valuation_methodology: (v) => MethodologyCard({ value: v }),
+  synthesis: (v) => SynthesisCard({ value: v }),
   criterion_evaluations: renderCriterion,
   criterion_evaluation: renderCriterion,
+  // The criterion definition handed to a worker as its INPUT, not a stage output.
+  criterion: (v) => CriteriaDefinitionCard({ value: [v] }),
+  // council
   persona_signals: renderPersona,
+  council_synthesis: (v) => CouncilVerdictCard({ value: v }),
+  // trading_decision
+  portfolio_decision: (v) => DecisionTicketCard({ value: v }),
+  investment_judge: (v) => JudgeCard({ value: v }),
+  trader: (v) => TradePlanCard({ value: v }),
+  resolved_decisions: (v) => OutcomesCard({ value: v }),
   investment_debate_messages: renderDebate,
   risk_debate_messages: renderDebate,
+  // research
+  evidence: (v) => EvidenceCard({ value: v }),
+  reranked_evidence: (v) => EvidenceCard({ value: v }),
 };
 
 /** Whether a channel name has a bespoke renderer — used to pick one out of a
@@ -149,7 +192,15 @@ function renderPersona(value: unknown): React.ReactNode {
       {p.evidence ? (
         <View className="gap-1">
           <Text variant="label">Evidence</Text>
-          <StructuredOutput value={p.evidence} />
+          {/* A specialist's evidence is a set of comparable strategy verdicts
+              (`{signal, confidence, metrics}` each), which reads far better as a grid of
+              tiles than as three levels of nested rows. Personas whose evidence is a flat
+              bag of numbers fall through to the semantic baseline. */}
+          {isStrategyGrid(p.evidence) ? (
+            <StrategyGridCard value={p.evidence} />
+          ) : (
+            <StructuredOutput value={p.evidence} />
+          )}
         </View>
       ) : null}
     </View>

@@ -666,6 +666,37 @@ are now reported honestly rather than papered over.
   written once and abandoned. The UI now says so; the agent-side fix belongs in muffin-agent.
 
 
+## ✅ Milestone 27 — Structured outputs get a design: semantic baseline + hero cards (2026-08-02)
+Every agent payload rendered as a stack of `LABEL` / value rows — a classification, a portfolio
+decision and a criterion definition all looked like the same database dump, `confidence` printed as
+the text "0.9", and null fields printed their label above a blank. Two layers replace it, after an
+inventory of all ~20 structured outputs across the five graphs.
+
+- **Layer 1 — the semantic baseline** (`renderers/structured.tsx` + `fields.tsx`). Reads FIELD
+  MEANING, not just type: a 0..1 `confidence` is a `Gauge`, `signal`/`rating` a toned `SignalPill`,
+  `weight` a `WeightBar`, `*_pct` a `DeltaValue`, `limitations`/`key_risks` a `CaveatList`,
+  `key_findings`/`catalysts` a `CheckList`, categorical strings a `Badge`, prose `Markdown`. Fields
+  are **ranked** so the headline leads, and **empty fields are dropped entirely**. The rules key on
+  naming conventions and value shapes, never a model registry, so a graph written next month is
+  legible for free — the same principle the timeline's structure follows.
+- **Layer 2 — hero cards** (`renderers/cards.tsx`) for the payloads carrying a run's headline:
+  `ClassificationCard`, `CriteriaDefinitionCard`, `MethodologyCard`, `SynthesisCard`,
+  `DecisionTicketCard`, `JudgeCard`, `TradePlanCard`, `OutcomesCard`, `CouncilVerdictCard` (with a
+  proportional vote-breakdown bar), `StrategyGridCard` (a specialist's `{signal, confidence,
+  metrics}` strategies as comparable tiles instead of three levels of JSON), `EvidenceCard`.
+  18 channels are now registered, up from 5.
+- **The null-fallthrough contract.** Every card returns `null` when the payload does not match, and
+  `CHANNEL_RENDERERS` calls cards as **plain functions** rather than as JSX elements — a JSX element
+  is always truthy, so `if (view) return view` would end the chain on a card that rendered nothing.
+  Safe because no card calls a hook in its own body.
+- **Two bugs caught in visual review:** `composite_score` 0.075 rendered as "8" (a 0–1 ratio printed
+  as if out of 10) — now a percentage, with a guard for graphs using other units. And `time_horizon`
+  came back as a full sentence on a real decision, which a `Badge` cannot wrap, pushing the card off
+  screen — long values now render as their own labelled block, in both the cards and the baseline.
+- **Follow-up:** the criteria/trading/council/research *Overview* renderers still have their own
+  layouts; folding them onto these cards would remove the last duplication between the two views.
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
