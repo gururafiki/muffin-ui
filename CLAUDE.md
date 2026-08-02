@@ -300,6 +300,15 @@ The whole app is organised around **"one graph → one screen"**:
     function node reports `checkpoint: null` and is genuinely a leaf, so the UI says so rather than
     offering an empty drill-down. Internal nodes (`*Middleware*`, `__start__`/`__end__`) are
     filtered: LangGraph compiles each middleware hook into its own node and surfaces it as a task.
+  - **A disabled `useRunTimeline` returns NOTHING — deliberately.** A leaf node has no namespace, so
+    callers pass `undefined` with `enabled: false`, which collapses the query key to the same
+    `'__root__'` the run's own timeline uses. A disabled `useQuery` still hands back whatever is
+    cached under its key, and the root is always cached by then — so **every plain function node
+    rendered the entire run inside itself** (expanding `package` under a criterion redrew the whole
+    pipeline). The hook now blanks `data`/`isPending`/`isFetching` when it was not enabled, which
+    makes the collision structurally impossible rather than fixing it per call site.
+    `scripts/smoke-timeline.mjs` guards it: it expands a node the API reports with
+    `checkpoint: null` and fails if another top-level step's label then appears twice.
   - **Everything below the root is lazy.** `useRunTimeline(threadId, namespace, enabled, busy)`
     (`run-timeline/use-run-timeline.ts`) reads one namespace per expanded card, cached forever once
     the thread settles. A criteria run has 27 namespaces; walking them eagerly would cost 27 round

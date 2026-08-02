@@ -106,9 +106,18 @@ const fannedOut = new Set(
     return Object.entries(counts).filter(([, c]) => c > 1).map(([n]) => n);
   }),
 );
+const humanise = (n) => n.replace(/[_-]+/g, ' ').trim().replace(/^./, (c) => c.toUpperCase());
 const soloNodes = [...new Set(history.flatMap((s) => (s.tasks ?? []).map(nameOf)).filter(keep))]
   .filter((n) => !fannedOut.has(n));
-const humanise = (n) => n.replace(/[_-]+/g, ' ').trim().replace(/^./, (c) => c.toUpperCase());
+/** Nodes LangGraph reports with `checkpoint: null` — plain function nodes, leaves by
+ * construction. Expanding one must show only its own record; these are exactly the nodes
+ * that shared the root's query key and redrew the entire run inside themselves. */
+const leafLabels = [...new Set(
+  history
+    .flatMap((s) => s.tasks ?? [])
+    .filter((t) => keep(nameOf(t)) && !t.checkpoint?.checkpoint_ns && !delegatedBy.has(t.id))
+    .map((t) => humanise(nameOf(t))),
+)];
 const expectLabels = soloNodes.map(humanise);
 if (expectLabels.length === 0) { console.error('FIXTURE BROKEN: thread has no non-plumbing tasks'); server.close(); process.exit(2); }
 
@@ -180,6 +189,35 @@ const clicked = expandTarget ? await clickRow(expandTarget) : false;
 const expandedBody = clicked ? await page.evaluate(() => document.body.innerText || '') : '';
 if (clicked) await page.screenshot({ path: `smoke-timeline-${GRAPH}-expanded.png`, fullPage: true });
 
+/**
+ * Regression guard: a LEAF node must not render the whole run inside itself.
+ *
+ * A leaf has no namespace, so its query key collapsed to the same `'__root__'` the run
+ * timeline uses — and a disabled `useQuery` still returns whatever is cached under its
+ * key. Every plain function node therefore redrew the entire pipeline when expanded.
+ * Detected by counting how many times the FIRST top-level step's label appears: once for
+ * the real row, more than once means the root leaked into a child.
+ */
+let leafDuplicated = false;
+let leafProbe = leafLabels.find((l) => l !== expandTarget && body.includes(l));
+if (leafProbe) {
+  if (clicked && expandTarget) await clickRow(expandTarget); // collapse, keep the page small
+  const opened = await clickRow(leafProbe);
+  if (opened) {
+    const after = await page.evaluate(() => document.body.innerText || '');
+    // Count a DIFFERENT top-level step. If expanding a leaf made it appear a second
+    // time, the leaf just redrew the whole run inside itself.
+    const witness = expectLabels.find((l) => l !== leafProbe && after.includes(l));
+    leafDuplicated = !!witness && (after.match(new RegExp(escapeRe(witness), 'g')) ?? []).length > 1;
+    await page.screenshot({ path: `smoke-timeline-${GRAPH}-leaf.png`, fullPage: true });
+  } else {
+    leafProbe = undefined;
+  }
+}
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const labelsPresent = expectLabels.filter((l) => body.includes(l));
 // A fanned-out node's raw name must NOT appear — seeing it means the members failed to
 // label themselves and the reader is looking at N identical rows.
@@ -200,7 +238,7 @@ server.close();
 
 console.log(`graph=${GRAPH} thread=${TID} elapsed=${elapsed}ms`);
 console.log(`  togglePresent=${togglePresent}  summary=${summaryShown}  labels=${labelsPresent.length}/${expectLabels.length}  fanRelabelled=${rawFanNames.length === 0}  parallelShown=${parallelShown}  durationsShown=${durationsShown}`);
-console.log(`  expanded="${expandTarget}" clicked=${clicked}  newFacets=[${facetsShown}]  reanimatedErrors=${reanimatedErrors.length}`);
+console.log(`  expanded="${expandTarget}" clicked=${clicked}  newFacets=[${facetsShown}]  leafDuplicatesRoot=${leafDuplicated}  reanimatedErrors=${reanimatedErrors.length}`);
 console.log(`  expected node labels: ${expectLabels.join(', ')}`);
 console.log('--- body text (collapsed) ---');
 console.log(body);
@@ -212,6 +250,7 @@ const pass =
   labelsPresent.length === expectLabels.length &&
   rawFanNames.length === 0 &&
   durationsShown &&
+  !leafDuplicated &&
   (!EXPECT_PARALLEL || parallelShown) &&
   reanimatedErrors.length === 0;
 if (!pass) {
@@ -223,6 +262,7 @@ if (!pass) {
     unrelabelledFanOut: rawFanNames,
     parallelShown,
     durationsShown,
+    leafDuplicated,
     reanimatedErrors,
   });
   process.exit(1);

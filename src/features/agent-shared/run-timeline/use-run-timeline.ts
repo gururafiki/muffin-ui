@@ -73,14 +73,26 @@ const EMPTY: RunTimelineDetail = {
  *
  * `enabled` gates the fetch on the card actually being open — that is the whole point
  * of this hook, so a 27-namespace run only ever pays for the branches someone opened.
+ *
+ * ## Why the result is blanked when disabled
+ *
+ * A **leaf** node (a plain function node in the graph) has no namespace, so callers
+ * naturally pass `undefined` with `enabled: false`. That collapses the query key to the
+ * same `'__root__'` the run's own timeline uses — and a disabled `useQuery` still hands
+ * back whatever is cached under its key. The root is always cached by then, so every
+ * leaf rendered the ENTIRE run inside itself: expanding `package` under a criterion
+ * redrew the whole pipeline, ticker classification and all.
+ *
+ * Blanking here rather than at each call site makes that structurally impossible: a
+ * query nobody enabled can never serve another query's data.
  */
 export function useRunTimeline(
   threadId: string | undefined,
   namespace: string | undefined,
   enabled: boolean,
   busy = false,
-) {
-  return useQuery({
+): { data: RunTimelineDetail | undefined; isPending: boolean; isFetching: boolean } {
+  const query = useQuery({
     queryKey: ['run-timeline', threadId, namespace ?? '__root__'],
     enabled: enabled && !!threadId,
     ...cachePolicy(busy),
@@ -101,4 +113,13 @@ export function useRunTimeline(
       };
     },
   });
+
+  const on = enabled && !!threadId;
+  return {
+    data: on ? query.data : undefined,
+    // A disabled query reports `isPending` forever (it has no data and never will),
+    // which would leave a leaf's card showing skeletons that never resolve.
+    isPending: on ? query.isPending : false,
+    isFetching: on ? query.isFetching : false,
+  };
 }

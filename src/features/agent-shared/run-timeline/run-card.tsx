@@ -257,7 +257,12 @@ function FacetSkeleton({ label, lines = 2 }: { label: string; lines?: number }) 
       <Text variant="label">{label}</Text>
       <View className="gap-1.5">
         {Array.from({ length: lines }, (_, i) => (
-          <Skeleton key={i} className={cn('h-3.5', widths[i % widths.length])} />
+          // `Skeleton`'s default fill is `bg-frosting-100 dark:bg-night-surface-muted`,
+          // which is EXACTLY the muted card these sit on in dark mode — the bars were
+          // rendering and pulsing, perfectly invisible, so an expanded sub-agent looked
+          // like a heading with nothing under it. One step further from the card fill in
+          // both themes.
+          <Skeleton key={i} className={cn('h-3.5 bg-frosting-200 dark:bg-night-border', widths[i % widths.length])} />
         ))}
       </View>
     </View>
@@ -315,14 +320,14 @@ export function RunCardBody({ node, ctx }: { node: RunNode; ctx: TimelineCtx }) 
           <FacetSkeleton label="Input" />
         ) : null}
 
+        {/* No skeleton for Plan: only a deep agent has one, and reserving space for a
+            facet most nodes will never show promises something that isn't coming. */}
         {isTodoList(latestPlan) ? (
           <PlanFacet
             todos={latestPlan as Todo[]}
             status={node.status}
             revisedAtStep={latestRevision?.step}
           />
-        ) : loading ? (
-          <FacetSkeleton label="Plan" lines={3} />
         ) : null}
 
         {hasTimeline && detail ? (

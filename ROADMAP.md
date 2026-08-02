@@ -635,6 +635,20 @@ are now reported honestly rather than papered over.
   spine draws downward (capped at 8), the rail below a running step breathes, and the run summary
   counts up on a settled run. All gated on `useReducedMotion`. Reanimated **layout transitions** were
   deliberately avoided — unreliable on RN-Web, and this repo's gate is a headless browser.
+- **Two bugs found in review of the above, fixed in the same milestone:**
+  - **Every leaf node rendered the whole run inside itself.** A plain function node has no
+    namespace, so `useRunTimeline` was called with `undefined` + `enabled: false` — collapsing the
+    query key to the same `'__root__'` the run timeline uses. A disabled `useQuery` still returns
+    cached data for its key, and the root is always cached, so expanding `package`, `merge_criteria`,
+    the trading judge/trader or the council judge redrew the entire pipeline. Present since M25 and
+    missed because the earlier smokes only ever expanded nodes that DO have namespaces. The hook now
+    blanks its result when it was not enabled; `smoke-timeline.mjs` expands a `checkpoint: null` node
+    and fails if a sibling label then appears twice (verified to fail with the bug reintroduced).
+  - **The loading skeletons were invisible.** `Skeleton`'s default fill is
+    `dark:bg-night-surface-muted` — exactly the muted card they sit on — so an expanded sub-agent
+    showed a "Plan"/"Timeline" heading with nothing beneath it while its namespace loaded. Bars now
+    sit one step off the card fill in both themes. The Plan skeleton was dropped entirely: only deep
+    agents have a plan, so reserving space for one promises something most nodes never show.
 - **Follow-up for muffin-agent:** deep agents do not maintain their `todos`. `TodoListMiddleware`
   gives them `write_todos` but nothing in the prompts requires marking items complete, so a plan is
   written once and abandoned. The UI now says so; the agent-side fix belongs in muffin-agent.
