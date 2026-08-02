@@ -1,6 +1,7 @@
 import { Linking, Pressable, View } from 'react-native';
 
 import { Badge, Card, Text } from '@/components/ui';
+import { CaveatList, ChipList, CheckList, Gauge } from './fields';
 import { JsonBlock } from './json-block';
 import { Markdown } from './markdown';
 
@@ -10,6 +11,7 @@ type ResearchOutput = {
   sources?: { n?: number; title?: string; url?: string }[];
   confidence?: number;
   suggested_followups?: string[];
+  missing_information?: string[];
 };
 
 /**
@@ -24,9 +26,8 @@ export function ResearchResult({ value }: { value: unknown }) {
     <Card className="gap-3">
       <View className="flex-row items-center gap-2">
         <Badge label="research" tone="info" />
-        {typeof out.confidence === 'number' ? (
-          <Text variant="muted">confidence {Math.round(out.confidence * 100)}%</Text>
-        ) : null}
+        <View className="flex-1" />
+        {typeof out.confidence === 'number' ? <Gauge value={out.confidence} /> : null}
       </View>
 
       {out.answer_markdown ? <Markdown value={out.answer_markdown} /> : null}
@@ -34,11 +35,16 @@ export function ResearchResult({ value }: { value: unknown }) {
       {out.key_findings && out.key_findings.length > 0 ? (
         <View className="gap-1">
           <Text variant="label">Key findings</Text>
-          {out.key_findings.map((f, i) => (
-            <Text key={i} variant="body">
-              • {f}
-            </Text>
-          ))}
+          <CheckList items={out.key_findings} />
+        </View>
+      ) : null}
+
+      {/* Was dropped entirely — what the run could NOT establish is as much a part of a
+          research answer as what it could. */}
+      {out.missing_information && out.missing_information.length > 0 ? (
+        <View className="gap-1">
+          <Text variant="label">Missing information</Text>
+          <CaveatList items={out.missing_information} />
         </View>
       ) : null}
 
@@ -58,11 +64,7 @@ export function ResearchResult({ value }: { value: unknown }) {
       {out.suggested_followups && out.suggested_followups.length > 0 ? (
         <View className="gap-1">
           <Text variant="label">Follow-ups</Text>
-          {out.suggested_followups.map((f, i) => (
-            <Text key={i} variant="muted">
-              • {f}
-            </Text>
-          ))}
+          <ChipList items={out.suggested_followups} />
         </View>
       ) : null}
 

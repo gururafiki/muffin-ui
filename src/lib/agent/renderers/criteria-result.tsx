@@ -10,8 +10,9 @@ import type { SubagentRun } from '@/features/agent-shared/conversation-turns';
 import { parseArray, zCriterionEvaluation, type CriterionEvaluation } from '@/lib/agent/schemas';
 import { palette } from '@/theme/colors';
 import { JsonBlock } from './json-block';
+import { ClassificationCard, MethodologyCard, SynthesisCard } from './cards';
 import { Markdown } from './markdown';
-import { ConfidenceBar, ReportSection, ScoreBar, TagRow, toneColor, Verdict, toneForSignal } from './widgets';
+import { ConfidenceBar, ScoreBar, TagRow, toneColor, toneForSignal } from './widgets';
 
 type Dict = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
@@ -277,15 +278,15 @@ export function CriteriaResult({
 
   return (
     <View className="gap-3">
-      <TagRow tags={[str(cls.stock_type), str(cls.sector), str(cls.sub_sector), str(cls.market)]} />
-
-      {str(synth.signal) || typeof synth.composite_score === 'number' ? (
-        <Verdict
-          signal={str(synth.signal)}
-          confidence={typeof synth.confidence === 'number' ? synth.confidence : undefined}
-          summary={str(synth.summary) ?? str(synth.thesis)}
-        />
-      ) : null}
+      {/* The verdict, the classification and the methodology all render through the SAME
+          cards the timeline uses. The hand-rolled `Verdict` this replaced read
+          `synth.summary ?? synth.thesis` — NEITHER field exists on
+          `CriteriaAnalysisSynthesis` (it is `thesis_paragraph`), so the headline summary
+          was always blank, and `key_positives` / `key_negatives` / `divergences` /
+          `weighted_breakdown` were dropped entirely. */}
+      {SynthesisCard({ value: synth }) ?? (
+        <TagRow tags={[str(cls.stock_type), str(cls.sector), str(cls.sub_sector), str(cls.market)]} />
+      )}
 
       {criteria.length > 0 ? (
         <Card className="gap-0">
@@ -301,8 +302,8 @@ export function CriteriaResult({
         </Card>
       ) : null}
 
-      <ReportSection title="Valuation methodology" icon="evaluation" markdown={str(valuation.methodology_summary)} />
-      {str(cls.rationale) ? <ReportSection title="Why this classification" icon="criteria" markdown={cls.rationale as string} /> : null}
+      {MethodologyCard({ value: valuation })}
+      {ClassificationCard({ value: cls })}
     </View>
   );
 }

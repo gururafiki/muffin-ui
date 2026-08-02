@@ -3,10 +3,9 @@ import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming } fr
 import { useEffect } from 'react';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Text, type Signal } from '@/components/ui';
+import { Card, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
-import { StructuredOutput } from '@/lib/agent/renderers';
-import { signalTone } from './types';
+import { CouncilVerdictCard, StructuredOutput } from '@/lib/agent/renderers';
 
 const KNOWN = new Set([
   'consensus_rating',
@@ -18,20 +17,6 @@ const KNOWN = new Set([
   'key_uncertainties',
   'reasoning',
 ]);
-
-function str(v: unknown): string | undefined {
-  return typeof v === 'string' && v.trim() ? v : undefined;
-}
-
-function Section({ label, body }: { label: string; body?: string }) {
-  if (!body) return null;
-  return (
-    <View className="gap-1">
-      <Text variant="label">{label}</Text>
-      <Text variant="body">{body}</Text>
-    </View>
-  );
-}
 
 /** The judge: deliberating shimmer, then the council's synthesised verdict. */
 export function JudgePanel({
@@ -62,47 +47,23 @@ export function JudgePanel({
 
   if (!synthesis) return null;
 
-  const rating = str(synthesis.consensus_rating);
-  const confidence = synthesis.weighted_confidence;
-  const tone: Signal = rating ? (signalTone(rating) as Signal) : 'info';
+  // The verdict body is the SAME card the timeline renders for `council_synthesis`, so
+  // the two views cannot drift. It replaces a hand-rolled panel that showed the vote
+  // breakdown as a nested key/value dump rather than a proportional bar, and rendered
+  // the bull/bear/dissent prose as plain `Text` instead of markdown.
+  const verdict = CouncilVerdictCard({ value: synthesis });
   const extras = Object.fromEntries(
     Object.entries(synthesis).filter(([k, v]) => !KNOWN.has(k) && v != null),
   );
 
   return (
-    <Card className="gap-3">
+    <View className="gap-2">
       <View className="flex-row items-center gap-2">
         <Icon name="council" size={24} color={palette.frosting[600]} />
         <Text variant="heading">Council Verdict</Text>
       </View>
-
-      <View className="flex-row items-center gap-3">
-        {rating ? <Badge label={rating} tone={tone} /> : null}
-        {typeof confidence === 'number' ? (
-          <Text variant="muted">confidence {Math.round(confidence * 100)}%</Text>
-        ) : null}
-      </View>
-
-      <Section label="Bull case" body={str(synthesis.bull_case_synthesis)} />
-      <Section label="Bear case" body={str(synthesis.bear_case_synthesis)} />
-      <Section label="Dissent" body={str(synthesis.dissent_summary)} />
-      <Section label="Reasoning" body={str(synthesis.reasoning)} />
-
-      {synthesis.key_uncertainties ? (
-        <View className="gap-1">
-          <Text variant="label">Key uncertainties</Text>
-          <StructuredOutput value={synthesis.key_uncertainties} depth={1} />
-        </View>
-      ) : null}
-
-      {synthesis.vote_breakdown ? (
-        <View className="gap-1">
-          <Text variant="label">Vote breakdown</Text>
-          <StructuredOutput value={synthesis.vote_breakdown} depth={1} />
-        </View>
-      ) : null}
-
+      {verdict ?? <StructuredOutput value={synthesis} />}
       {Object.keys(extras).length > 0 ? <StructuredOutput value={extras} /> : null}
-    </Card>
+    </View>
   );
 }
