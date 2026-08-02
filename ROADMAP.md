@@ -693,8 +693,17 @@ inventory of all ~20 structured outputs across the five graphs.
   as if out of 10) — now a percentage, with a guard for graphs using other units. And `time_horizon`
   came back as a full sentence on a real decision, which a `Badge` cannot wrap, pushing the card off
   screen — long values now render as their own labelled block, in both the cards and the baseline.
-- **Follow-up:** the criteria/trading/council/research *Overview* renderers still have their own
-  layouts; folding them onto these cards would remove the last duplication between the two views.
+- **The Overview now renders through the same cards** (same milestone), removing the last
+  duplication between the two run views — and fixing drift each renderer had accumulated:
+  `CriteriaResult` read `synth.summary ?? synth.thesis`, **neither of which exists** on
+  `CriteriaAnalysisSynthesis` (it is `thesis_paragraph`), so its headline summary was always blank
+  and `key_positives` / `key_negatives` / `divergences` / `weighted_breakdown` never rendered;
+  `TradingResult` collapsed three payloads into one `Verdict` and dropped the price target, stop,
+  horizon, sizing, accepted risks, the judge's cases/catalysts/checklist and the trader's levels;
+  `JudgePanel` showed the vote breakdown as a nested dump; `ResearchResult` discarded
+  `missing_information` entirely. Each renderer keeps only what is genuinely Overview-specific —
+  the criterion list with its transcript injection, the analyst reports, the debates, the judge's
+  deliberating shimmer.
 
 
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
