@@ -771,6 +771,94 @@ nothing checked it. This milestone made it verifiable and then made it true.
   different and smaller reason (client-only state at first paint). See the backlog item below.
 
 
+## ✅ Milestone 29 — First real Android run: the native path, verified (2026-08-03)
+The app had never been run on a device — "cross-platform (Web · iOS · Android)" was a build-time
+claim only. Built a dev client (Expo SDK 56 / RN 0.85, `expo prebuild` + Gradle, compileSdk 36) and
+drove it on a Pixel 7 arm64 emulator against the **deployed** API. **Expo Go cannot host this app**
+(`react-native-mmkv`, now also `expo-crypto`), so a development build is the only option; setup
+runbook is in README → Develop → Running on Android.
+
+**Verified working on device:** Globe/Markets/Portfolio/Agents/Calls/Settings, the Calls list off
+real production threads, reopen-hydration (STRONG SELL / 4% composite for AMZN), the full run
+Timeline (16 steps · 2 parallel · 16m 9s, with the 2- and 10-wide `Send` fan-outs and per-criterion
+relabelling), Supabase sign-in, run submit, and **live streaming** (status pill, `Now:` stage,
+ticking elapsed, sub-agent discovery).
+
+**Five defects — the first three native-only, none visible to the web build or to `tsc`/`expo
+export`; the last two cross-platform, found only because real runs were driven on a device:**
+1. **`resolveBaseUrl` bricked the app** (`src/lib/resolve-url.ts`). RN defines a global `window`, and
+   the Expo dev client gives it a `location` pointing at Metro — so the branch commented "web only"
+   ran on native. It then called `new URL(partial, 'http://<metro>:8081')` on every keystroke while a
+   URL was typed in Settings; `new URL('https:', 'http://…')` throws (scheme mismatch → parsed as
+   absolute, no host). Thrown during render, so the app died — and the interrupted edit had already
+   persisted `https:` to MMKV, so it then crashed on **every launch**, with Settings (the only screen
+   that could repair it) behind the crash. Fixed: web is detected by `document` (RN has none) and
+   `new URL` is wrapped so an unresolvable base degrades to a failed request, never an unmountable
+   app. **Lesson: `typeof window !== 'undefined'` is not a web check in React Native.**
+2. **No `crypto` global in Hermes.** `@langchain/langgraph-sdk` mints the thread id with
+   `crypto.randomUUID()` on submit (`dist/react/stream.custom.js`), so **every new run** on native
+   failed with `ReferenceError: Property 'crypto' doesn't exist` — surfaced only as an unhandled
+   promise rejection, so "Run agent" looked like a dead button. Reopening past threads was
+   unaffected (the id already exists), which is why read-only browsing seemed fine. Fixed by
+   polyfilling `globalThis.crypto` from `expo-crypto` in `install-fetch.native.ts`, next to the
+   existing URL/fetch polyfills.
+3. **Cloudflare Access had no native credential.** `buildAuthHeaders` only ever emitted
+   `Authorization: Bearer`; the browser gets past Access on its SSO cookie, but a native client has
+   none, so every request returned the Access login page — `302 text/html`, not JSON, silently.
+   Added `cfAccessClientId` / `cfAccessClientSecret` to Settings → Connection, emitted as the
+   `CF-Access-Client-*` pair from the one chokepoint all three request paths share. Both are in
+   `EXCLUDED_SETTINGS` so they never reach cloud backup — note that set is a **denylist**, so any
+   future secret field is uploaded unless it is added there.
+
+**4. An errored run threw away its own error** (found by the run above, fixed same day).
+`isFreshRun` was inlined in **both** `AgentRunner` and `CouncilScreen` and both tested the
+**mount-time `threadId` prop** — `undefined` for the whole life of a fresh run — never the live id
+`onThreadId` sets on submit. So the instant a submitted run ended without output (**errored,
+Stopped, or empty `resultKey`**) every guard went false and the screen fell back to the landing
+composer, taking the `<RunErrorCard>` rendered just below it with it. The run vanished with no
+explanation. Extracted to one predicate, `agent-shared/run-phase.ts` → `showsLandingHero`, which
+also disqualifies on the live id; both screens now call it, so the condition cannot drift apart
+again. Fixing it exposed a second bug it had been hiding: `RunRecap`'s status pill had no error
+state, so a failed run drew a green **"Completed"** directly above its own error card — it now has a
+`failed` prop and a bearish **"Failed"** pill. Guarded by seven assertions in
+`scripts/run-timeline-check.ts` (verified to FAIL against the old predicate, not just pass against
+the new one).
+
+**5. The timeline spine drifted off its own labels** (spotted on the live Android run).
+`SpineRow` centred its dot inside a fixed 22px box at the top of the gutter, so the marker's centre
+was pinned at 11px — but `NodeRow` was `items-center`, so the label centred in a row whose height is
+set by its TALLEST child. A plain row is 28px (label centre 14 → dot 3px high); a row carrying a
+`running`/`failed` `Badge` (~26px against a 16px text line) grows to ~38px (label centre 19 → dot
+**8px** high). So the error was not constant — it grew with whatever a row carried, which is exactly
+why the running step looked wrong while the pending steps below it looked nearly fine. Fixed by
+anchoring rather than centring: `NodeRow` is now `items-start`, so the first text line always sits
+in a fixed band, and the marker box (`ROW_FIRST_LINE`) and the rail are derived from that plus
+`StatusDot`'s diameter instead of being independent magic numbers. `ParallelFan` had the same bug
+4px the other way (a 26px box against a header whose first line centres at 9) and is now derived the
+same way. The rail also gained the 2px it needed at each end to actually meet the markers.
+
+**6. The app icon was never branded.** Installing on a real launcher made it obvious: Android, iOS
+and the web favicon all still shipped `create-expo-app`'s blue chevron, while Muffin's mascot existed
+only as an in-app SVG (`ui/logo.tsx`). The adaptive-icon *plumbing* was correct all along
+(background + foreground + monochrome layers wired) — it just pointed at template art. Added
+`scripts/generate-icons.mjs`, which renders the mascot into the whole icon set from one source, and
+deleted **9 unreferenced template assets** (`react-logo@1/2/3x`, `expo-badge`, `expo-badge-white`,
+`expo-logo`, `tutorial-web`, `logo-glow`, `tabIcons/`, the template `expo.icon` bundle) — `assets/`
+went 1.3 MB → 104 KB. Fixing it surfaced a latent flaw in the mascot itself: the liner pleats
+overshot the cup outline, invisible at the 48px it had only ever been drawn at, obvious at 1024px —
+corrected in both the component and the generator.
+
+**Open follow-ups:**
+- **Native has no automated verification.** All six existing scripts are headless-**web**; every
+  finding above came from driving the emulator by hand (`adb` + `uiautomator`). Nothing stops these
+  regressing. Cheapest guard would be a boot-and-navigate smoke test over `adb`.
+- `structuredClone` appears in 4 files of the LangGraph SDK bundle and is the next most likely
+  missing-global of this class — untriggered so far, worth checking before it bites.
+- The test run itself failed **server-side**, unrelated to the client:
+  `StructuredOutputRetryExhaustedError` at the `classifier` node (6 attempts at
+  `ClassifierNodeOutput`) — the known weak-model structured-output failure, a muffin-agent item.
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
@@ -929,8 +1017,10 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
   and the `registry.subgraphs` flag. Accepted the message branching / edit-fork / regenerate
   regression (no protocol-v2 equivalent; `MessageActions` makes them optional). Also fixed the native
   streaming path: the v2 SSE transport ignores the SDK's `overrideFetchImplementation` global, so
-  `useRunStream` now passes `fetch: streamingFetch()` (expo/fetch on native). **Still owed: a real
-  iOS/Android device/simulator test of streaming** — verification so far is web + type/bundle only.
+  `useRunStream` now passes `fetch: streamingFetch()` (expo/fetch on native). ~~Still owed: a real
+  iOS/Android device/simulator test of streaming~~ — **done 2026-08-03 on an Android emulator
+  (Pixel 7, arm64, API 36) against the DEPLOYED API; see M29 below.** The SSE path itself was
+  correct; three other things were not.
 - **M12 follow-ups:**
   - **Message branching / edit / regenerate** — re-add if `@langchain/react` exposes a
     message→checkpoint metadata + branch-select API (today only `submit(forkFrom)` / `state.fork` /

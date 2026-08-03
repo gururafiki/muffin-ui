@@ -488,7 +488,8 @@ fallback for TypeScript resolution and unexpected platforms. Used by:
 - `src/lib/storage/` — `localStorage` (web) / MMKV (native) / in-memory (fallback) behind one
   `KeyValueStore` interface.
 - `src/lib/agent/install-fetch.*` — native installs the `expo/fetch` streaming shim so
-  `runs.stream` works on iOS/Android; web/fallback are no-ops.
+  `runs.stream` works on iOS/Android, **plus the `globalThis.crypto` polyfill from `expo-crypto`**
+  (see Native below); web/fallback are no-ops.
 - `src/hooks/use-color-scheme.*` — **retained despite having zero importers.** Every real call site
   imports `useColorScheme` straight from `react-native` (14 of them). The `.web.ts` variant holds a
   static-render hydration guard (return `'light'` until hydrated), which looked like the fix for the
@@ -496,6 +497,74 @@ fallback for TypeScript resolution and unexpected platforms. Used by:
   identical in light and dark on all 18 routes (`scripts/hydration-check.mjs`), so the 14 call sites
   were deliberately NOT rerouted through it. Kept as the documented Expo idiom in case per-route
   prerendering ever changes; delete it if that never happens.
+
+**Spine geometry — anchor rows, never centre them (`components/ui/spine.tsx`, M29).** A timeline
+row's marker is positioned against the row's **first line**, so the row must anchor that line:
+`NodeRow` is `items-start`, not `items-center`. Centred, the label slides down as a row gains
+ornaments — a `running` `Badge` is ~26px against a 16px text line — while the marker stays put, so
+the spine drifts off its own labels (measured: 3px on a plain row, 8px on a badge row). The marker
+box (`ROW_FIRST_LINE`), the `ParallelFan` diamond box (`FAN_FIRST_LINE`) and the rail are all
+**derived** from that first-line height plus `StatusDot`'s diameter — if you change one, the rail
+follows. Don't reintroduce independent magic offsets; three hand-rolled copies of this line already
+had to be merged once.
+
+**Hero vs run view — `agent-shared/run-phase.ts` → `showsLandingHero` (M29).** Whether a run screen
+shows its landing composer or the run view is ONE shared predicate because it used to be inlined in
+both `AgentRunner` and `CouncilScreen`, and both were wrong the same way: they tested the
+**mount-time `threadId` prop** (`undefined` for the whole life of a fresh run) and never the live id
+`onThreadId` sets on submit. The moment a submitted run ended without output — **errored, Stopped,
+or an empty `resultKey`** — every guard went false and the screen fell back to the composer, hiding
+the `<RunErrorCard>` rendered just below it. A run that exists must never be able to render as
+"no run yet": add new conditions to that predicate, not inline at a call site. Its companion is
+`RunRecap`'s `failed` prop — without it a failed run drew a green "Completed" pill above its own
+error card.
+
+### Native (Android/iOS) — what the web build never exercises
+First real device run was **M29 (2026-08-03)**, on an Android emulator against the deployed API.
+Setup runbook: README → Develop → Running on Android. `android/`+`ios/` are `expo prebuild` output
+and gitignored. **Expo Go cannot host this app** (`react-native-mmkv`, `expo-crypto`) — dev build only.
+
+Four rules learned the hard way; all four passed `tsc`, `expo export` and every headless-web script:
+
+- **`typeof window !== 'undefined'` is NOT a web check.** React Native defines a global `window`, and
+  the Expo dev client gives it a `location` pointing at Metro. Use **`typeof document !== 'undefined'`**
+  (RN has no `document`) — or `Platform.OS === 'web'` where importing `react-native` is acceptable.
+  `resolve-url.ts` took the "web-only" branch on native for exactly this reason.
+- **Never let `new URL()` run unguarded on user input.** Settings persists per keystroke, so URL
+  fields are parsed half-typed; `new URL('https:', 'http://…')` throws. A throw during render on
+  native takes the whole app down, and because the bad value is already in MMKV it then **crashes on
+  every launch** — with Settings, the only repair path, behind the crash. Anything reading a
+  user-supplied URL during render must degrade, not throw.
+- **Hermes has no `crypto`.** The LangGraph SDK calls `crypto.randomUUID()` to mint a thread id on
+  submit, so every new run failed with `ReferenceError: Property 'crypto' doesn't exist` — visible
+  only as an unhandled promise rejection, i.e. a Run button that appears dead. Polyfilled in
+  `install-fetch.native.ts`. **`structuredClone` is the next most likely gap** (4 files in the SDK).
+- **Native carries no Cloudflare Access cookie.** Web rides the browser's Access SSO cookie and
+  nginx's same-origin `/api` + `/supabase` proxies; native has neither, so Settings needs absolute
+  URLs and the `CF-Access-Client-Id`/`-Secret` service-token pair (`cfAccessClientId` /
+  `cfAccessClientSecret`). Missing them returns the Access **login page** — `302 text/html`, not a
+  JSON error, so it fails silently. All outbound API headers come from the single chokepoint
+  `buildAuthHeaders` (`settings/configurable.ts`), used by `makeClient`, `makeReopenTransport` and
+  the memoized client `useRunStream` receives — add a credential there and it reaches every path.
+
+**`EXCLUDED_SETTINGS` in `features/account/backup.ts` is a DENYLIST** — a new settings field is
+uploaded to Supabase cloud backup unless it is named there. Add every secret/endpoint field to it.
+
+**There is no automated native verification.** All six verification scripts are headless-web; the
+M29 findings all came from driving the emulator by hand (`adb` + `uiautomator dump`). Four traps
+when doing that:
+- `uiautomator` reports the **unobscured** layout, so a field under the soft keyboard still dumps at
+  a plausible y and tapping it hits the IME instead (disable the soft keyboard with
+  `settings put secure show_ime_with_hard_keyboard 0` + `ime disable …`, or use `KEYCODE_TAB`).
+- An **empty** RN `TextInput` dumps with `text` equal to its placeholder (the Android *hint*), so a
+  placeholder reads as a filled field. Compare `text` against `hint` before believing it.
+- **The dump goes stale.** It repeatedly reported the previous screen while the app had already
+  navigated — twice sending this investigation down a wrong path. A **screenshot is authoritative**;
+  confirm any surprising dump with one before concluding anything. `enabled=false` on an RN
+  `Pressable` is likewise unreliable — a visibly active button dumps as DISABLED.
+- Give the AVD **≥3 GB** (`emulator -memory 3072`). At 2 GB a long session degrades until the app
+  takes minutes to paint and `uiautomator` starts getting OOM-killed (exit 137), which looks exactly
+  like an app hang.
 
 ### Theming — two mechanisms, and a deleted third
 1. **NativeWind `dark:` variants** — the palette lives in `tailwind.config.js`. Dominant path.
@@ -525,7 +594,7 @@ thread exists), the same way `ChatScreen` already split hero vs. transcript.
 ### Features — `src/features/`
 - **`agent-shared/`** — the streaming primitives EVERY run surface uses: `use-run-stream.ts`,
   `run-projections.ts`, `run-progress.tsx`, `subgraph-detail.tsx`, `run-surface.tsx`,
-  `use-estimated-progress.ts`, and the
+  `run-phase.ts`, `use-estimated-progress.ts`, and the
   transcript cluster (`conversation.tsx` — the mutually-recursive Conversation/StepTimeline pair;
   `conversation-turns.ts` — pure fold logic + types, `coerceMessages` accepts `BaseMessage`
   instances via the SDK's `toMessageDict`; `message-bubbles.tsx`; `subagent-activity.tsx`). Also
@@ -563,6 +632,16 @@ thread exists), the same way `ChatScreen` already split hero vs. transcript.
   palette** for APIs that need raw color values (navigation theme, status bar, SVG fills, charts) —
   **keep the two in sync** — and is the single home for the categorical chart palettes
   (`chartColors.allocation` / `.sector`) and the world-map light fills (`mapColors`).
+- **App icons are GENERATED, never hand-cut** (`scripts/generate-icons.mjs`, M29). Every launcher
+  icon was still `create-expo-app`'s blue chevron — on Android, iOS and the web favicon — while the
+  real mascot lived only in `ui/logo.tsx`. That script renders the mascot (headless Chrome +
+  puppeteer-core, the pair the smoke tests already use) into `android-icon-foreground`,
+  `android-icon-monochrome` (Android 13+ themed icons — alpha only, so it is a fused silhouette, not
+  the coloured mark), `icon.png`, `favicon.png` and `splash-icon.png`. The Android background is the
+  flat `adaptiveIcon.backgroundColor` (`#5A3C77`), not a PNG. **Its SVG mirrors `ui/logo.tsx` and
+  cannot import it** (that component is `react-native-svg`, which does not render in a browser) — so
+  a change to the mascot means changing both, then re-running the script and `expo prebuild`.
+  Artwork is sized to Android's 66/108 safe zone; anything larger gets clipped by a launcher mask.
 - **`icons/`** — `<Icon name="…" />` + `registry.ts` mapping semantic names → Phosphor `*Icon`
   components (duotone default). Call sites never import Phosphor directly, so a glyph can be swapped
   for a custom doodle SVG by editing the registry. SVGs import as React components via
