@@ -2,8 +2,30 @@
 // builds URLs internally, so install the standard polyfill on native.
 import 'react-native-url-polyfill/auto';
 
+import * as ExpoCrypto from 'expo-crypto';
 import { fetch as expoFetch } from 'expo/fetch';
 import { overrideFetchImplementation } from '@langchain/langgraph-sdk';
+
+/**
+ * Hermes ships no global `crypto`. The LangGraph SDK mints a thread id with
+ * `crypto.randomUUID()` when a run is submitted without one
+ * (`@langchain/langgraph-sdk/dist/react/stream.custom.js` — `usableThreadId =
+ * crypto.randomUUID()`), so on iOS/Android EVERY new run died with
+ * `ReferenceError: Property 'crypto' doesn't exist`. The failure is specific to
+ * STARTING a run: reopening a past thread already has its id, which is why
+ * browsing history worked on device while "Run agent" silently did nothing but
+ * surface an unhandled promise rejection.
+ *
+ * `getRandomValues` is polyfilled alongside `randomUUID` so any other Web
+ * Crypto call the SDKs reach for lands on a real CSPRNG rather than failing the
+ * same way later.
+ */
+if (typeof globalThis.crypto === 'undefined') {
+  globalThis.crypto = {
+    randomUUID: ExpoCrypto.randomUUID,
+    getRandomValues: ExpoCrypto.getRandomValues,
+  } as Crypto;
+}
 
 /**
  * React Native's built-in `fetch` cannot stream a response body, which the
