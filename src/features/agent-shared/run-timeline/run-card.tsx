@@ -200,7 +200,12 @@ export function NodeRow({
         accessibilityRole={expandable ? 'button' : undefined}
         accessibilityState={expandable ? { expanded: open } : undefined}
         accessibilityLabel={`${node.label}, ${statusLabel(node.status)}${duration ? `, ${duration}` : ''}`}
-        className={cn('flex-row items-center gap-2 py-1.5', expandable && 'active:opacity-70')}>
+        // `items-start`, not `items-center`: the spine's dot is positioned against this
+        // row's FIRST LINE (`ROW_FIRST_LINE` in `ui/spine.tsx`). Centred, the label slid
+        // down whenever the row grew — a `running` badge is ~26px against a 16px text
+        // line — while the dot stayed put, so the spine drifted off the labels. Anchoring
+        // the label keeps that alignment true no matter what a row carries.
+        className={cn('flex-row items-start gap-2 py-1.5', expandable && 'active:opacity-70')}>
         {bare ? <StatusDot status={node.status} size={15} /> : null}
         {node.icon ? <Icon name={node.icon} size={15} color={palette.frosting[500]} /> : null}
         <Text

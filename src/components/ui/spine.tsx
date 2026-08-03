@@ -23,7 +23,32 @@ import { StatusDot, type DotStatus } from './status-dot';
  *
  * Three separate copies of this line existed before, each with its own offsets.
  */
-const RAIL = { position: 'absolute' as const, top: 22, bottom: -12, width: 2 };
+/**
+ * One collapsed row's first line: `py-1.5` (6 top + 6 bottom) around a 16px text line.
+ * The marker box is this tall so the dot centres on the LABEL, and the rail starts where
+ * the marker box ends. Rows are NOT a fixed height — a `running`/`failed` badge is ~26px
+ * and makes its row taller — which is why the row anchors its label to the top
+ * (`items-start` in `NodeRow`) rather than centring it: centred, the label slid down as
+ * ornaments were added while the dot stayed put, and the spine visibly drifted (3px on a
+ * plain row, 8px on a badge row).
+ */
+const ROW_FIRST_LINE = 28;
+
+/** `StatusDot`'s default diameter — the rail is positioned off the marker, not guessed. */
+const DOT = 18;
+
+/** `FanHeader`'s first line: `pt-0.5` (2) around a 14px label line → its centre is 9. */
+const FAN_FIRST_LINE = 18;
+
+const RAIL = {
+  position: 'absolute' as const,
+  // Start 1px inside the dot's lower edge so the line meets the marker with no seam,
+  // and run 14px past the row to bridge the inter-row gap into the next dot. Derived
+  // from the marker geometry: nudge `ROW_FIRST_LINE` and the rail follows.
+  top: ROW_FIRST_LINE / 2 + DOT / 2 - 1,
+  bottom: -14,
+  width: 2,
+};
 
 /**
  * The rail segment below a row. On the branch that is currently running it breathes, so
@@ -67,7 +92,7 @@ export function SpineRow({
     <View className={cn('flex-row', className)}>
       <View style={{ width: gutter }} className="items-center">
         {!last ? <Rail active={status === 'active'} /> : null}
-        <View className="z-10 h-[22px] items-center justify-center">
+        <View style={{ height: ROW_FIRST_LINE }} className="z-10 items-center justify-center">
           {marker ?? <StatusDot status={status} />}
         </View>
       </View>
@@ -90,8 +115,12 @@ export function ParallelFan({ header, last, children }: { header: ReactNode; las
   return (
     <View className="flex-row">
       <View style={{ width: 26 }} className="items-center">
-        {!last ? <View style={{ ...RAIL, top: 26 }} className="bg-frosting-200 dark:bg-night-border" /> : null}
-        <View className="z-10 h-[26px] w-full items-center justify-center">
+        {/* Same rule as SpineRow: the diamond centres on the header's FIRST LINE
+            (`FanHeader` is `pt-0.5` + a 14px label line, so 2 + 7 = 9), not on a box
+            sized independently of it — at 26 tall it centred at 13 and sat visibly
+            below its own "N in parallel" label. */}
+        {!last ? <View style={{ ...RAIL, top: FAN_FIRST_LINE }} className="bg-frosting-200 dark:bg-night-border" /> : null}
+        <View style={{ height: FAN_FIRST_LINE }} className="z-10 w-full items-center justify-center">
           <View className="h-2.5 w-2.5 rotate-45 rounded-[3px] border-2 border-frosting-300 bg-dough dark:border-night-border dark:bg-night-bg" />
         </View>
       </View>
