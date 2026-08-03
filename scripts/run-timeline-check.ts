@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { AssistantGraph } from '@langchain/langgraph-sdk';
 
+import { showsLandingHero } from '../src/features/agent-shared/run-phase';
 import { planFromGraph, pendingNodes } from '../src/lib/agent/run-graph';
 import {
   durationBetween,
@@ -549,6 +550,37 @@ async function main(): Promise<void> {
       msgs.length > 0 &&
       msgs.every((m) => !!m && typeof m === 'object' && ('type' in m || 'role' in m));
     check('array is recognisable as serialized messages', isMsgList);
+  }
+
+  console.log('\nthe landing hero yields to a run that produced nothing');
+  {
+    // Regression guard for the bug where an errored/stopped run fell back to the
+    // composer and hid its own RunErrorCard. The old predicate only consulted
+    // the mount-time `pinnedThreadId`, so every case below except the first
+    // wrongly reported "show the hero".
+    const fresh = { busy: false, hasOutput: false, hydrating: false };
+    check('a genuinely fresh screen shows the hero', showsLandingHero(fresh));
+    check(
+      'a submitted run that ERRORED keeps the run view',
+      !showsLandingHero({ ...fresh, liveThreadId: 't1' }),
+    );
+    check(
+      'a run stopped by the user keeps the run view',
+      !showsLandingHero({ ...fresh, liveThreadId: 't1', busy: false }),
+    );
+    check('a running run keeps the run view', !showsLandingHero({ ...fresh, busy: true }));
+    check(
+      'a finished run with output keeps the run view',
+      !showsLandingHero({ ...fresh, hasOutput: true }),
+    );
+    check(
+      'a reopened thread still hydrating keeps the run view',
+      !showsLandingHero({ ...fresh, pinnedThreadId: 't1', hydrating: true }),
+    );
+    check(
+      'a reopened thread keeps the run view',
+      !showsLandingHero({ ...fresh, pinnedThreadId: 't1' }),
+    );
   }
 
   console.log('\nedge cases degrade cleanly');

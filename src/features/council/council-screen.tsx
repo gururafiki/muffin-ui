@@ -13,6 +13,7 @@ import { AgentHero } from '@/features/agent-shared/agent-hero';
 import { RunTimeline } from '@/features/agent-shared/run-timeline/run-timeline';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { useSubgraphRows } from '@/features/agent-shared/run-projections';
+import { showsLandingHero } from '@/features/agent-shared/run-phase';
 import { RunRecap } from '@/features/agent-shared/run-recap';
 import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
 import { HydrationCard, RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
@@ -181,9 +182,16 @@ export function CouncilScreen({
     });
   };
 
-  // Nothing to show yet but the landing hero: no thread pinned, not busy, no
-  // votes in, and (for a reopened session) not still hydrating.
-  const isFreshRun = !threadId && !busy && totalVotes === 0 && !stream.isThreadLoading;
+  // Nothing to show yet but the landing hero. `liveThreadId` is load-bearing:
+  // without it a submitted session that ends with no votes (error / Stop) fell
+  // back to the composer and hid its own error card — see `showsLandingHero`.
+  const isFreshRun = showsLandingHero({
+    pinnedThreadId: threadId,
+    liveThreadId,
+    busy,
+    hasOutput: totalVotes > 0,
+    hydrating: stream.isThreadLoading,
+  });
 
   if (isFreshRun) {
     return (
@@ -234,6 +242,7 @@ export function CouncilScreen({
         values={{ ticker: savedTicker, query: savedQuery }}
         busy={busy}
         loading={stream.isThreadLoading}
+        failed={stream.error != null}
         onStop={() => stream.stop()}
       />
 

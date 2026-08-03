@@ -16,6 +16,7 @@ import { AgentHero } from '@/features/agent-shared/agent-hero';
 import { type SubagentRun } from '@/features/agent-shared/conversation';
 import { RunTimeline } from '@/features/agent-shared/run-timeline/run-timeline';
 import { mergeLiveEvaluations, useCriterionEvents, useSubgraphRows } from '@/features/agent-shared/run-projections';
+import { showsLandingHero } from '@/features/agent-shared/run-phase';
 import { RunRecap } from '@/features/agent-shared/run-recap';
 import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
 import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
@@ -106,9 +107,16 @@ export function AgentRunner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, canRun, threadId, signInRequired]);
 
-  // Nothing to show yet but the landing hero: no thread pinned, not busy, no
-  // result, and (for a reopened thread) not still hydrating.
-  const isFreshRun = !threadId && !busy && !hasResult && !stream.isThreadLoading;
+  // Nothing to show yet but the landing hero. `liveThreadId` is load-bearing:
+  // without it a submitted run that ends with no result (error / Stop) fell back
+  // to the composer and hid its own error card — see `showsLandingHero`.
+  const isFreshRun = showsLandingHero({
+    pinnedThreadId: threadId,
+    liveThreadId,
+    busy,
+    hasOutput: hasResult,
+    hydrating: stream.isThreadLoading,
+  });
 
   if (isFreshRun) {
     return (
@@ -154,6 +162,7 @@ export function AgentRunner({
             values={savedInputs}
             busy={busy}
             loading={stream.isThreadLoading}
+            failed={stream.error != null}
             onStop={() => stream.stop()}
           />
 

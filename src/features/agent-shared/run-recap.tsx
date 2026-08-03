@@ -27,13 +27,14 @@ import { Button, Card, Text } from '@/components/ui';
 import type { AgentDef } from '@/lib/agent/registry';
 import { palette } from '@/theme/colors';
 
-type RunState = 'running' | 'loading' | 'done';
+type RunState = 'running' | 'loading' | 'error' | 'done';
 
 export function RunRecap({
   agent,
   values,
   busy,
   loading,
+  failed,
   onStop,
 }: {
   agent: AgentDef;
@@ -41,12 +42,21 @@ export function RunRecap({
   busy: boolean;
   /** Thread-state fetch in flight (reopen hydration) — shown as "Loading". */
   loading?: boolean;
+  /**
+   * The run ended in an error (`stream.error`). Without this a failed run drew
+   * the green "Completed" pill directly above its own error card. Previously
+   * unreachable — an errored run fell back to the landing hero before anyone
+   * could see the contradiction (see `showsLandingHero`).
+   */
+  failed?: boolean;
   onStop?: () => void;
 }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const filled = agent.inputs.filter((f) => values[f.key]?.trim());
-  const state: RunState = busy ? 'running' : loading ? 'loading' : 'done';
+  // Order matters: a resumed/retried run is "running" again even if the last
+  // attempt failed, and hydration outranks a stale error from the prior mount.
+  const state: RunState = busy ? 'running' : loading ? 'loading' : failed ? 'error' : 'done';
   // `push` (not `setParams`/`replace`) reliably mounts a NEW screen instance —
   // the same idiom the Calls tab's `openThread` uses — so the pinned `threadId`
   // prop and `useRunStream`'s internal state actually reset for a fresh run.
@@ -112,6 +122,14 @@ function StatusPill({ state, reduceMotion }: { state: RunState; reduceMotion: bo
       <View className="flex-row items-center gap-1.5 rounded-pill border border-leaf-500/40 bg-leaf-500/15 px-2.5 py-1">
         <Icon name="check-circle" size={14} color={palette.leaf[600]} weight="fill" />
         <Text className="font-heading text-xs text-leaf-600">Completed</Text>
+      </View>
+    );
+  }
+  if (state === 'error') {
+    return (
+      <View className="flex-row items-center gap-1.5 rounded-pill border border-bearish/30 bg-bearish/15 px-2.5 py-1">
+        <Icon name="warning" size={14} color={palette.bearish} weight="fill" />
+        <Text className="font-heading text-xs text-bearish">Failed</Text>
       </View>
     );
   }
