@@ -1,9 +1,13 @@
-# Build & push the Muffin web app image (arm64) to GHCR.
+# Build & push the Muffin web app image (arm64) to GHCR, and build the Android APK.
 #
 # Builds the Expo web export + nginx image (see Dockerfile) on a native arm64
 # runner and pushes it to ghcr.io/<owner>/muffin-ui. The deployment
 # (gururafiki/muffin-deployment) pulls this :latest tag onto the Oracle ARM node.
 # Mirrors the other image repos in the umbrella (agent-chat-ui-docker, etc.).
+#
+# The `android` job runs in PARALLEL and never gates the deploy: a broken APK
+# build must not stop the web app shipping. It republishes the rolling
+# `android-latest` release so the phone download URL never changes.
 name: Build image
 
 on:
@@ -55,3 +59,86 @@ jobs:
           repository: ${{ github.repository_owner }}/muffin-deployment
           event-type: deploy
           client-payload: '{"repo": "${{ github.repository }}", "sha": "${{ github.sha }}"}'
+
+  # Sideloadable Android APK, republished to a rolling release so the phone can
+  # always fetch the newest build from one URL:
+  #   https://github.com/<owner>/muffin-ui/releases/latest/download/muffin-arm64.apk
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create/replace the release asset
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }   # RN 0.85 needs JDK 17+
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20.19.4', cache: npm }         # Expo SDK 56 minimum
+
+      # Gradle's caches dominate the build time; without this every run is ~20min.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - run: npm ci
+
+      # `android/` is gitignored — it is prebuild output, regenerated here.
+      - run: npx expo prebuild -p android
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Restore upload keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+
+      # arm64 only: every real phone is arm64, and dropping the x86/x86_64 slices
+      # (emulator-only) roughly halves the download. Signing is INJECTED rather than
+      # patched into the generated build.gradle — AGP's android.injected.signing.*
+      # properties are the supported way, so nothing has to edit prebuild output.
+      #
+      # The connection URLs are baked so the phone opens ready to go. The Cloudflare
+      # Access service token is deliberately NOT baked: this release is public, and
+      # the APK must not carry a credential for the deployment.
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -PreactNativeArchitectures=arm64-v8a \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload.keystore" \
+            -Pandroid.injected.signing.store.password='${{ secrets.ANDROID_KEYSTORE_PASSWORD }}' \
+            -Pandroid.injected.signing.key.alias='${{ secrets.ANDROID_KEY_ALIAS }}' \
+            -Pandroid.injected.signing.key.password='${{ secrets.ANDROID_KEY_PASSWORD }}'
+
+      - name: Stage the artifact
+        id: apk
+        run: |
+          mv android/app/build/outputs/apk/release/app-release.apk muffin-arm64.apk
+          echo "sha256=$(sha256sum muffin-arm64.apk | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h muffin-arm64.apk | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      # Rolling release: replace the asset in place so `releases/latest/download/...`
+      # keeps working. `--clobber` overwrites; create only on the very first run.
+      - name: Publish to the rolling release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NOTES=$(printf 'Sideloadable Android build (arm64), rebuilt on every push to main.\n\n- commit: %s\n- size: %s\n- sha256: `%s`\n\nInstall: download the APK on the phone and tap it (allow "install unknown apps").\nThen set the Cloudflare Access client ID + secret in Settings -> Connection and sign in —\nthose are deliberately not baked into a public artifact.' \
+            "${{ github.sha }}" "${{ steps.apk.outputs.size }}" "${{ steps.apk.outputs.sha256 }}")
+          if gh release view android-latest >/dev/null 2>&1; then
+            gh release upload android-latest muffin-arm64.apk --clobber
+            gh release edit   android-latest --notes "$NOTES"
+          else
+            gh release create android-latest muffin-arm64.apk \
+              --title 'Android APK (latest)' --notes "$NOTES"
+          fi
