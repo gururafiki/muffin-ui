@@ -1,8 +1,40 @@
 # `/api/docs` — make Scalar's "Test Request" target the `/api` prefix
 
 **Date:** 2026-08-03
-**Status:** approved design, not yet implemented
-**Scope:** `muffin-ui` only — one nginx location block, one verification check, docs.
+**Status:** **NOT IMPLEMENTED — superseded by using `muffin-api.<domain>/docs`.** Kept for the
+root-cause analysis and the rejected-alternative reasoning. See "Why this was dropped" below.
+**Scope (had it shipped):** `muffin-ui` only — one nginx location block, one verification check, docs.
+
+## Why this was dropped
+
+`https://muffin-api.<domain>/docs` serves the same Scalar page with the API at that origin's
+**root**, so request execution is already correct there — no injection needed. Verified by firing
+the relative paths Scalar resolves, from inside each docs page:
+
+| call | from `muffin-api.<domain>/docs` | from `muffin.<domain>/api/docs` |
+| --- | --- | --- |
+| `GET /ok` | `200 application/json` `{"ok":true}` | `200 text/html` — the SPA shell |
+| `POST /assistants/search` | `200 application/json`, real assistants | **`405 Not Allowed`** from nginx |
+| `GET /info` | `200 application/json` | `200 text/html` — the SPA shell |
+
+Two further findings removed the rest of the rationale:
+
+- **The auth injection was unnecessary.** Scalar's test client already exposes `Select Auth Type`,
+  `Headers`, `Clear All Headers`, `Cookies` and `Variables` tabs, so an `Authorization: Bearer`
+  header can be set by hand with no `securitySchemes` in the document. That was the sole purpose of
+  two of the three `sub_filter` lines.
+- **The write limit is not a base-URL problem.** Per `auth.py` ("Read-shared, write-authenticated
+  threads") reads/searches are open, but creating a thread or starting a run requires sign-in —
+  anonymous callers get `403` on create. Paste a Supabase user access token to launch runs. This is
+  identical on both hostnames; neither this design nor any other nginx change would affect it.
+  (`MUFFIN_API_TOKEN`, the fully-exempt `api-client` identity, is not set in the deployment, so
+  there is no exempt shared token available.)
+
+**Residual known nit:** the document has no `servers`, so Scalar's *displayed* curl sample is
+relative on **both** pages (`curl /assistants`) and is not pasteable as-is. Execution is unaffected.
+This cannot be fixed with nginx on the api host — Traefik routes straight to `langgraph-api` with no
+proxy in between — so it would require the backend custom route described under
+"Rejected alternatives". Judged not worth it.
 
 ## Problem
 
