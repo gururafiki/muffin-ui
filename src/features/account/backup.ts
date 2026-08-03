@@ -11,9 +11,13 @@ import { getSettings, useSettings, type Settings } from '@/lib/settings/store';
  * The brand promise is enforced here: API keys, tokens and connection
  * endpoints never leave the device.
  */
+// NOTE: this is a DENYLIST — a settings field not named here IS uploaded.
+// Anything secret or connection-specific must be added when it is introduced.
 const EXCLUDED_SETTINGS = new Set<keyof Settings>([
   'apiUrl',
   'authToken',
+  'cfAccessClientId',
+  'cfAccessClientSecret',
   'userId',
   'supabaseUrl',
   'supabaseAnonKey',

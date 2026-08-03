@@ -28,8 +28,23 @@ export type ToolLessonsMode = '' | 'read_and_record' | 'read_only' | 'off';
 export interface Settings {
   /** LangGraph server base URL. Web defaults to the same-origin `/api` proxy. */
   apiUrl: string;
-  /** Optional bearer / Cloudflare Access service token for the API. */
+  /**
+   * Optional static bearer token for the API's identity layer (`auth.py`).
+   * A live Supabase session supersedes it. This is NOT the Cloudflare Access
+   * credential — Access is a separate perimeter and wants the header PAIR
+   * below, not a bearer.
+   */
   authToken: string;
+  /**
+   * Cloudflare Access service-token id (`…​.access`). Access is the perimeter in
+   * front of the deployed API; a browser passes it with an SSO cookie, but a
+   * native client has no cookie jar for it, so iOS/Android must send the
+   * service-token header pair or every request is bounced at the edge with an
+   * Access login page (HTML 302/403) before it ever reaches langgraph-api.
+   */
+  cfAccessClientId: string;
+  /** Cloudflare Access service-token secret. Pairs with `cfAccessClientId`. */
+  cfAccessClientSecret: string;
   /** Stable identity for per-user memory isolation (configurable.user_id). */
   userId: string;
   /** Supabase URL. Web defaults to the same-origin `/supabase` proxy. */
@@ -84,6 +99,8 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   apiUrl: process.env.EXPO_PUBLIC_API_URL ?? '/api',
   authToken: '',
+  cfAccessClientId: '',
+  cfAccessClientSecret: '',
   userId: '',
   supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '/supabase',
   supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',

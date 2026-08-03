@@ -87,11 +87,34 @@ export function buildPresetConfigurable(settings: Settings): Record<string, unkn
 }
 
 /**
- * Auth header for the LangGraph API. A live Supabase session wins (the agent's
- * auth.py verifies it as a user token); the static token remains the fallback
- * for bearer / Cloudflare-service-token setups.
+ * Auth headers for the LangGraph API. There are TWO independent layers and
+ * they are not interchangeable:
+ *
+ * 1. **Identity** (`Authorization: Bearer …`) — the agent's `auth.py`. A live
+ *    Supabase session wins; the static `authToken` is the fallback.
+ * 2. **Perimeter** (`CF-Access-Client-*`) — Cloudflare Access, in front of the
+ *    whole deployment. The web build never needs it (the browser carries an
+ *    Access SSO cookie and nginx proxies same-origin), but a native client has
+ *    no such cookie, so iOS/Android must send the service-token pair or every
+ *    request is bounced at the edge before reaching the API.
+ *
+ * Both are emitted together when configured — passing Access does not
+ * authenticate you to the agent, and a user token does not get you past Access.
+ *
+ * This is the single chokepoint for outbound API headers: `makeClient`,
+ * `makeReopenTransport` and (through the memoized client) `useRunStream` all
+ * read it, so a credential added here reaches every request path.
  */
 export function buildAuthHeaders(settings: Settings): Record<string, string> {
   const token = getAuthSession()?.accessToken ?? settings.authToken.trim();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const cfId = settings.cfAccessClientId.trim();
+  const cfSecret = settings.cfAccessClientSecret.trim();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    // Both halves or neither — a lone id is not a credential and would just
+    // look like a malformed request at the edge.
+    ...(cfId && cfSecret
+      ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret }
+      : {}),
+  };
 }

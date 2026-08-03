@@ -43,7 +43,9 @@ const CONNECTION: SectionDef = {
   title: 'Connection',
   items: [
     { kind: 'field', key: 'apiUrl', label: 'API URL', hint: 'LangGraph server. Web uses the same-origin /api proxy by default.' },
-    { kind: 'field', key: 'authToken', label: 'Auth token (optional)', secure: true, hint: 'Bearer / Cloudflare Access service token.' },
+    { kind: 'field', key: 'authToken', label: 'Auth token (optional)', secure: true, hint: 'Static bearer token for the API. Signing in overrides this.' },
+    { kind: 'field', key: 'cfAccessClientId', label: 'CF Access client ID (optional)', hint: 'Cloudflare Access service token. Native only — the web build rides the browser SSO cookie.' },
+    { kind: 'field', key: 'cfAccessClientSecret', label: 'CF Access client secret (optional)', secure: true, hint: 'Pairs with the client ID; both are needed or neither is sent.' },
     { kind: 'field', key: 'userId', label: 'User ID (optional)', hint: 'Used for per-user memory isolation. Signing in overrides this.' },
     { kind: 'field', key: 'supabaseUrl', label: 'Supabase URL', onChanged: reinitAuth, hint: 'Web uses the same-origin /supabase proxy by default; native needs the full URL.' },
     { kind: 'field', key: 'supabaseAnonKey', label: 'Supabase anon key', secure: true, onChanged: reinitAuth, hint: "Public client key. Leave blank to use this deployment's default." },
