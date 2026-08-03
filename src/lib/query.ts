@@ -8,9 +8,9 @@ export const queryClient = new QueryClient({
   },
 });
 
-// On native, drive TanStack's focus from AppState so interval refetches (the
-// tool-cache poll) pause while the app is backgrounded — the default
-// `refetchIntervalInBackground: false` only helps if focus is actually wired.
+// On native, drive TanStack's focus from AppState so interval refetches pause
+// while the app is backgrounded — the default `refetchIntervalInBackground:
+// false` only helps if focus is actually wired.
 if (Platform.OS !== 'web') {
   AppState.addEventListener('change', (status) => focusManager.setFocused(status === 'active'));
 }

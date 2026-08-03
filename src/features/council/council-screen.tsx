@@ -227,7 +227,7 @@ export function CouncilScreen({
 
   return (
     <Screen>
-    <RunSurface stream={stream} threadId={liveThreadId}>
+    <RunSurface stream={stream}>
     <View className="gap-4">
       <RunRecap
         agent={agent}

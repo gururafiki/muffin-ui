@@ -1,4 +1,4 @@
-import { safeParse } from '@/lib/agent/tool-cache';
+import { safeParse } from '@/lib/agent/schemas';
 import { TimeSeriesChart } from './chart';
 import { parseTimeSeries } from './chart-data';
 import { JsonBlock } from './json-block';

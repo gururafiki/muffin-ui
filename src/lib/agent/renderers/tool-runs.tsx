@@ -104,8 +104,9 @@ const toneDot: Record<Signal, string> = {
   info: palette.frosting[400],
 };
 
-/** A flat, tap-to-expand list of tool runs. */
-export function ToolRunList({ runs }: { runs?: ToolRun[] }) {
+/** A flat, tap-to-expand list of tool runs. Only ever rendered inside
+ *  `ToolRunsPanel`'s envelope — not exported, so the panel stays the one way in. */
+function ToolRunList({ runs }: { runs?: ToolRun[] }) {
   if (!runs?.length) return null;
   return (
     <View>

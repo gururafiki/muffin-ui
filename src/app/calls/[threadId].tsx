@@ -17,7 +17,6 @@ import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
 import { getAgent } from '@/lib/agent/registry';
 import { CriterionDetails, isMessageArray, StructuredOutput, type Todo } from '@/lib/agent/renderers';
 import { parseArray, zCriterionEvaluation } from '@/lib/agent/schemas';
-import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 
 /**
  * The result rows for a finished run: one per criterion evaluation, straight from
@@ -81,7 +80,6 @@ export default function CallDetailRoute() {
           </Text>
         </Card>
       ) : (
-        <ToolCacheProvider thread={threadId} busy={false}>
         <View className="mt-4 gap-4">
           <Card tone="sticker" className="gap-2">
             <View className="flex-row items-center gap-2">
@@ -127,7 +125,6 @@ export default function CallDetailRoute() {
           </>
           )}
         </View>
-        </ToolCacheProvider>
       )}
     </Screen>
   );

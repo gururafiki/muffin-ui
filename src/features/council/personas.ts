@@ -100,12 +100,4 @@ export function normalizeSlug(raw: string | undefined): string {
   return BY_SLUG.has(s) ? s : s;
 }
 
-/**
- * `tool_runs` records carry `agent` = the collect_data builder's name
- * (`<slug>_data_collection` for every persona AND ReAct specialist) — strip
- * the suffix to join records to their council member.
- */
-export const toolRunAgentSlug = (agent: string | undefined): string =>
-  normalizeSlug((agent ?? '').replace(/_data_collection$/, ''));
-
 export const getPersonaMeta = (slug: string): PersonaMeta | undefined => BY_SLUG.get(slug);

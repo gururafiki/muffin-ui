@@ -111,3 +111,7 @@ if (!hitValues || hitCheckpoint || !hasCriterion || isEmptyState || realErrors.l
   process.exit(1);
 }
 console.log('SMOKE PASS');
+// See smoke-timeline.mjs: `server.close()` drains rather than severs, and the /api
+// proxy's keep-alive sockets to the deployment keep the event loop alive, so a
+// PASSING run hangs forever. Only the failure path exited.
+process.exit(0);

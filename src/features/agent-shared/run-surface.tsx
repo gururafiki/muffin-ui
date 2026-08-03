@@ -1,8 +1,8 @@
 /**
  * The shared scaffolding every live run screen (generic runner, council, chat)
- * used to hand-roll: the provider-call cache, the stream context for detail
- * components, the error card, and the hydration-notice wrapper. Screens keep
- * their own layout; this owns the cross-cutting wiring.
+ * used to hand-roll: the stream context for detail components, the error card,
+ * and the hydration-notice wrapper. Screens keep their own layout; this owns the
+ * cross-cutting wiring.
  */
 import type { ReactNode } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -11,29 +11,27 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { Badge, Card, ProgressBar, Text } from '@/components/ui';
 import { RunStreamProvider } from '@/lib/agent/stream-context';
 import type { RunStream } from '@/lib/agent/stream-types';
-import { ToolCacheProvider } from '@/lib/agent/tool-cache';
 import { palette } from '@/theme/colors';
 import { useEstimatedProgress } from './use-estimated-progress';
 
 /**
- * Mount once per live run screen. Provides the tool cache (joined by
- * `ToolRunsPanel` rows on expand) and the stream handle (read by
+ * Mount once per live run screen. Provides the stream handle (read by
  * `SubgraphDetail` / `MemberDetail` via `useRunStreamContext`).
+ *
+ * It also used to mount a `ToolCacheProvider`, which fetched the whole
+ * `["cache", …]` store namespace (100 items, re-polled every 10s while busy) so
+ * `ToolRunRow` could show a payload's size and age. M25 removed that join —
+ * `output_preview` already carries the full result — but left the provider
+ * mounted, so every run surface kept paying for a request nothing read. Deleted.
  */
 export function RunSurface({
   stream,
-  threadId,
   children,
 }: {
   stream: RunStream;
-  threadId?: string;
   children: ReactNode;
 }) {
-  return (
-    <ToolCacheProvider thread={threadId} busy={stream.isLoading}>
-      <RunStreamProvider stream={stream}>{children}</RunStreamProvider>
-    </ToolCacheProvider>
-  );
+  return <RunStreamProvider stream={stream}>{children}</RunStreamProvider>;
 }
 
 /** The run's error, as a card — renders nothing while healthy. */

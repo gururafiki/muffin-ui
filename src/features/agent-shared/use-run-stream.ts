@@ -1,7 +1,7 @@
 import type { Client } from '@langchain/langgraph-sdk';
 import { useStream } from '@langchain/react';
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { makeClient } from '@/lib/agent/client';
 import type { AgentDef } from '@/lib/agent/registry';
@@ -55,18 +55,23 @@ export function useRunStream(
   // streams on iOS/Android (the protocol-v2 transport uses
   // `options.fetch ?? globalThis.fetch`, not the SDK's fetch-override singleton).
   //
-  // The MOUNT-TIME threadId (captured in a ref, NOT the reactive `opts.threadId`
-  // or the live `threadId` state) binds the adapter at construction, so the
-  // framework's constructor-time `getState()` — which runs before
-  // `setThreadId` — reads it (see `makeReopenTransport`). Using the mount-time
-  // value is deliberate: it prevents a spurious mid-run re-hydrate when a fresh
-  // run's `onThreadId` writes the new id into the URL. Memoized on `[client]`
-  // only: `client` is stable, so the transport (and the controller it backs)
-  // is built once — hydrate runs once, submit/stream are unaffected.
-  const initialThreadIdRef = useRef(opts.threadId);
+  // The MOUNT-TIME threadId (NOT the reactive `opts.threadId` or the live
+  // `threadId` state) binds the adapter at construction, so the framework's
+  // constructor-time `getState()` — which runs before `setThreadId` — reads it
+  // (see `makeReopenTransport`). Using the mount-time value is deliberate: it
+  // prevents a spurious mid-run re-hydrate when a fresh run's `onThreadId`
+  // writes the new id into the URL. Memoized on `[client]` only: `client` is
+  // stable, so the transport (and the controller it backs) is built once —
+  // hydrate runs once, submit/stream are unaffected.
+  //
+  // Held in `useState`'s initial value, not a ref: both freeze the first-render
+  // value, but a ref is documented as not-for-render and `react-hooks/refs`
+  // rightly rejects reading `.current` inside this `useMemo`. State initialisers
+  // are the supported way to snapshot a prop at mount and read it during render.
+  const [initialThreadId] = useState(opts.threadId);
   const transport = useMemo(
-    () => makeReopenTransport(client, getSettings(), initialThreadIdRef.current),
-    [client],
+    () => makeReopenTransport(client, getSettings(), initialThreadId),
+    [client, initialThreadId],
   );
 
   const stream = useStream<AgentState>({

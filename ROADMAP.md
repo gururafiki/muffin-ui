@@ -706,6 +706,71 @@ inventory of all ~20 structured outputs across the five graphs.
   deliberating shimmer.
 
 
+## ✅ Milestone 28 — README re-documented against a real build; dead code removed (2026-08-02)
+The README was the feature tour, but it had not been refreshed since before M15/M25/M26/M27, and
+nothing checked it. This milestone made it verifiable and then made it true.
+
+- **`scripts/verify-readme.mjs` — the README is now a test.** It walks every feature bullet in a
+  headless browser (client-side screens offline, run pages against the deployment with CF Access,
+  signing in through the real `/auth` form for the gated screens) and prints a **pass / differs /
+  fail** table plus screenshots to `.verify-shots/`. Final run: **76 pass, 0 fail** (55 client-side +
+  21 against the deployment) across the six tabs, four run graphs, the drill-downs and both auth
+  routes. A bullet nobody can observe is now a
+  bullet that gets rewritten.
+- **Seven things the README claimed that were not true**, each corrected:
+  - Chat offered "**edit & resend / regenerate / branch navigation**" — all three have been unwired
+    since M12b; `chat-screen.tsx` passes only `{busy, onCopy}`. Documented as removed, with the
+    `MessageActions` seam noted for the tracked restore.
+  - Council was "**13** famous-investor avatars" — it has been **19 seats (13 personas + 6
+    specialists)** in one member-unified arena since M15. Confirmed on prod thread `019f901f`.
+  - LLM provider chips omitted **ollama** and the **"Server default"** option; API keys omitted
+    the **Ollama Cloud key**; Settings → Advanced omitted the **Tool lessons** chip.
+  - **Criteria Analysis was listed as having no advanced options** — it has *Tool lessons*.
+  - The **sign-in gate was understated**: it does not just replace the Run action, it replaces the
+    *entire* input surface (`agent-hero.tsx` renders the notice instead of its children), so a
+    signed-out user sees no fields, chips, advanced options or preset control at all.
+- **Three shipped features were undocumented:** the whole **`/verify`** route (GoTrue
+  confirmation / magic-link / e-mail-change / password-recovery with a set-new-password step), the
+  **stepped `/auth` flow** (6-digit e-mail code, resend, forgot-password), and the **M27 two-layer
+  renderer architecture** (semantic baseline + 11 hero cards over 18 channels).
+- **A "Real vs. sample data" table** now sits in the README. Globe / Markets / Portfolio touch no
+  backend at all: authored ISO-3166 classification lists, invented `changePct` values, and a
+  demo-seeded on-device wealth store. Badging was inconsistent and is now stated per-surface.
+- **Dead code removed.** `lib/agent/tool-cache.tsx` is gone — M25 deleted the `useToolCache()`
+  *consumer* but left `ToolCacheProvider` mounted by `RunSurface` and the calls detail page, still
+  issuing `store.searchItems(['cache'], {limit:100})` and re-polling every 10s while busy, into a
+  context nothing read. Also deleted: `constants/theme.ts` + `hooks/use-theme.ts` (the
+  `create-expo-app` template's own palette, a second colour source participating in neither of the
+  app's two theming mechanisms), `zTreeNode`/`TreeNode` (the `subagent_tree` channel died in M24),
+  `toolRunAgentSlug`, `regionsAsMovers`; `ToolRunList` lost a redundant `export`. `safeParse` moved
+  to `schemas.ts`. All backend smokes re-run after the deletions: unchanged.
+- **`npm run lint` is green again, and now actually covers the tooling.** The one standing error
+  (`use-run-stream.ts:68`, `react-hooks/refs` — "Cannot access refs during render") is fixed at the
+  cause rather than suppressed: the mount-time `threadId` snapshot moved from `useRef` to a
+  `useState` initial value, which freezes the first-render value identically but is the supported
+  way to read a snapshot during render. Behaviour is unchanged — `smoke-reopen` still hydrates from
+  `thread.values` in ~640ms with `hitCheckpoint=false`.
+  Separately, `expo lint` only walks `/src`, `/app`, `/components`, so **`scripts/` had never been
+  linted**; pointing eslint at it surfaced `Buffer is not defined` in three scripts. `eslint.config.js`
+  gained a `scripts/**` block with Node globals, and `npm run lint:all` / `npm run check` now make
+  the whole repo lintable in one command. `npx eslint .` is clean, exit 0.
+- **New npm scripts:** `check` (typecheck + lint:all + offline verification — the credential-free
+  pre-push gate), plus `typecheck`, `lint:all`, `build:web`, `verify:offline`.
+- **A passing smoke used to hang forever.** `smoke-timeline.mjs` and `smoke-reopen.mjs` only called
+  `process.exit` on the FAILURE path; on success they printed `SMOKE PASS` and then sat there,
+  because `server.close()` drains rather than severs and the `/api` proxy holds keep-alive sockets
+  to the deployment, so the event loop never empties. A green run was indistinguishable from a hung
+  one and timed out every wrapper waiting on it. Both now `process.exit(0)` after passing.
+- **React #418 root-caused** (`scripts/hydration-check.mjs`). The standing suspicion was the colour
+  scheme, via the unused `hooks/use-color-scheme.web.ts` hydration guard. **Disproved by
+  measurement** — #418 counts are identical in light and dark on all 18 routes, so no call site was
+  rerouted. The real cause: Expo emits per-route prerenders whose dynamic-route filenames contain
+  **literal brackets** (`dist/stock/[ticker].html`), which nginx's `try_files $uri $uri.html
+  /index.html` can never match for `/stock/AAPL` — so it serves `index.html`, the Globe tab's
+  426-tag prerender, and React hydrates it into a Stock screen. `/settings` and `/auth` fire it for a
+  different and smaller reason (client-only state at first paint). See the backlog item below.
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
@@ -822,8 +887,9 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
 - **M18 follow-ups:**
   - **Transcript windowing** — `Conversation` renders every turn; very long runs deserve a
     "show earlier turns" expander (buildTurns is memoized, but the render itself is unbounded).
-  - **Targeted tool-cache reads** — `searchItems(['cache'], {limit: 100})` can miss payloads in a
-    very large global cache; switch the join to per-key `store.getItem` (pre-existing item, restated).
+  - ~~**Targeted tool-cache reads**~~ — **obsolete, closed by M28.** The fix was not to make the
+    `searchItems(['cache'], {limit: 100})` join cheaper but to delete it: its only consumer went in
+    M25 and the provider had been issuing the query into a context nothing read ever since.
   - **World-map per-path memoization** — 177 SVG paths re-render on every selection change; a
     memoized Path row would limit it to the fill-changed ones.
   - **Drill-list virtualization** — `markets/drill-list.tsx` (~40 rows) still `.map()`s in a
@@ -831,6 +897,12 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
   - **Grandfathered `useMemo`s** — a handful predate the React Compiler convention and are
     redundant-but-harmless; strip opportunistically when touching those files (keep the
     load-bearing mount-time snapshot in `use-run-stream.ts`).
+  - **`npm run lint` is red on one pre-existing error** (noted M28): `use-run-stream.ts:68`
+    `react-hooks/refs` — "Passing a ref to a function may read its value during render", on the
+    deliberate mount-time `initialThreadIdRef` snapshot above. Either restructure so the initial
+    thread id is captured without reading a ref in the `useMemo`, or add a scoped
+    `eslint-disable-next-line` with the reasoning — but stop leaving the suite red, because a red
+    baseline is how the next real lint error gets ignored.
 - **M1:** real illustrated muffin mascot (the rest of the M1 backlog — token streaming, repo
   extraction — has shipped).
 - **M2 (deferred backend work):** declare `config_schema` on each graph so the app can render
@@ -870,9 +942,20 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
   - **Live per-run tool feed:** scoped `useToolCalls` renders per-worker tool calls in expanded
     rows; a run-level LIVE union (across namespaces) needs either a depth-aware tools projection
     or backend events — today the run-level summary grows as evaluations land (their `tool_runs`).
-  - **Pre-existing hydration warning:** React #418 (HTML hydration mismatch) fires on prod today on
-    call-detail routes (expo-router static export served as SPA fallback) — harmless but noisy;
-    investigate per-route HTML serving in `deploy/nginx.conf` vs `web.output: single`.
+  - **Hydration warning — ROOT-CAUSED in M28, fix still owed.** React #418 fires on **every**
+    dynamic route (not just call detail). `scripts/hydration-check.mjs` shows Expo emits a per-route
+    prerender for each dynamic route with **literal brackets in the filename**
+    (`dist/stock/[ticker].html`, `dist/agents/[assistantId].html`, …), which nginx's
+    `try_files $uri $uri.html /index.html` can never select for a request like `/stock/AAPL` — so it
+    falls back to `index.html`, the Globe tab's prerender, and React hydrates the wrong markup.
+    **Fix options:** (a) an nginx `location ~` rewrite mapping `/stock/<x>` → `/stock/[ticker].html`
+    per dynamic segment (`deploy/nginx.conf`), (b) `web.output: 'single'` to stop shipping per-route
+    prerenders entirely and accept a client-rendered shell, or (c) generate real static params so
+    Expo emits concrete filenames — only viable for finite route sets. Measured **not**
+    colour-scheme related (identical in light and dark on all 18 routes), so
+    `hooks/use-color-scheme.*` was left unused rather than wired in. `/settings` and `/auth` fire it
+    for a separate, smaller reason: client-only state at first paint (persisted zustand; the GoTrue
+    provider probe).
   - **Sandbox/file browser** (deepagents frontend docs pattern): muffin runs OpenSandbox — a
     thread-scoped file tree + diff viewer for `execute_python` / offloaded tool outputs would give
     the run pages an IDE-like data pane. Needs a small backend file-listing endpoint.
@@ -917,7 +1000,15 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
   cloud backup, Resend SMTP (real confirmation e-mails).
 - **M5:** live market data (needs a backend screening/discovery graph) for the movers panels;
   richer sub-sector pages (markdown styling for `research-result` shipped with M10).
+  - **Globe drill-down is 19 countries deep, out of 177 map paths** (M28). Tapping any country
+    outside `taxonomy.ts`'s `COUNTRIES` gives pills + Analyse but no "Open ⟨country⟩" — the country
+    page has nothing to render. Either widen the modelled set or make the map paths without a
+    country page visually distinct, so the affordance matches what happens.
 - **M6:** futures/options/MMF instruments; addressable-market tags; real holdings/weights;
   filter the universe by style/country.
+  - **Badge the asset-universe change %** (M28). The sector donut and every movers panel carry a
+    `SAMPLE` badge; the Markets drill list shows ~50 authored `changePct` values with no caveat at
+    all, which is the one place invented numbers currently read as real. Cheapest honest fix is the
+    same badge on the "Asset universe" header.
 - **M7:** multi-currency / FX; cash-flow budgeting; live prices / broker sync; create
   accounts from scratch; tax / contribution-limit logic.

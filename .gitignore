@@ -50,3 +50,6 @@ example
 
 # Headless run-timeline smoke screenshots (scripts/smoke-timeline.mjs) — one pair per graph
 /smoke-timeline-*.png
+
+# README-verification screenshots + verdict table (scripts/verify-readme.mjs)
+/.verify-shots/

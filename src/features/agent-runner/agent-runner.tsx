@@ -147,7 +147,7 @@ export function AgentRunner({
 
   return (
     <Screen>
-      <RunSurface stream={stream} threadId={liveThreadId}>
+      <RunSurface stream={stream}>
         <View className="gap-4">
           <RunRecap
             agent={agent}

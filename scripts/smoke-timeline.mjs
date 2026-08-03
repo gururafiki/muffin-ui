@@ -268,3 +268,9 @@ if (!pass) {
   process.exit(1);
 }
 console.log(`SMOKE PASS (structure). Facets after expand: ${facetsShown.length >= 1 ? `CONFIRMED (${facetsShown})` : 'not confirmed in-script — verify via Playwright MCP'}.`);
+// Exit explicitly. `server.close()` above only stops NEW connections and waits for
+// in-flight ones to drain — the /api proxy holds keep-alive sockets to the
+// deployment, so the event loop never empties and the process hangs forever after
+// printing PASS. Only the failure path used to exit, which made a green run look
+// like a hung one (and times out any wrapper waiting on it).
+process.exit(0);

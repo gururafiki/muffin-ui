@@ -193,8 +193,6 @@ export const changeTone = (pct: number): Tone =>
 export const sortMovers = (items: MoverItem[]) =>
   [...items].sort((a, b) => b.changePct - a.changePct);
 
-export const regionsAsMovers = (): MoverItem[] =>
-  REGIONS.map((r) => ({ key: r.id, label: r.name, icon: r.icon, changePct: r.changePct }));
 export const countriesAsMovers = (regionId: string): MoverItem[] =>
   countriesInRegion(regionId).map((c) => ({ key: c.id, label: c.name, sublabel: c.flag, changePct: c.changePct }));
 export const sectorsAsMovers = (): MoverItem[] =>

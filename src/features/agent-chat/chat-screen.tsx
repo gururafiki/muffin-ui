@@ -154,7 +154,7 @@ export function ChatScreen({
 
   // ── Conversation: transcript + docked composer ────────────────────────
   return (
-    <RunSurface stream={stream} threadId={liveThreadId}>
+    <RunSurface stream={stream}>
     <Screen scroll={false}>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View className="gap-2 pb-2">

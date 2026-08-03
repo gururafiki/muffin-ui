@@ -29,15 +29,39 @@ direct edits.
 ```bash
 npm install
 npx expo start                      # press w (web), i (iOS), a (Android)
+npm run check                       # typecheck + lint:all + offline checks — the pre-push gate
+npm run typecheck                   # = tsc --noEmit (TS strict)
 npm run lint                        # = expo lint (ESLint flat config, eslint-config-expo)
-npx tsc --noEmit                    # type-check (TS strict)
-npx expo export -p web --output-dir dist   # static web build → dist/
+npm run lint:all                    # = eslint . — ALSO covers scripts/ (see below)
+npm run build:web                   # static web build → dist/
 docker build -t muffin-ui .         # web export + nginx /api proxy (built arm64 in CI)
 ```
+
+**`npm run lint` does not lint `scripts/`.** `expo lint` only walks `/src`, `/app` and
+`/components`, so the verification tooling was completely unlinted until M28. `eslint.config.js`
+now has a `scripts/**` block declaring **Node globals** (without them every script reports
+`Buffer is not defined`) and disabling `import/no-named-as-default-member` (a false positive —
+puppeteer-core's default export really does have `.launch`). Use `lint:all` when touching tooling.
 
 **There is no test runner** (no `pytest`/`jest`). The established per-change verification loop is:
 `npx tsc --noEmit` + `npx expo export -p web` + a headless-browser smoke test of the changed flow
 with a screenshot, asserting zero Reanimated/worklet errors. See `ROADMAP.md` for milestone history.
+
+Six scripts back that up (full table in `README.md` → Develop → Verification):
+`run-timeline-check.ts` (offline) · `history-check.ts` · `smoke-timeline.mjs` · `smoke-reopen.mjs` ·
+**`verify-readme.mjs`** (walks every README feature bullet, prints a pass/differ/fail table) ·
+`hydration-check.mjs` (the React #418 diagnostic). Credentials come from the environment
+(`CF_ACCESS_CLIENT_ID`/`_SECRET`, `SUPABASE_ANON_KEY`, `MUFFIN_EMAIL`/`MUFFIN_PASSWORD`) and are
+never committed.
+
+**Two traps these scripts encode, learned the hard way (M28):**
+- **React reports #418 as a `pageerror`, not a `console` error.** A listener on `console` alone
+  reports zero hydration errors and looks like a clean bill of health. Listen to both.
+- **Assert on text CASE-INSENSITIVELY.** The design system uppercases labels and badges in RN
+  styles (`Badge` renders "SAMPLE", `Text variant="label"` renders "ASSET UNIVERSE"), so a
+  case-sensitive probe fails on copy that is plainly on screen. Likewise, wait for the body text to
+  stop growing rather than sleeping a constant — persisted zustand stores rehydrate after mount, and
+  a short sleep catches `/portfolio` with only its title painted.
 
 Point the app at a LangGraph server in **Settings**. Local backend: run `langgraph dev` in
 `muffin-agent`, set API URL to `http://localhost:8123` (`http://10.0.2.2:8123` on the Android
@@ -185,18 +209,25 @@ The whole app is organised around **"one graph → one screen"**:
   M25 removed both the `useToolCache()` size/age join (a muffin-specific side-read, plus a 100-item
   query per surface) and the `mode="grouped"` run-wide roll-up (shipped unmounted since M24 —
   rebuilding it would mean eagerly walking every namespace).
-  `lib/agent/tool-cache.tsx` survives only for `safeParse` and the wealth surfaces.
+  **`lib/agent/tool-cache.tsx` is DELETED (M28).** M25 removed the *consumer* but left the
+  *producer*: `ToolCacheProvider` stayed mounted by `RunSurface` and the calls detail page and kept
+  running `store.searchItems(['cache'], {limit:100})` — re-polled every 10s while busy — into a
+  context nothing read. `safeParse` (its one live export) moved to `lib/agent/schemas.ts`.
+  **Lesson: removing a context's only reader leaves its provider silently paying for the query —
+  check both ends.**
   **Panel surfaces:** the three live screens (generic runner, council, chat) mount
-  **`<RunSurface stream threadId>`** (`features/agent-shared/run-surface.tsx`) — it owns the
-  cross-cutting wiring (`ToolCacheProvider` + `RunStreamProvider`), with `RunErrorCard` /
+  **`<RunSurface stream>`** (`features/agent-shared/run-surface.tsx`) — it owns the cross-cutting
+  wiring (`RunStreamProvider`), with `RunErrorCard` /
   `HydrationCard` for the shared error/hydration markup. `app/calls/[threadId].tsx` (history — no
-  live stream, `busy={false}`) has no `RunStreamProvider` at all, which is why anything wanting live
-  data asks for it through `useOptionalRunStream()` and degrades to checkpoint history. Council
-  records carry
-  `agent: "<slug>_data_collection"` — join via `toolRunAgentSlug()` (`features/council/personas.ts`),
-  and `useSubgraphRows` accepts the suffixed form too. The council screen itself is member-unified
+  live stream) has no `RunStreamProvider` at all, which is why anything wanting live
+  data asks for it through `useOptionalRunStream()` and degrades to checkpoint history.
+  `useSubgraphRows` accepts the council's suffixed `agent: "<slug>_data_collection"` form.
+  (The `toolRunAgentSlug()` helper that used to join those records was deleted in M28 with the rest
+  of the capture-channel residue — nothing had called it since M24.)
+  The council screen itself is member-unified
   (M15): `COUNCIL_MEMBERS` = 13 personas + 6 optional specialists in one arena grid, one
-  `MemberDetail` card for both kinds.
+  `MemberDetail` card for both kinds — **19 seats, not 13**; the README said 13 for three
+  milestones.
   **Stage envelope convention (M19):** every pipeline "stage" body wraps in `Card tone="muted"` +
   `Collapsible` — `ReportSection` (`widgets.tsx`) and the unified `ToolRunsPanel` both follow this;
   `DebateView` keeps its chat-bubble turn styling but takes a `bare` prop to skip its own
@@ -385,7 +416,9 @@ The whole app is organised around **"one graph → one screen"**:
     for a payload's size and age (`useToolCache` by `args_hash`): that was a muffin-specific
     side-read a graph-agnostic timeline has no business depending on, it cost a 100-item query per
     surface, and `output_preview` already carries the full result. `ToolRunsPanel`'s dead
-    `mode="grouped"` roll-up (shipped unmounted since M24) is deleted with it.
+    `mode="grouped"` roll-up (shipped unmounted since M24) is deleted with it. **M28 finished the
+    job**: the whole `tool-cache.tsx` module is gone, because the provider was still mounted and
+    still issuing that query even after the join was removed.
   - **Verification.** `scripts/run-timeline-check.ts` (`npx tsx`, offline, no credentials) imports
     the REAL modules over synthetic snapshots — the shape is fixed by `langgraph_api/state.py`'s
     `state_snapshot_to_thread_state` and the SDK's `ThreadTask`, which keeps it runnable offline and
@@ -448,12 +481,32 @@ fallback for TypeScript resolution and unexpected platforms. Used by:
   `KeyValueStore` interface.
 - `src/lib/agent/install-fetch.*` — native installs the `expo/fetch` streaming shim so
   `runs.stream` works on iOS/Android; web/fallback are no-ops.
-- `src/hooks/use-color-scheme.*`.
+- `src/hooks/use-color-scheme.*` — **retained despite having zero importers.** Every real call site
+  imports `useColorScheme` straight from `react-native` (14 of them). The `.web.ts` variant holds a
+  static-render hydration guard (return `'light'` until hydrated), which looked like the fix for the
+  app's React #418 warning. **M28 measured it and the hypothesis is disproved** — #418 counts are
+  identical in light and dark on all 18 routes (`scripts/hydration-check.mjs`), so the 14 call sites
+  were deliberately NOT rerouted through it. Kept as the documented Expo idiom in case per-route
+  prerendering ever changes; delete it if that never happens.
+
+### Theming — two mechanisms, and a deleted third
+1. **NativeWind `dark:` variants** — the palette lives in `tailwind.config.js`. Dominant path.
+2. **`useColorScheme()` from `react-native`** → raw values from `src/theme/colors.ts`
+   (`theme.dark`/`theme.light`, `palette`, `mapColors`, `chartColors`) for APIs that cannot take a
+   className: Stack `screenOptions`, `StatusBar`, SVG fills, charts. `app.json` sets
+   `userInterfaceStyle: "automatic"`.
+
+`src/constants/theme.ts` + `src/hooks/use-theme.ts` were the `create-expo-app` template's OWN
+theming (a `Colors` object of plain black/white/greys, plus `Fonts`/`Spacing`/`BottomTabInset`).
+They participated in neither path — `use-theme.ts` was the only importer of `constants/theme.ts`,
+and nothing imported `use-theme.ts` — so both were **deleted in M28**. Don't reintroduce a second
+palette: `tailwind.config.js` and `theme/colors.ts` are the pair, and they must stay in sync.
 
 ### Routing — `src/app/` (Expo Router, typed routes, React Compiler on)
-File-based routes. `(tabs)/` = Globe (`index`), Markets, Portfolio, Agents, Settings. Detail routes:
-`agents/[assistantId]`, `stock/[ticker]`, `sector/[sectorId]`, `country/[countryId]`,
-`region/[regionId]`, `group/[groupId]`, `account/[accountId]`, `goal/[goalId]`. The root `_layout`
+File-based routes. `(tabs)/` = Globe (`index`), Markets, Portfolio, Agents, **Calls**, Settings.
+Detail routes: `agents/[assistantId]`, `stock/[ticker]`, `sector/[sectorId]`, `country/[countryId]`,
+`region/[regionId]`, `group/[groupId]`, `account/[accountId]`, `goal/[goalId]`,
+`calls/[threadId]`, `auth`, `verify`. The root `_layout`
 loads fonts (Baloo2 + Nunito), wraps `QueryClientProvider` / `GestureHandlerRootView` /
 `SafeAreaProvider`. `agents/[assistantId]` seeds the runner from field-shaped deep-link params
 (e.g. an "Analyse" link passing `ticker`/`sector`/`market` + `autostart=1`). It does **not** wrap
