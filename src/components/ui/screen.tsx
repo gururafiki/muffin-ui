@@ -1,4 +1,4 @@
-import { ScrollView, View, type ViewProps } from 'react-native';
+import { ScrollView, View, type ScrollViewProps, type ViewProps } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { cn } from '@/lib/cn';
@@ -10,6 +10,13 @@ type ScreenProps = ViewProps & {
   contentClassName?: string;
   /** Render the lavender plaid texture behind the content. */
   plaid?: boolean;
+  /**
+   * Pull-to-refresh for the scroll container. A screen whose list state is
+   * empty or errored still renders through here rather than through its list,
+   * so without this the gesture would work on a populated screen and silently
+   * do nothing on exactly the screens where a retry matters most.
+   */
+  refreshControl?: ScrollViewProps['refreshControl'];
 };
 
 /**
@@ -22,6 +29,7 @@ export function Screen({
   className,
   contentClassName,
   plaid,
+  refreshControl,
   children,
   ...props
 }: ScreenProps) {
@@ -40,7 +48,8 @@ export function Screen({
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled">
+          keyboardShouldPersistTaps="handled"
+          refreshControl={refreshControl}>
           {inner}
         </ScrollView>
       ) : (

@@ -2,7 +2,7 @@ import type { Thread } from '@langchain/langgraph-sdk';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -70,8 +70,22 @@ const Separator = () => <View className="h-3" />;
 
 export default function CallsScreen() {
   const router = useRouter();
-  const { data: threads, isLoading, isError, error } = useCalls();
+  const { data: threads, isLoading, isError, error, refetch, isRefetching } = useCalls();
   const [filter, setFilter] = useState<string>('all'); // 'all' | graphId | 'other'
+
+  // Pull to load the latest runs. `searchThreads` is already `created_at desc`,
+  // so a refetch puts a just-finished run at the top. The same control is handed
+  // to BOTH render paths below — the list, and the plain `Screen` that the empty
+  // and error states use — because "pull the calls page" has to mean one thing.
+  const refreshControl = (
+    <RefreshControl
+      refreshing={isRefetching}
+      onRefresh={refetch}
+      tintColor={palette.frosting[500]}
+      colors={[palette.frosting[500]]}
+      progressBackgroundColor={palette.white}
+    />
+  );
 
   // Open into the agent's own screen (resumes chat / reopens the saved result).
   // Threads from an unknown/legacy agent fall back to the read-only detail page.
@@ -135,7 +149,7 @@ export default function CallsScreen() {
   // in-place on web, verified in the M18 smoke test).
   if (isLoading || isError || visible.length === 0) {
     return (
-      <Screen plaid>
+      <Screen plaid refreshControl={refreshControl}>
         {header}
         {isLoading ? (
           /* Skeleton rows in the shape of the loaded call cards. */
@@ -183,6 +197,7 @@ export default function CallsScreen() {
         ListHeaderComponent={header}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 96 }}
+        refreshControl={refreshControl}
       />
     </Screen>
   );
