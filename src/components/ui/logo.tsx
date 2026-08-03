@@ -23,9 +23,12 @@ export function MuffinLogo({ size = 64 }: { size?: number }) {
         strokeWidth={stroke}
         strokeLinejoin="round"
       />
-      {/* liner pleats */}
+      {/* liner pleats — stop short of the cup's bottom curve. The original
+          lengths pierced the outline; invisible at 48px here, but this mark is
+          also rendered at 1024px for the app icons (scripts/generate-icons.mjs,
+          which mirrors this file). */}
       <Path
-        d="M27 35.5 25.7 53 M32 35.5 V54.5 M37 35.5 38.3 53"
+        d="M27 35.5 26 50 M32 35.5 V51.5 M37 35.5 38 50"
         stroke="#D9C7A8"
         strokeWidth={1.6}
         strokeLinecap="round"
