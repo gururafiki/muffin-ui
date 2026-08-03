@@ -35,6 +35,15 @@ const MUFFIN_EMAIL = process.env.MUFFIN_EMAIL ?? '';
 const MUFFIN_PASSWORD = process.env.MUFFIN_PASSWORD ?? '';
 const SCHEME = process.env.MUFFIN_SCHEME === 'dark' ? 'dark' : 'light';
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice(7);
+/**
+ * `--live[=https://muffin.example]` drives the DEPLOYED site instead of a local
+ * `dist/`. Use it to verify a deploy: a local build of the same commit proves the
+ * source is good, not that the right image reached the node and nginx is serving
+ * it. Cloudflare Access is satisfied with the service-token headers on every
+ * request (same credentials the /api proxy uses below).
+ */
+const LIVE_ARG = process.argv.find((a) => a === '--live' || a.startsWith('--live='));
+const LIVE = LIVE_ARG ? (LIVE_ARG.includes('=') ? LIVE_ARG.split('=')[1] : 'https://muffin.rafiki.guru') : '';
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
 const DIST = new URL('../dist', import.meta.url).pathname;
@@ -45,8 +54,12 @@ const MIME = {
   '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
 };
 
-if (!existsSync(DIST)) {
+if (!LIVE && !existsSync(DIST)) {
   console.error('dist/ missing — run: npx expo export -p web --output-dir dist');
+  process.exit(2);
+}
+if (LIVE && (!CID || !CSEC)) {
+  console.error('--live needs CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET (the site is behind Access)');
   process.exit(2);
 }
 mkdirSync(SHOTS, { recursive: true });
@@ -97,14 +110,23 @@ const server = http.createServer((req, res) => {
   createReadStream(p).pipe(res);
 });
 
+// In --live mode the local server is still started (harmless, and the API-survey
+// fetches below reuse its proxy), but every page navigation targets the
+// deployment instead.
 await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}`;
+const local = `http://localhost:${server.address().port}`;
+const base = LIVE || local;
+console.log(LIVE ? `TARGET: ${LIVE} (deployed)\n` : `TARGET: local dist/\n`);
 
 // ── browser ──────────────────────────────────────────────────────────────────
 const browser = await puppeteer.launch({ channel: 'chrome', headless: 'new', args: ['--no-sandbox'] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1100, height: 1600 });
 await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: SCHEME }]);
+// Cloudflare Access sits in front of the deployment; the service-token headers
+// have to ride on EVERY request (documents, bundles, /api and /supabase alike),
+// so set them at the page level rather than per-fetch.
+if (LIVE) await page.setExtraHTTPHeaders({ 'CF-Access-Client-Id': CID, 'CF-Access-Client-Secret': CSEC });
 
 /** Console errors, tagged with the route that produced them (for the #418 study). */
 const consoleErrors = [];
@@ -188,7 +210,7 @@ async function clickText(needle, { exact = false } = {}) {
 }
 
 async function shot(name) {
-  await page.screenshot({ path: join(SHOTS, `${SCHEME}-${name}.png`), fullPage: true });
+  await page.screenshot({ path: join(SHOTS, `${LIVE ? 'live-' : ''}${SCHEME}-${name}.png`), fullPage: true });
 }
 
 /**
@@ -497,7 +519,7 @@ if (shouldRun('drill')) {
 // ═════════════════════════ 10. CALLS + RUN PAGES (needs CF Access) ═════════════════════════
 let threads = [];
 if (shouldRun('calls') && CID && CSEC) {
-  threads = await fetch(`${base}/api/threads/search`, {
+  threads = await fetch(`${local}/api/threads/search`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ limit: 40, select: ['thread_id', 'status', 'created_at', 'metadata'] }),
@@ -607,7 +629,7 @@ const md = [
       .map((e) => `- \`${e.route}\` — ${e.text.slice(0, 300)}`)
     : ['(none)']),
 ].join('\n');
-writeFileSync(join(SHOTS, `verdict-${SCHEME}.md`), md);
+writeFileSync(join(SHOTS, `verdict-${LIVE ? 'live-' : ''}${SCHEME}.md`), md);
 
 console.log(`\n${'='.repeat(70)}`);
 console.log(`${pass} pass · ${differs} differ · ${fail} fail   (${SCHEME} scheme)`);

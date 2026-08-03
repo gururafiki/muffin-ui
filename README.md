@@ -319,7 +319,7 @@ two:
 | `npx tsx scripts/history-check.ts` | CF Access | The `/history` + `getGraph` contract end-to-end against the deployment, for all five graphs |
 | `node scripts/smoke-timeline.mjs [threadId] [graphId]` | CF Access | The Timeline in a browser: parallel brackets, durations, the four facets, and that a leaf node does not redraw the whole run |
 | `node scripts/smoke-reopen.mjs` | CF Access | Reopening a finished thread hydrates from `thread.values` |
-| `node scripts/verify-readme.mjs [--only=<screen>]` | Optional | **Walks every feature bullet in this README** and prints a pass/differ/fail table to `.verify-shots/`. Client-side screens need nothing; run pages need CF Access; `MUFFIN_EMAIL`/`MUFFIN_PASSWORD` unlock the sign-in-gated screens |
+| `node scripts/verify-readme.mjs [--only=<screen>] [--live]` | Optional (`--live` requires CF Access) | **Walks every feature bullet in this README** and prints a pass/differ/fail table to `.verify-shots/`. Client-side screens need nothing; run pages need CF Access; `MUFFIN_EMAIL`/`MUFFIN_PASSWORD` unlock the sign-in-gated screens. **`--live` drives the deployed site** (`muffin.<domain>`) instead of the local `dist/` — use it to verify a deploy, since a local build of the same commit proves the source is good, not that the right image reached the node |
 | `node scripts/hydration-check.mjs` | No | Visits every route in both colour schemes and reports which prerendered HTML was served — the React #418 diagnostic |
 
 Credentials come from the environment (`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`,

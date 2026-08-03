@@ -54,7 +54,15 @@ Six scripts back that up (full table in `README.md` → Develop → Verification
 (`CF_ACCESS_CLIENT_ID`/`_SECRET`, `SUPABASE_ANON_KEY`, `MUFFIN_EMAIL`/`MUFFIN_PASSWORD`) and are
 never committed.
 
-**Two traps these scripts encode, learned the hard way (M28):**
+`verify-readme.mjs --live` drives the **deployed** site rather than the local `dist/` (CF Access
+service-token headers set via `page.setExtraHTTPHeaders`, since Access checks every request). Use it
+to verify a deploy — a local build of the same commit proves the source is good, not that the right
+image reached the node. **Do not verify a deploy by comparing bundle hashes**: the Dockerfile
+exports with `EXPO_PUBLIC_API_URL=/api` set, so a local `expo export` legitimately produces a
+different hash. Check *behaviour* instead (e.g. after M28, a run page making **zero**
+`store/items/search` requests is proof the new bundle is live).
+
+**Three traps these scripts encode, learned the hard way (M28):**
 - **React reports #418 as a `pageerror`, not a `console` error.** A listener on `console` alone
   reports zero hydration errors and looks like a clean bill of health. Listen to both.
 - **Assert on text CASE-INSENSITIVELY.** The design system uppercases labels and badges in RN
