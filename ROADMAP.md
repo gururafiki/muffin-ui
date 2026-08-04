@@ -859,6 +859,52 @@ corrected in both the component and the generator.
   `ClassifierNodeOutput`) — the known weak-model structured-output failure, a muffin-agent item.
 
 
+## ✅ Milestone 30 — Rendered text is bounded (2026-08-04)
+Opening a past Trading Decision run and expanding **Risk Debate** closed the app instantly on a
+Pixel 10 Pro — straight to the home screen, no dialog.
+
+**The payload.** `risk_debate_messages` on that run is **753 KB across 15 turns**, against 26 KB
+across 10 for the bull/bear debate. Three turns are ~200 KB each (261,505 / 208,213 / 214,727
+chars); the other twelve are 1–11 KB. Those three are not debate text at all — turn 2 is 196 KB on
+a SINGLE line, mostly newline noise, wrapped in a Python repr of a reasoning block
+(`[{'type': 'reasoning', 'reasoning': 'We need to produce a. (obiang.,,,\n\n..ingue…`). That is a
+muffin-agent defect (degenerate generation + reasoning serialised into `content`) and is filed
+separately; this milestone is about the client not dying because of it.
+
+**What the measurements showed.** On a 3 GB emulator the app sat at 245 MB on the home screen and
+373 MB with the run open; expanding the risk debate spiked it to 473 MB and settled at 412 MB.
+Crucially, `dumpsys meminfo` put **277 MB of that 412 MB in the NATIVE heap** (Dalvik was 13 MB
+against a 192 MB cap, so the Java ceiling was never the constraint). Every markdown element becomes
+a shadow node + Yoga node + native text layout, and a failed native allocation calls `abort()` —
+which kills the process instantly with no dialog and nothing catchable, exactly the reported
+symptom. The same expansion on the deployed **web** app reaches 679,221 characters and survives.
+
+The 3 GB emulator never actually died: 20 controls were swept across the timeline and Overview
+without a crash, so the exact allocation that aborts on a real device was never pinned down. The
+bound is justified on its own terms rather than on a reproduction.
+
+**The fix — bound the STRING, not the box.** `Markdown` and `JsonBlock` now cap what they parse at
+`BOUND` (12 KB, `lib/agent/bound-text.ts`) and offer an incremental "Show more". Two things this
+milestone got right that the previous attempts did not:
+
+- **A `maxHeight` + `overflow: hidden` clamp is not a memory fix.** The existing `InputBlock`
+  clamp rendered the full markdown and clipped it visually — every element still parsed and laid
+  out. The same is true of any fixed-height container, which is why "fixed containers + skeletons"
+  was explicitly rejected as the fix for this.
+- **Bound at the renderer, by default.** The three ad-hoc guards that already existed (`cap()` at
+  6,000 chars in tool-registry, a duplicated inline cap at 8,000 in `conversation.tsx`, and the
+  `InputBlock` height clamp) covered 3 of ~33 `<Markdown>` call sites — and the debate turns were
+  not among them. `JsonBlock` was worse: it puts the whole payload in ONE `<Text>` inside a
+  horizontal `ScrollView`, so it never wraps and lays out as a single enormous line.
+
+Guarded by 7 assertions in `scripts/run-timeline-check.ts`, 5 of which were verified to FAIL
+against the unbounded version; the other 2 guard the opposite regression (normal reports must
+render verbatim).
+
+**Deferred:** fixed-height containers + matching skeletons for API-driven components. Worth doing
+for layout stability, but it is not a crash fix and must not be sold as one.
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

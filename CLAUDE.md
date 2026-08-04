@@ -498,6 +498,30 @@ fallback for TypeScript resolution and unexpected platforms. Used by:
   were deliberately NOT rerouted through it. Kept as the documented Expo idiom in case per-route
   prerendering ever changes; delete it if that never happens.
 
+**Rendered text is BOUNDED — and bounding means slicing the STRING, not the box
+(`lib/agent/bound-text.ts`, M30).** `Markdown` and `JsonBlock` both cap what they parse at
+`BOUND` (12 KB) and offer an incremental "Show more"; nothing a graph legitimately produces
+comes close, so only pathological payloads are affected. Rules:
+
+- **A `maxHeight` + `overflow: hidden` clamp is NOT a memory fix.** The old `InputBlock`
+  clamp rendered the full markdown and clipped it visually — every element still parsed, still
+  laid out. Same reason a fixed-height container with a skeleton buys nothing here.
+- **The cost is in the NATIVE heap, and overrunning it is not catchable.** Measured on one
+  trading run: 277 MB of a 412 MB process was native heap (Dalvik was 13 MB against a 192 MB
+  cap, so the Java ceiling is irrelevant). Every markdown element becomes a shadow node + Yoga
+  node + native text layout. A failed native allocation calls `abort()` — the app closes
+  instantly to the home screen with no dialog and no JS error, which is what a user reports as
+  "it crashed".
+- **`JsonBlock` is the sharper edge**: it puts the whole payload in ONE `<Text>` inside a
+  horizontal `ScrollView`, so it never wraps and lays out as a single enormous line.
+- Bound by DEFAULT, at the renderer, not per call site. The three ad-hoc caps this replaced
+  (`cap()` in tool-registry, an inline cap in `conversation.tsx`, the `InputBlock` height
+  clamp) guarded 3 of ~33 `<Markdown>` sites, and the debate turns that took a Pixel 10 Pro
+  down were not among them. Pass `bound={false}` only for authored copy you control.
+- What triggered it: a backend defect produced three ~200 KB debate turns of newline noise
+  (`risk_debate_messages` 753 KB over 15 turns, vs 26 KB for bull/bear). Guarded offline in
+  `scripts/run-timeline-check.ts`.
+
 **Spine geometry — anchor rows, never centre them (`components/ui/spine.tsx`, M29).** A timeline
 row's marker is positioned against the row's **first line**, so the row must anchor that line:
 `NodeRow` is `items-start`, not `items-center`. Centred, the label slides down as a row gains
