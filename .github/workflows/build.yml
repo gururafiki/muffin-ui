@@ -126,19 +126,40 @@ jobs:
           echo "sha256=$(sha256sum muffin-arm64.apk | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "size=$(du -h muffin-arm64.apk | cut -f1)" >> "$GITHUB_OUTPUT"
 
-      # Rolling release: replace the asset in place so `releases/latest/download/...`
-      # keeps working. `--clobber` overwrites; create only on the very first run.
-      - name: Publish to the rolling release
+      # ONE RELEASE PER BUILD, tagged by date + commit.
+      #
+      # The previous rolling release clobbered a single asset in place, which left
+      # `publishedAt` frozen at the release's original creation — and that is the
+      # field GitHub's list sorts and labels by, so a freshly rebuilt APK still read
+      # "17 hours ago" with no way to tell a current build from a stale one.
+      #
+      # A new release per build fixes that at the source: the date IS the build, every
+      # build stays downloadable, and rolling back is just picking an older one. The
+      # bookmarkable URL keeps working because `releases/latest/download/<name>`
+      # resolves to the newest published release and the asset name is constant:
+      #
+      #   https://github.com/<owner>/muffin-ui/releases/latest/download/muffin-arm64.apk
+      #
+      # NOTE: that URL means "newest release of ANY kind". If product/version releases
+      # are ever published from this repo, they would take over `latest` and the phone
+      # would start downloading the wrong thing — switch to a fixed tag then.
+      - name: Publish a release for this build
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          NOTES=$(printf 'Sideloadable Android build (arm64), rebuilt on every push to main.\n\n- commit: %s\n- size: %s\n- sha256: `%s`\n\nInstall: download the APK on the phone and tap it (allow "install unknown apps").\nThen set the Cloudflare Access client ID + secret in Settings -> Connection and sign in —\nthose are deliberately not baked into a public artifact.' \
-            "${{ github.sha }}" "${{ steps.apk.outputs.size }}" "${{ steps.apk.outputs.sha256 }}")
-          if gh release view android-latest >/dev/null 2>&1; then
-            gh release upload android-latest muffin-arm64.apk --clobber
-            gh release edit   android-latest --notes "$NOTES"
-          else
-            gh release create android-latest muffin-arm64.apk \
-              --title 'Android APK (latest)' --notes "$NOTES"
-          fi
+          STAMP=$(date -u +'%Y.%m.%d-%H%M')
+          SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          TAG="android-$STAMP-$SHORT"
+          NOTES=$(printf 'Sideloadable Android build (arm64), one release per push to main.\n\n- commit: %s\n- built: %s\n- size: %s\n- sha256: `%s`\n\nAlways-newest link: https://github.com/%s/releases/latest/download/muffin-arm64.apk\n\nInstall: download the APK on the phone and tap it (allow "install unknown apps").\nThen set the Cloudflare Access client ID + secret in Settings -> Connection and sign in —\nthose are deliberately not baked into a public artifact.' \
+            "${{ github.sha }}" "$(date -u +'%Y-%m-%d %H:%M UTC')" "${{ steps.apk.outputs.size }}" "${{ steps.apk.outputs.sha256 }}" "${{ github.repository }}")
+          gh release create "$TAG" muffin-arm64.apk \
+            --title "Android APK — $(date -u +'%Y-%m-%d %H:%M UTC') ($SHORT)" --notes "$NOTES"
+
+          # Keep the list readable: prune every android-* release past the newest 10.
+          # Each carries a ~51 MB asset, so this is about storage as much as tidiness.
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("android-"))] | sort_by(.createdAt) | reverse | .[10:] | .[].tagName' \
+            | while read -r old; do
+                [ -n "$old" ] && gh release delete "$old" --yes --cleanup-tag || true
+              done
