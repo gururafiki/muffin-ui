@@ -7,11 +7,6 @@ import { Markdown } from './markdown';
 /** Tool names whose output is always a price/indicator time series. */
 const CHART_TOOL_RE = /equity_price|ohlcv|_historical|get_indicators|price_performance/i;
 
-/** Cap very long plain-text bodies before handing them to `Markdown`. */
-function cap(s: string): string {
-  return s.length > 6000 ? s.slice(0, 6000) + '\n… (truncated)' : s;
-}
-
 /**
  * Per-tool-name output renderer — the pluggable seam for ONE tool call's
  * output payload (usually the joined cache text, or the capped
@@ -38,7 +33,9 @@ export function renderToolOutput(toolName: string | undefined, payload: unknown)
 
   if (body.startsWith('{') || body.startsWith('[')) {
     const j = safeParse(body);
-    return j !== undefined ? <JsonBlock value={j} /> : <Markdown value={cap(body)} />;
+    return j !== undefined ? <JsonBlock value={j} /> : <Markdown value={body} />;
   }
-  return <Markdown value={cap(body)} />;
+  // No cap here any more: `Markdown` bounds what it parses and offers "Show more",
+  // which beats the silent hard truncation this used to do.
+  return <Markdown value={body} />;
 }

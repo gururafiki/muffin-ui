@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import type { AssistantGraph } from '@langchain/langgraph-sdk';
 
 import { showsLandingHero } from '../src/features/agent-shared/run-phase';
+import { BOUND, sliceAtBoundary } from '../src/lib/agent/bound-text';
 import { planFromGraph, pendingNodes } from '../src/lib/agent/run-graph';
 import {
   durationBetween,
@@ -599,6 +600,41 @@ async function main(): Promise<void> {
       snapshot(1, null, [{ id: 'r', name: 'analyst', ns: 'analyst:u1' }]),
     ));
     check('a task repeated across supersteps stays one node', repeated.flatMap((l) => l.nodes).length === 1);
+  }
+
+  console.log('\nrendered text is bounded, so one bad payload cannot abort the app');
+  {
+    // The real shape that took a Pixel down: ~196 KB on a SINGLE line, so there
+    // is no newline to cut on. This is the case a boundary-seeking slice must
+    // still bound rather than give up and return everything.
+    const degenerate = `[{'type': 'reasoning', 'reasoning': 'We need to produce a.${',,,\n'.repeat(0)}${'x'.repeat(196_000)}`;
+    check(
+      'a 196KB single-line turn is bounded',
+      sliceAtBoundary(degenerate).length <= BOUND,
+      `${sliceAtBoundary(degenerate).length} chars`,
+    );
+    // 753 KB across 15 turns is what `risk_debate_messages` actually held.
+    const turn = 'y'.repeat(250_000);
+    check('a 250KB turn is bounded', sliceAtBoundary(turn).length <= BOUND);
+
+    // Content a graph legitimately produces must be untouched — a bound that
+    // truncates ordinary reports would be worse than the bug.
+    const report = '## Analysis\n\n' + 'A long but reasonable analyst paragraph. '.repeat(50);
+    check('a normal report is returned verbatim', sliceAtBoundary(report) === report, `${report.length} chars`);
+    check('an empty string survives', sliceAtBoundary('') === '');
+
+    // Cutting mid-fence/mid-table renders as broken markup, so the slice prefers
+    // a line boundary when one is available within budget.
+    const lines = ('sensible markdown line\n'.repeat(2000));
+    const cut = sliceAtBoundary(lines);
+    check('a multi-line payload cuts on a line boundary', !cut.endsWith('sensible markdown li') && cut.length <= BOUND);
+    check('the boundary cut keeps most of the budget', cut.length > BOUND * 0.5, `${cut.length} of ${BOUND}`);
+
+    // "Show more" must actually reveal more, or the reveal is a dead end.
+    check(
+      'raising the limit reveals strictly more',
+      sliceAtBoundary(turn, BOUND * 2).length > sliceAtBoundary(turn, BOUND).length,
+    );
   }
 
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}\n`);

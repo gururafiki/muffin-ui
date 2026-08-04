@@ -1,7 +1,9 @@
-import { Fragment, type ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
+import { Fragment, useState, type ReactNode } from 'react';
+import { Pressable, useColorScheme } from 'react-native';
 import { Renderer, useMarkdown } from 'react-native-marked';
 
+import { Text } from '@/components/ui';
+import { BOUND, sliceAtBoundary } from '@/lib/agent/bound-text';
 import { palette } from '@/theme/colors';
 import { CodeBlock } from './code-block';
 
@@ -14,8 +16,16 @@ class AppRenderer extends Renderer {
 
 const renderer = new AppRenderer();
 
-/** Render a markdown string with the app's theme (headings, lists, code, links). */
-export function Markdown({ value }: { value: string }) {
+/**
+ * Render a markdown string with the app's theme (headings, lists, code, links).
+ *
+ * Bounded by DEFAULT — every caller is protected without having to remember,
+ * which is the point: the ad-hoc caps this replaced guarded 3 of ~33 call sites
+ * and the debate turns that took the app down were not among them. Pass
+ * `bound={false}` only for authored copy whose length you control.
+ */
+export function Markdown({ value, bound = true }: { value: string; bound?: boolean }) {
+  const [limit, setLimit] = useState(BOUND);
   const dark = useColorScheme() === 'dark';
   const text = dark ? palette.night.text : palette.ink;
   const codeBg = dark ? palette.night.surfaceMuted : palette.frosting[50];
@@ -25,7 +35,9 @@ export function Markdown({ value }: { value: string }) {
   // react-native-marked doesn't interpret inline HTML; models often emit <br>
   // (notably inside table cells) — turn them into spaces so they don't show raw.
   const cleaned = (value ?? '').replace(/<br\s*\/?>/gi, ' ');
-  const elements = useMarkdown(cleaned, {
+  const over = bound && cleaned.length > limit;
+  // Only the visible slice is parsed — the rest never becomes elements at all.
+  const elements = useMarkdown(over ? sliceAtBoundary(cleaned, limit) : cleaned, {
     colorScheme: dark ? 'dark' : 'light',
     renderer,
     styles: {
@@ -50,5 +62,20 @@ export function Markdown({ value }: { value: string }) {
     },
   });
 
-  return <Fragment>{elements}</Fragment>;
+  return (
+    <Fragment>
+      {elements}
+      {over ? (
+        <Pressable
+          onPress={() => setLimit((n) => n + BOUND)}
+          accessibilityRole="button"
+          accessibilityLabel={`Show more, ${Math.round(limit / 1000)} of ${Math.round(cleaned.length / 1000)} thousand characters shown`}
+          className="self-start py-1 active:opacity-70">
+          <Text variant="muted" className="text-[11px] text-frosting-500">
+            {`Show more — ${Math.round(limit / 1000)}k of ${Math.round(cleaned.length / 1000)}k shown`}
+          </Text>
+        </Pressable>
+      ) : null}
+    </Fragment>
+  );
 }

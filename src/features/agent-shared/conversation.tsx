@@ -56,13 +56,17 @@ function ToolResult({ message }: { message?: AnyMessage }) {
   // Chart detection runs on the uncapped text — price-history payloads are
   // usually far larger than the JSON-preview cap below.
   const chart = parseTimeSeries(raw);
+  // The cap still guards the JSON *preview* (parsing a multi-MB payload to
+  // pretty-print it is its own cost). Markdown gets the full text: it bounds
+  // itself now and offers "Show more", where this used to dead-end at
+  // "… (truncated)" with no way to read the rest.
   const capped = raw.length > 8000 ? raw.slice(0, 8000) + '\n… (truncated)' : raw;
   const t = capped.trim();
   const json = tryParseJson(t);
   return (
     <View className="gap-2">
       {chart ? <TimeSeriesChart data={chart} /> : null}
-      {json !== undefined ? <JsonBlock value={json} /> : <Markdown value={capped} />}
+      {json !== undefined ? <JsonBlock value={json} /> : <Markdown value={raw} />}
     </View>
   );
 }
