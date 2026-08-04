@@ -498,6 +498,33 @@ fallback for TypeScript resolution and unexpected platforms. Used by:
   were deliberately NOT rerouted through it. Kept as the documented Expo idiom in case per-route
   prerendering ever changes; delete it if that never happens.
 
+**Skeletons live NEXT to what they mirror, and are sized in LINE BOXES (M31).** A loading state
+should be the shape of what is coming, so filling it moves nothing.
+
+- **Co-locate.** A component that can load exports its own skeleton beside it —
+  `CouncilArenaSkeleton` (`council/council-arena.tsx`), `CallListSkeleton` (`(tabs)/calls.tsx`),
+  `HydrationSkeleton`, `SubagentPanelSkeleton`. Never hand-copy a shape into the parent: that is
+  how they drift from the markup they stand for.
+- **Size line BOXES, not bar thickness.** A 14px bar where a 20px line will land still moves the
+  page. Use `SkeletonText` / `SkeletonRow` (`components/ui/skeleton.tsx`), which put a slim bar
+  inside a correctly-sized box — heading 28px (`text-lg`), body 20px (`text-sm`), small 16px
+  (`text-xs`), measured from the rendered app. The calls card was 86px as a skeleton against 108px
+  filled until this was fixed; it is now 108 = 108.
+- **Match the row's real parts**: line count, column gap, and the trailing element. The calls
+  skeleton drew two lines for a three-line card and a wide pill where the card ends in a narrow
+  chevron — while omitting the badge, which is the thing that actually is a pill.
+- **The run Timeline derives its skeleton from the GRAPH**, not from grey bars and never from
+  `AgentDef.stages`: `pendingNodes(planFromGraph(graph), ∅)` through the same `SpineRow`/`NodeRow`
+  the loaded view uses, so it shows the run's real steps and cannot disagree with what replaces
+  it. Generic for any graph; falls back to anonymous bars only while the graph query itself is in
+  flight. It cannot know superstep grouping (that is history-only), so parallel fans still regroup.
+- **Guarded**: `npm run verify:skeletons` (`scripts/skeleton-check.mjs`) serves `dist/`, hangs the
+  API so the loading state stays up, and asserts the bars have non-zero geometry — the M28
+  regression where every skeleton was an invisible zero-height box. It was verified to FAIL when
+  that bug is reintroduced. Genericity of the timeline skeleton is asserted offline in
+  `run-timeline-check.ts` against an invented graph.
+- Local-data screens (Globe, Markets, Portfolio, stock/sector/country) do not fetch and need none.
+
 **Rendered text is BOUNDED — and bounding means slicing the STRING, not the box
 (`lib/agent/bound-text.ts`, M30).** `Markdown` and `JsonBlock` both cap what they parse at
 `BOUND` (12 KB) and offer an incremental "Show more"; nothing a graph legitimately produces

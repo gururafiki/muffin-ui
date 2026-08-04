@@ -36,9 +36,29 @@ function longest(lanes: Lane[]): number {
   return max;
 }
 
-/** Spine-shaped placeholders plus a line that says what is happening — an unlabelled
- * skeleton reads the same as an empty run, which is the confusion being fixed. */
-function RunTimelineSkeleton() {
+/**
+ * The run's shape while history loads — **the real steps, from the graph**.
+ *
+ * `GET /assistants/{id}/graph` already tells us which nodes this graph declares, and the
+ * loaded view already renders un-reached steps as `pending` rows. So the skeleton is those
+ * same rows, through the same `SpineRow`/`NodeRow` components: right count, right labels,
+ * right icons, and the same 26px gutter — which means history landing turns pending rows
+ * into real ones instead of replacing a differently-shaped placeholder.
+ *
+ * It is generic by construction, not by discipline: everything comes from `planFromGraph`,
+ * which humanises any node id and filters internal ones, so a graph written next month works
+ * with no change here. Deriving this from `AgentDef.stages` instead would reintroduce exactly
+ * the per-graph knowledge this view was built to avoid.
+ *
+ * The anonymous bars remain for the one case with nothing to derive from: the graph query
+ * itself still in flight. That is brief and usually skipped entirely, since `useAssistantGraph`
+ * is cached per `graphId`.
+ *
+ * KNOWN LIMIT: the graph gives node names and order, not superstep grouping — parallelism is
+ * only knowable from history. So this lists steps flat, and some rows regroup into bracketed
+ * fans when history arrives. Far less movement than three unlabelled bars, but not zero.
+ */
+function RunTimelineSkeleton({ pending, ctx }: { pending: RunNode[]; ctx: TimelineCtx }) {
   return (
     <View className="gap-2.5">
       <View className="flex-row items-center gap-2">
@@ -47,13 +67,23 @@ function RunTimelineSkeleton() {
           Reading this run…
         </Text>
       </View>
-      {[0, 1, 2].map((i) => (
-        <View key={i} className="flex-row items-center gap-3">
-          <Skeleton className="h-[18px] w-[18px] rounded-pill" />
-          <Skeleton className="h-3.5 flex-1" />
-          <Skeleton className="h-3 w-12" />
+      {pending.length > 0 ? (
+        <View>
+          {pending.map((node, i) => (
+            <SpineRow key={node.id} status="pending" last={i === pending.length - 1}>
+              <NodeRow node={node} ctx={ctx} />
+            </SpineRow>
+          ))}
         </View>
-      ))}
+      ) : (
+        [0, 1, 2].map((i) => (
+          <View key={i} className="flex-row items-center gap-3">
+            <Skeleton className="h-[18px] w-[18px] rounded-pill" />
+            <Skeleton className="h-3.5 flex-1" />
+            <Skeleton className="h-3 w-12" />
+          </View>
+        ))
+      )}
     </View>
   );
 }
@@ -143,7 +173,9 @@ export function RunTimeline({
   const reduced = useReducedMotion();
   const ctx: TimelineCtx = { threadId, busy, maxMs: longest(lanes), live, depth: 0 };
 
-  if (isPending && lanes.length === 0) return <RunTimelineSkeleton />;
+  // With no lanes yet, `pending` IS the whole graph — so the skeleton is the run's real
+  // shape rather than three anonymous bars.
+  if (isPending && lanes.length === 0) return <RunTimelineSkeleton pending={pending} ctx={ctx} />;
 
   if (lanes.length === 0 && pending.length === 0) {
     return (

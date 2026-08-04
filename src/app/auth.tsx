@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
-import { Button, Card, Field, MuffinLogo, Screen, Text } from '@/components/ui';
+import { Button, Card, Field, MuffinLogo, Screen, Skeleton, Text } from '@/components/ui';
 import {
   emailError,
   friendlyAuthError,
@@ -272,6 +272,28 @@ export default function AuthScreen() {
         </Card>
       ) : (
         <Card className="gap-3">
+          {/* Reserve the OAuth block while GoTrue's settings load, or the buttons drop in
+              late and shove the e-mail form down the page. `h-11` matches Button `md`
+              (py-3 + a text line); two of them because that is what this deployment
+              enables. Honest trade-off: a deployment with NO providers configured briefly
+              reserves space that then collapses — a smaller jump than the current one, and
+              only on first load since the query is cached. */}
+          {providers.isPending ? (
+            <>
+              <View className="gap-2">
+                <Skeleton className="h-11 w-full rounded-pill" />
+                <Skeleton className="h-11 w-full rounded-pill" />
+              </View>
+              <View className="flex-row items-center gap-3 py-1">
+                <View className="h-px flex-1 bg-frosting-200 dark:bg-night-border" />
+                <Text variant="muted" className="text-xs">
+                  or
+                </Text>
+                <View className="h-px flex-1 bg-frosting-200 dark:bg-night-border" />
+              </View>
+            </>
+          ) : null}
+
           {providers.data && providers.data.length > 0 ? (
             <>
               <View className="gap-2">

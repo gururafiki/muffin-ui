@@ -602,6 +602,48 @@ async function main(): Promise<void> {
     check('a task repeated across supersteps stays one node', repeated.flatMap((l) => l.nodes).length === 1);
   }
 
+  console.log('\nthe timeline skeleton is generic — an unknown graph still gets a real shape');
+  {
+    // The loading skeleton renders `pendingNodes(planFromGraph(graph), ∅)` — the run's actual
+    // steps rather than three anonymous bars. That is only honest if it works for a graph the
+    // app has never seen, so this uses invented node names on purpose. If someone later reaches
+    // for `AgentDef.stages` here, registered graphs would keep working and this would fail.
+    const unknown: AssistantGraph = {
+      nodes: [
+        { id: '__start__', data: '__start__' },
+        { id: 'quantum_flux_probe', data: 'quantum_flux_probe' },
+        { id: 'ReducerMiddleware.before', data: 'ReducerMiddleware.before' },
+        { id: 'zeta_reconciliation', data: 'zeta_reconciliation' },
+        { id: 'orphaned_epilogue', data: 'orphaned_epilogue' },
+        { id: '__end__', data: '__end__' },
+      ],
+      edges: [
+        { source: '__start__', target: 'quantum_flux_probe' },
+        { source: 'quantum_flux_probe', target: 'zeta_reconciliation' },
+        { source: 'zeta_reconciliation', target: '__end__' },
+      ],
+    } as unknown as AssistantGraph;
+
+    const plan = planFromGraph(unknown);
+    const names = plan.map((s) => s.name);
+    check('unseen graph still yields a plan', plan.length === 3, names.join(','));
+    check('sentinels and middleware are filtered', !names.some((n) => isInternalNode(n)));
+    check(
+      'unknown node ids get readable labels',
+      plan[0]?.label === 'Quantum flux probe',
+      `${plan[0]?.label}`,
+    );
+    check('unreachable nodes still appear, sorted last', names[names.length - 1] === 'orphaned_epilogue');
+
+    // With no lanes yet, nothing has executed — so the skeleton shows every step, as pending.
+    const skeleton = pendingNodes(plan, new Set());
+    check('skeleton row per planned step', skeleton.length === plan.length, `${skeleton.length}`);
+    check('skeleton rows are all pending', skeleton.every((n) => n.status === 'pending'));
+    check('skeleton rows carry labels, not blanks', skeleton.every((n) => n.label.trim().length > 0));
+    // Pending rows must not be expandable, or the skeleton would fire history fetches.
+    check('skeleton rows have no namespace to fetch', skeleton.every((n) => !n.namespace));
+  }
+
   console.log('\nrendered text is bounded, so one bad payload cannot abort the app');
   {
     // The real shape that took a Pixel down: ~196 KB on a SINGLE line, so there

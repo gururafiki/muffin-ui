@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Screen, Text } from '@/components/ui';
+import { Badge, Card, Screen, SkeletonRow, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { usePresets, useDeletePreset } from '@/features/presets/use-presets';
 import { AGENTS, getAgent } from '@/lib/agent/registry';
@@ -41,6 +41,22 @@ export default function AgentsScreen() {
           </Pressable>
         ))}
       </View>
+
+      {/* Presets come from the API, so reserve their shape rather than letting the whole
+          section appear at once. `isPending` (not `!data`) — an empty result must render
+          nothing, not skeletons forever. The static AGENTS list above is local and has
+          always painted immediately. */}
+      {presets.isPending ? (
+        <View className="mt-6 gap-3">
+          <Text variant="heading">Saved presets</Text>
+          <Text variant="muted">Named configurations you saved. Tap to run.</Text>
+          {[0, 1].map((i) => (
+            <Card key={i}>
+              <SkeletonRow tile="h-10 w-10" gap="gap-0.5" trailing="chevron" />
+            </Card>
+          ))}
+        </View>
+      ) : null}
 
       {presets.data?.length ? (
         <View className="mt-6 gap-3">

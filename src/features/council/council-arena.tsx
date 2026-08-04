@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
-import { Card, Text } from '@/components/ui';
-import type { PersonaMeta } from './personas';
+import { Card, Skeleton, Text } from '@/components/ui';
+import { COUNCIL_PERSONAS, type PersonaMeta } from './personas';
 import { PersonaAvatar } from './persona-avatar';
 import type { PersonaSignal, PersonaStage } from './types';
 
@@ -40,6 +40,36 @@ export function CouncilArena({
             selected={selected === meta.slug}
             onPress={() => onSelect(meta.slug)}
           />
+        ))}
+      </View>
+    </Card>
+  );
+}
+
+/**
+ * The arena's shape while a reopened session hydrates.
+ *
+ * Lives next to `CouncilArena` so the two stay in step — the seat metrics below mirror
+ * `PersonaAvatar` (`w-[88px]`, a 64px avatar, a label line) and the wrapper mirrors the grid
+ * above. It seats `COUNCIL_PERSONAS` because that is what the screen renders before it knows
+ * whether specialists took part; their six extra seats join later, as they do in a live run.
+ *
+ * This replaced a single `h-24` (96px) bar. The real arena is ~4 rows of ~96px seats, so
+ * hydration used to grow the page by roughly 500px and shove everything below it down.
+ */
+export function CouncilArenaSkeleton() {
+  return (
+    <Card tone="muted" className="gap-3">
+      <View className="flex-row items-center justify-between">
+        <Text variant="heading">The Council</Text>
+        <Skeleton className="h-3.5 w-20" />
+      </View>
+      <View className="flex-row flex-wrap justify-center gap-y-3">
+        {COUNCIL_PERSONAS.map((meta) => (
+          <View key={meta.slug} className="w-[88px] items-center gap-1">
+            <Skeleton className="h-16 w-16 rounded-full" />
+            <Skeleton className="h-2.5 w-14" />
+          </View>
         ))}
       </View>
     </Card>

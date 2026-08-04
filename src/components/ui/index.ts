@@ -12,7 +12,7 @@ export { ProgressBar } from './progress-bar';
 export { ScallopDivider } from './scallop-divider';
 export { Screen } from './screen';
 export { Segmented } from './segmented';
-export { Skeleton } from './skeleton';
+export { Skeleton, SkeletonRow, SkeletonText } from './skeleton';
 export { ParallelFan, SpineRow } from './spine';
 export { StatusDot, statusLabel, type DotStatus } from './status-dot';
 export { Text } from './text';

@@ -5,7 +5,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
 
 import { AdvancedOptions } from '@/components/advanced-options';
-import { Button, Card, Field, Screen, Skeleton } from '@/components/ui';
+import { Button, Card, Field, Screen } from '@/components/ui';
 import { useSignInRequiredToRun } from '@/features/account/run-gate';
 import { useCall } from '@/features/agent-calls/use-calls';
 import { useAgentView } from '@/features/agent-shared/agent-view-store';
@@ -24,7 +24,7 @@ import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { parseArray, zPersonaSignal } from '@/lib/agent/schemas';
 import { useRunTimeline } from '@/features/agent-shared/run-timeline/use-run-timeline';
-import { CouncilArena } from './council-arena';
+import { CouncilArena, CouncilArenaSkeleton } from './council-arena';
 import { useCouncilLive, type PersonaLive } from './council-live';
 import { JudgePanel } from './judge-panel';
 import { findMemberNode, MemberDetail } from './member-detail';
@@ -251,11 +251,13 @@ export function CouncilScreen({
       <RunErrorCard error={stream.error} />
 
       {stream.isThreadLoading ? (
-        /* Reopened session hydrating — hold the arena's shape. */
-        <HydrationCard label="Loading this session…">
-          <Skeleton className="h-3.5 w-full" />
-          <Skeleton className="h-24 w-full" />
-        </HydrationCard>
+        /* Reopened session hydrating — hold the arena's ACTUAL shape. This used to be a
+           96px bar standing in for a ~4-row seat grid, so hydration grew the page by
+           roughly 500px. `CouncilArenaSkeleton` lives beside the arena it mirrors. */
+        <View className="gap-3">
+          <HydrationCard label="Loading this session…" />
+          <CouncilArenaSkeleton />
+        </View>
       ) : null}
 
       {busy ? (

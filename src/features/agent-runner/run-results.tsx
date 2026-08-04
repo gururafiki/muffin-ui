@@ -7,7 +7,7 @@
 import type { SubgraphDiscoverySnapshot } from '@langchain/langgraph-sdk/stream';
 import { View } from 'react-native';
 
-import { Badge, Card, Skeleton, Text } from '@/components/ui';
+import { Badge, Card, Skeleton, SkeletonText, Text } from '@/components/ui';
 import { Conversation, type SubagentRun } from '@/features/agent-shared/conversation';
 import { RunProgress } from '@/features/agent-shared/run-progress';
 import { HydrationCard } from '@/features/agent-shared/run-surface';
@@ -37,6 +37,13 @@ const RESULT_RENDERERS: Record<
 };
 
 /**
+ * Result renderers that open with a signal pill + confidence bar. Keyed on the registry's
+ * own `resultRenderer` vocabulary — the same field `RESULT_RENDERERS` above dispatches on —
+ * so this stays in step with what actually renders rather than being a second agent list.
+ */
+const VERDICT_RESULTS = new Set(['criteria', 'trading']);
+
+/**
  * Placeholder panels shown while a reopened thread hydrates (`isThreadLoading`
  * — one `getState` that can take a while on the deployed backend). Shaped to
  * match the real result layout so nothing jumps when data lands: the run-plan
@@ -63,17 +70,21 @@ export function HydrationSkeleton({ agent }: { agent: AgentDef }) {
         ) : null}
       </HydrationCard>
 
-      {/* Headline verdict card (pill + conviction bar + summary lines). */}
+      {/* Headline card — verdict-shaped ONLY for agents whose result is a verdict.
+          `criteria` and `trading` open with a signal pill + confidence bar; `research`
+          returns prose and every other agent falls through to `StructuredOutput`, so
+          promising a pill there advertises a shape that never arrives. */}
       <Card tone="sticker" className="gap-3">
-        <View className="flex-row items-center gap-3">
-          <Skeleton className="h-10 w-24 rounded-pill" />
-          <View className="flex-1 gap-1.5">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-2 w-full rounded-pill" />
+        {VERDICT_RESULTS.has(agent.resultRenderer ?? '') ? (
+          <View className="flex-row items-center gap-3">
+            <Skeleton className="h-10 w-24 rounded-pill" />
+            <View className="flex-1 gap-1.5">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-2 w-full rounded-pill" />
+            </View>
           </View>
-        </View>
-        <Skeleton className="h-3.5 w-full" />
-        <Skeleton className="h-3.5 w-5/6" />
+        ) : null}
+        <SkeletonText lines={3} />
       </Card>
 
       {/* Report-section rows (icon · label · chevron). */}

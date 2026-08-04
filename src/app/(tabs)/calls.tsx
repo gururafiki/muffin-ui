@@ -66,6 +66,48 @@ function CallCard({ thread, onOpen }: { thread: Thread; onOpen: (thread: Thread)
   );
 }
 
+/**
+ * `CallCard`'s shape while the thread list loads — kept directly beneath it so the two are
+ * edited together.
+ *
+ * Mirrors the card above field for field, because the previous version did not and every row
+ * moved on fill: it drew TWO text bars where the card renders three lines (title+badge,
+ * descriptor, relative time), used `gap-1.5` against the card's `gap-1`, and ended in a wide
+ * pill where the card ends in a narrow chevron — while omitting the status badge, which is the
+ * thing that actually is a pill, inline beside the title.
+ *
+ * Eight rows rather than three: three left most of the screen empty and then reflowed as ~20
+ * real rows arrived.
+ */
+function CallListSkeleton() {
+  return (
+    <View className="gap-3">
+      {Array.from({ length: 8 }, (_, i) => (
+        <Card key={i} tone="sticker" className="flex-row items-center gap-3">
+          <Skeleton className="h-12 w-12 rounded-crumb" />
+          <View className="flex-1 gap-1">
+            {/* Line BOXES, not bar heights — measured off the rendered card: the title line
+                is 28px (text-lg), the descriptor 20px (text-sm), the timestamp 16px
+                (text-xs). Sizing these to the bars instead left the card 86px against a
+                real 108px, so every row grew by 22px on fill. */}
+            <View className="h-7 flex-row items-center gap-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-4 w-12 rounded-pill" />
+            </View>
+            <View className="h-5 justify-center">
+              <Skeleton className="h-3.5 w-24" />
+            </View>
+            <View className="h-4 justify-center">
+              <Skeleton className="h-3 w-16" />
+            </View>
+          </View>
+          <Skeleton className="h-5 w-2.5" />
+        </Card>
+      ))}
+    </View>
+  );
+}
+
 const Separator = () => <View className="h-3" />;
 
 export default function CallsScreen() {
@@ -151,21 +193,7 @@ export default function CallsScreen() {
     return (
       <Screen plaid refreshControl={refreshControl}>
         {header}
-        {isLoading ? (
-          /* Skeleton rows in the shape of the loaded call cards. */
-          <View className="gap-3">
-            {[0, 1, 2].map((i) => (
-              <Card key={i} tone="sticker" className="flex-row items-center gap-3">
-                <Skeleton className="h-12 w-12 rounded-crumb" />
-                <View className="flex-1 gap-1.5">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-24" />
-                </View>
-                <Skeleton className="h-5 w-12 rounded-pill" />
-              </Card>
-            ))}
-          </View>
-        ) : isError ? (
+        {isLoading ? <CallListSkeleton /> : isError ? (
           <Card tone="outline">
             <Text variant="heading">Couldn’t load calls</Text>
             <Text variant="muted">
