@@ -562,7 +562,9 @@ Four rules learned the hard way; all four passed `tsc`, `expo export` and every 
 - **Hermes has no `crypto`.** The LangGraph SDK calls `crypto.randomUUID()` to mint a thread id on
   submit, so every new run failed with `ReferenceError: Property 'crypto' doesn't exist` — visible
   only as an unhandled promise rejection, i.e. a Run button that appears dead. Polyfilled in
-  `install-fetch.native.ts`. **`structuredClone` is the next most likely gap** (4 files in the SDK).
+  `install-fetch.native.ts`. (`structuredClone` was flagged as the next likely gap and **checked —
+  it is not one**: the SDK calls it unguarded in its message-assembly paths, but RN 0.85 ships it at
+  `react-native/src/private/webapis/structuredClone/`. Verify before polyfilling anything else.)
 - **Native carries no Cloudflare Access cookie.** Web rides the browser's Access SSO cookie and
   nginx's same-origin `/api` + `/supabase` proxies; native has neither, so Settings needs absolute
   URLs and the `CF-Access-Client-Id`/`-Secret` service-token pair (`cfAccessClientId` /
