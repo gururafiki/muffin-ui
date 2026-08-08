@@ -2,7 +2,7 @@
 # Build the Expo web export and serve it with nginx (same-origin /api proxy).
 # Mirrors the agent-chat-ui pattern; built for arm64 in CI like the other images.
 
-FROM node:22-slim AS builder
+FROM node:26-slim AS builder
 WORKDIR /app
 
 # Install deps first for layer caching.
