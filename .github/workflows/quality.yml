@@ -1,0 +1,38 @@
+name: Quality
+
+# The merge gate for this repo: `npm run check` = tsc --noEmit, eslint over the
+# whole tree (not just expo lint's /src,/app,/components), and the offline
+# timeline/skeleton verification scripts.
+#
+# Before this, build.yml was the only workflow: it builds and pushes the image on
+# push-to-main, so nothing checked a pull request at all. A type error or a
+# broken timeline reducer could only be discovered after it was already on `main`
+# and dispatched to the deployment repo.
+#
+# NOTE: deliberately NO `paths` / `paths-ignore` filter. This is a REQUIRED
+# status check, and a filtered workflow never reports on a PR that misses the
+# filter — leaving the PR blocked on a check that will never arrive.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: quality-${{ github.ref }}
+  # Superseded PR pushes are safe to cancel; a `main` commit is not — its result
+  # is the record that the merged tree is sound.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Matches build.yml's android job: Expo SDK 56 minimum.
+          node-version: "20.19.4"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck, lint, offline verification
+        run: npm run check

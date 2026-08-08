@@ -6,7 +6,11 @@ const globals = require("globals");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*"],
+    // `dist/` is the exported web bundle. `.expo/` is Expo's generated cache —
+    // its `types/router.d.ts` ships an eslint-disable directive that this config
+    // makes redundant, so linting it reports an "unused disable directive"
+    // warning about a file nobody here wrote and every `expo start` rewrites.
+    ignores: ["dist/*", ".expo/*"],
   },
   {
     // The verification scripts (`scripts/*.mjs`, `scripts/*.ts`) are Node
