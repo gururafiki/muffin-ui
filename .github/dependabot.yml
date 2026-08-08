@@ -40,6 +40,15 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Node major bumps are chosen by LTS line, not by version number, and
+      # Dependabot has no concept of release lines. It proposed 25 (#30), then
+      # 26 (#44) — both Current releases (`lts: false` on nodejs.org/dist) with
+      # ~6 months of support, i.e. each one moves a production image OFF
+      # long-term support. Even majors do become LTS, but months after release,
+      # so the next move is a deliberate decision. Minor/patch flow normally.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
