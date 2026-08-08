@@ -24,6 +24,13 @@ updates:
       # unit instead (see the expo-upgrade flow in ROADMAP.md).
       - dependency-name: "expo"
       - dependency-name: "expo-*"
+      # Not covered by "expo-*" — the name does not start with "expo", but the
+      # package is versioned in lockstep with the SDK major all the same.
+      # Dependabot opened #35 to take 57.0.1 against Expo SDK 56; the lint
+      # config for an SDK we are not on is exactly the mismatch this list
+      # exists to prevent.
+      - dependency-name: "eslint-config-expo"
+      - dependency-name: "@expo/*"
       - dependency-name: "react"
       - dependency-name: "react-dom"
       - dependency-name: "react-native"
