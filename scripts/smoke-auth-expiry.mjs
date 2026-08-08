@@ -20,7 +20,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
 const API = 'https://muffin-api.rafiki.guru';
@@ -32,7 +32,7 @@ const EMAIL = process.env.MUFFIN_EMAIL;
 const PASSWORD = process.env.MUFFIN_PASSWORD;
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
-const DIST = new URL('../dist', import.meta.url).pathname;
+const DIST = resolve(new URL('../dist', import.meta.url).pathname);
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.map': 'application/json', '.png': 'image/png',
@@ -88,8 +88,16 @@ const server = http.createServer((req, res) => {
     res.end(`window.__MUFFIN_CONFIG__=${JSON.stringify({ supabaseUrl: '/supabase', supabaseAnonKey: ANON })};`);
     return;
   }
-  let p = normalize(join(DIST, decodeURIComponent(req.url.split('?')[0])));
-  if (!p.startsWith(DIST)) { res.writeHead(403); res.end(); return; }
+  // Resolve, then require the result to be DIST itself or strictly beneath it.
+  // `startsWith(DIST)` alone is not containment — it also admits a sibling
+  // directory whose name merely begins with it (`dist-evil`), hence the `sep`.
+  const requested = resolve(DIST, `.${normalize(`/${decodeURIComponent(req.url.split('?')[0])}`)}`);
+  if (requested !== DIST && !requested.startsWith(DIST + sep)) {
+    res.writeHead(403);
+    res.end();
+    return;
+  }
+  let p = requested;
   if (!existsSync(p) || statSync(p).isDirectory()) p = join(DIST, 'index.html');
   res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' });
   createReadStream(p).pipe(res);
