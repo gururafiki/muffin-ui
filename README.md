@@ -386,18 +386,21 @@ Note that `npm run lint` alone will **not** see the `scripts/` directory — `ex
 ### Verification
 
 **There is no test runner.** The per-change loop is `tsc` + `expo export` + a headless-browser
-check of the changed flow, asserting zero Reanimated/worklet errors. Six scripts back that up —
+check of the changed flow, asserting zero Reanimated/worklet errors. Eight scripts back that up —
 all need a fresh `npx expo export -p web --output-dir dist` and system Chrome, except the first
-two:
+three:
 
 | Script | Needs credentials? | What it asserts |
 |---|---|---|
 | `npx tsx scripts/run-timeline-check.ts` | **No** — fully offline | Runs the real timeline modules over synthetic snapshots: errored tasks, unanswered tool calls, summarised transcripts, duration edge cases |
+| `npx tsx scripts/auth-check.ts` (`npm run verify:auth`) | **No** — fully offline | The auth-header / session-expiry / connection layer: that the per-request hook overrides a stale `Authorization` (and *deletes* it when signed out), the expired-vs-signed-out truth table, connection-status transitions, and **that the SSE transport keeps a non-zero reconnect budget** |
+| `node scripts/smoke-auth-expiry.mjs` | CF Access + Supabase + login | Signs in for real, expires the stored access token in place, and asserts the next request carries a *refreshed* Bearer — then kills the refresh token and asserts the app says "your session expired" instead of surfacing a raw 401 |
 | `npx tsx scripts/history-check.ts` | CF Access | The `/history` + `getGraph` contract end-to-end against the deployment, for all five graphs |
 | `node scripts/smoke-timeline.mjs [threadId] [graphId]` | CF Access | The Timeline in a browser: parallel brackets, durations, the four facets, and that a leaf node does not redraw the whole run |
 | `node scripts/smoke-reopen.mjs` | CF Access | Reopening a finished thread hydrates from `thread.values` |
 | `node scripts/verify-readme.mjs [--only=<screen>] [--live]` | Optional (`--live` requires CF Access) | **Walks every feature bullet in this README** and prints a pass/differ/fail table to `.verify-shots/`. Client-side screens need nothing; run pages need CF Access; `MUFFIN_EMAIL`/`MUFFIN_PASSWORD` unlock the sign-in-gated screens. **`--live` drives the deployed site** (`muffin.<domain>`) instead of the local `dist/` — use it to verify a deploy, since a local build of the same commit proves the source is good, not that the right image reached the node |
 | `node scripts/hydration-check.mjs` | No | Visits every route in both colour schemes and reports which prerendered HTML was served — the React #418 diagnostic |
+| `node scripts/skeleton-check.mjs` (`npm run verify:skeletons`) | No | Hangs the API so loading states stay up, and asserts the skeleton bars have non-zero geometry |
 
 Credentials come from the environment (`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`,
 `SUPABASE_ANON_KEY`, `MUFFIN_EMAIL`, `MUFFIN_PASSWORD`) and are never committed.

@@ -452,6 +452,54 @@ cloud backup (`backup.ts`: portfolio + NON-SECRET settings subset → RLS'd `use
 API keys / tokens / endpoints are stripped on upload AND restore). Native pulls
 `react-native-url-polyfill` (in `install-fetch.native.ts`) for supabase-js.
 
+**The access token is resolved PER REQUEST, not per client (M32).** The deployment issues
+one-hour tokens (`GOTRUE_JWT_EXP: "3600"`). supabase-js refreshes them fine — but the refresh
+never reached an open screen, so any agent page left open for an hour 401'd every action until
+the page was reloaded. Four things to keep straight:
+
+- **`defaultHeaders` is a SNAPSHOT, and the run screen freezes it.** `buildAuthHeaders` returns
+  a plain object; `useRunStream` memoizes `makeClient(...)` on `[]` and the transport on
+  `[client, reconnectTarget]`. That memoization is load-bearing (a new client identity rebuilds
+  `useStream`'s controller and re-runs `hydrate` forever), so **the fix is never to un-memoize**.
+- **`onRequest` is the per-request auth chokepoint.** Both the classic `Client` and the SSE
+  transport accept `(url, init) => Promise<RequestInit>`, applied *after* the `defaultHeaders`
+  merge on every path — `getState`, SSE open, commands, **reconnect**, and `BaseClient.fetch`.
+  `lib/auth/request-hook.ts` is that hook; `lib/auth/headers.ts` holds the composition both it
+  and `buildAuthHeaders` share. Add a credential there and it reaches every request.
+  It must **delete** `Authorization` when there is no token — omitting the key leaves the dead
+  one from `defaultHeaders` in place.
+- **Use `getSession()`, not `refreshSession()`.** It returns the cached token while >90s from
+  expiry (a storage read), dedupes concurrent refreshes via `refreshingDeferred`, rate-limits
+  serial retries with a token-keyed cooldown, and — importantly — PRESERVES the session when a
+  refresh fails while the access token is still valid (a network blip), only removing it when
+  the refresh token is genuinely dead.
+- **`SIGNED_OUT` does not mean the user left.** supabase-js emits it for both an explicit
+  `signOut()` and a rejected refresh token, so `lib/auth/expiry.ts` + `beginIntentionalSignOut()`
+  tell them apart. Without that, an expiry showed a first-run "Sign in to run agents" card, as if
+  the app had forgotten they were ever signed in.
+
+**Supplying `fetch` to the SSE transport SILENTLY DISABLES its reconnect loop (M32).**
+`ProtocolSseTransportAdapter` does
+`maxReconnectAttempts = options.fetch != null ? 0 : options.maxReconnectAttempts ?? 5` (and the
+same for `idleReconnect`). `streamingFetch()` is `undefined` on web but `expo/fetch` on native —
+so **native run streams had no reconnect at all**, and one blip killed the stream permanently,
+while web (which reconnects with `since: <last seq>`) merely reconnected with a stale token and
+got a 401. Pass **`fetchFactory`** instead: `resolveFetch()` checks it first and it does not trip
+that guard. `HttpAgentServerAdapter` cannot express any of this — it forwards only
+`{apiUrl, threadId, defaultHeaders, onRequest, fetch, asyncCaller, paths}` — so
+`makeReopenTransport` constructs `ProtocolSseTransportAdapter` directly (it is exported and
+declares a public `getState()` matching `AgentServerAdapter`). `scripts/auth-check.ts` reads
+`maxReconnectAttempts` back off the constructed adapter, which is the only way to assert the
+budget survived.
+
+**Reconnect = a new transport identity, not a remount.** `useStream` keys its controller on
+`[client, assistantId, transport]`, so `useRunStream`'s `reconnect()` bumps a `{nonce, threadId}`
+object in the transport's `useMemo` deps: re-hydrate + fresh event pump, React tree intact. It
+binds the **live** thread id (the mount-time one is `undefined` for the whole life of a fresh
+run) and **never re-submits** — a dropped socket does not stop the server-side run, and replaying
+a `POST /runs` that may already have landed would start a duplicate. Only a 401 is safe to replay,
+because the server rejected it.
+
 ### Settings → `config.configurable` — `src/lib/settings/`
 On-device keys are injected into each run's `config.configurable`, never persisted server-side.
 **`configurable.ts` field names mirror `muffin-agent`'s `BaseConfiguration` subclasses

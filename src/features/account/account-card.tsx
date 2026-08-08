@@ -4,7 +4,7 @@ import { View } from 'react-native';
 
 import { Badge, Button, Card, Text } from '@/components/ui';
 import { getSupabase } from '@/lib/auth/client';
-import { useAuth } from '@/lib/auth/store';
+import { beginIntentionalSignOut, useAuth } from '@/lib/auth/store';
 
 import { backupToCloud, restoreFromCloud } from './backup';
 
@@ -27,6 +27,10 @@ export function AccountCard() {
     if (!supabase) return;
     setBusy(true);
     try {
+      // Mark it BEFORE the call: supabase-js emits the same SIGNED_OUT event for a
+      // deliberate sign-out and for a rejected refresh token, and only this flag
+      // stops the user being told their session "expired" when they just left.
+      beginIntentionalSignOut();
       await supabase.auth.signOut();
       setNotice(null);
     } finally {

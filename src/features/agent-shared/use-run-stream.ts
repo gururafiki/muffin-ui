@@ -68,10 +68,20 @@ export function useRunStream(
   // value, but a ref is documented as not-for-render and `react-hooks/refs`
   // rightly rejects reading `.current` inside this `useMemo`. State initialisers
   // are the supported way to snapshot a prop at mount and read it during render.
-  const [initialThreadId] = useState(opts.threadId);
+  //
+  // `nonce` is what makes `reconnect()` possible: `useStream` keys its
+  // StreamController on `[client, assistantId, transport]`, so bumping this
+  // object's identity rebuilds the controller — re-hydrate plus a fresh event pump
+  // — WITHOUT remounting the React tree. `threadId` is carried alongside so the
+  // rebuilt transport binds the LIVE thread rather than the mount-time one (which
+  // is `undefined` for the whole life of a fresh run).
+  const [reconnectTarget, setReconnectTarget] = useState<{
+    nonce: number;
+    threadId: string | undefined;
+  }>({ nonce: 0, threadId: opts.threadId });
   const transport = useMemo(
-    () => makeReopenTransport(client, getSettings(), initialThreadId),
-    [client, initialThreadId],
+    () => makeReopenTransport(client, getSettings(), reconnectTarget.threadId),
+    [client, reconnectTarget],
   );
 
   const stream = useStream<AgentState>({
@@ -119,5 +129,18 @@ export function useRunStream(
     void stream.respond(resumeValue, { config: runConfig(overrides) });
   };
 
-  return { stream, threadId, submitRun, resume };
+  /**
+   * Re-hydrate and re-open the event pump after the SDK's own reconnect budget is
+   * exhausted, by rebuilding the transport (see `reconnectTarget` above).
+   *
+   * Deliberately does NOT re-submit. A dropped socket does not mean the run stopped
+   * — it almost always keeps executing server-side — and replaying a `POST /runs`
+   * that may already have landed would start a duplicate. Reconnect observes; only
+   * a 401 (which the server rejected, so it never executed) is safe to replay, and
+   * that is handled invisibly by the per-request token refresh.
+   */
+  const reconnect = () =>
+    setReconnectTarget((prev) => ({ nonce: prev.nonce + 1, threadId: threadId ?? prev.threadId }));
+
+  return { stream, threadId, submitRun, resume, reconnect };
 }

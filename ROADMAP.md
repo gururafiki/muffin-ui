@@ -905,6 +905,45 @@ render verbatim).
 for layout stability, but it is not a crash fix and must not be sold as one.
 
 
+## ✅ Milestone 32 — Sessions survive an idle hour; streams survive a dropped connection (2026-08-08)
+Reported as *"if session expires after inactivity I have to reload app/web page since it doesn't
+handle well 401/403 from langgraph api"* (`todos.md:152`). Two independent root causes, found to
+compound:
+
+- **`defaultHeaders` is a snapshot, and the run screen freezes it.** The deployment issues
+  one-hour tokens; supabase-js refreshed them and `onAuthStateChange` updated the store, but
+  `useRunStream` memoizes its client for the life of the screen, so an open run kept sending the
+  token it was built with. Fixed with the SDK's `onRequest` hook — applied after the
+  `defaultHeaders` merge on every path including SSE reconnect — resolving the token through
+  `supabase.auth.getSession()` per request. Nothing was un-memoized: rebuilding the client
+  re-runs `hydrate` forever.
+- **Supplying `fetch` to the SSE transport silently zeroes its reconnect budget**
+  (`maxReconnectAttempts = options.fetch != null ? 0 : 5`). `streamingFetch()` returns
+  `expo/fetch` on native, so **native run streams could not reconnect at all**. Fixed by
+  constructing `ProtocolSseTransportAdapter` directly and passing `fetchFactory`, which
+  `resolveFetch()` checks first and which does not trip that guard.
+
+Also: an expired session now says *"Your session expired"* instead of the first-run "Sign in to
+run agents" (supabase-js emits the same `SIGNED_OUT` for both, so `lib/auth/expiry.ts` tells them
+apart); a `Reconnecting…` status pill; and a **Reconnect** action that rebuilds the transport —
+re-hydrate plus a fresh event pump, React tree intact — and never re-submits.
+
+Guarded by 34 assertions in `scripts/auth-check.ts` (offline, including reading
+`maxReconnectAttempts` back off the constructed adapter) and `scripts/smoke-auth-expiry.mjs`,
+which signs in for real and expires the stored token in place rather than waiting an hour.
+
+**Deferred, deliberately:**
+- **Cloudflare Access expiry (24h) still produces a poor error** (`todos.md:141`). Access answers
+  with a 302 to a login page — `text/html`, not a 401 — so it surfaces as a parse error and needs
+  its own detection and copy.
+- **A manual Reconnect on a *busy* thread pays the ~27s checkpoint `getState`**, because
+  `makeReopenTransport` delegates busy/interrupted threads to it for correct active-thread and
+  interrupt detection. Making that path fast is separate work.
+- **No browser gate for reconnect.** It would need a live run to drop a stream mid-flight — slow,
+  costs LLM calls, and flaky. The offline reconnect-budget assertion guards the regression that
+  actually happened instead.
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,

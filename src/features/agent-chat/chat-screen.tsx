@@ -101,7 +101,9 @@ export function ChatScreen({
   threadId?: string;
   initialPrompt?: string;
 }) {
-  const { stream, submitRun, resume, threadId: liveThreadId } = useRunStream(agent, { threadId: initialThreadId });
+  const { stream, submitRun, resume, reconnect, threadId: liveThreadId } = useRunStream(agent, {
+    threadId: initialThreadId,
+  });
   // Seed the composer from a deep link only when starting a fresh conversation.
   const [draft, setDraft] = useState(initialThreadId ? '' : initialPrompt ?? '');
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
@@ -216,7 +218,7 @@ export function ChatScreen({
 
           {stream.interrupt ? <InterruptCard value={stream.interrupt.value} busy={busy} onResume={resume} /> : null}
 
-          <RunErrorCard error={stream.error} />
+          <RunErrorCard error={stream.error} onRetry={reconnect} />
         </ScrollView>
 
         {!atBottom ? (

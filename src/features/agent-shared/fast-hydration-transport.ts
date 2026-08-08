@@ -1,10 +1,17 @@
 import {
   type AgentServerAdapter,
   type Client,
-  HttpAgentServerAdapter,
+  ProtocolSseTransportAdapter,
 } from '@langchain/langgraph-sdk';
 
+import {
+  setOnline,
+  setReconnecting,
+  withConnectionTracking,
+} from '@/lib/agent/connection-status';
 import { streamingFetch } from '@/lib/agent/install-fetch';
+import { liveToken } from '@/lib/auth/live-token';
+import { authRequestHook } from '@/lib/auth/request-hook';
 import { resolveBaseUrl } from '@/lib/resolve-url';
 import { buildAuthHeaders } from '@/lib/settings/configurable';
 import type { Settings } from '@/lib/settings/store';
@@ -44,20 +51,52 @@ import type { Settings } from '@/lib/settings/store';
  * override it) — slower (~27s), but correct active-thread + interrupt
  * detection. Only idle/error reopens (the reopen-of-a-finished-run case this
  * optimisation targets) take the fast `thread.values` path.
+ *
+ * ## Why `ProtocolSseTransportAdapter` and not `HttpAgentServerAdapter`
+ *
+ * The `HttpAgentServerAdapter` wrapper forwards only
+ * `{apiUrl, threadId, defaultHeaders, onRequest, fetch, asyncCaller, paths}` to the
+ * SSE transport it delegates to, and binds `getState`. That makes
+ * `fetchFactory` / `maxReconnectAttempts` / `idleReconnect` / `onReconnect`
+ * unreachable — which mattered a great deal, because the SSE transport DISABLES its
+ * own reconnect loop when a `fetch` is supplied:
+ *
+ *     this.maxReconnectAttempts = options.fetch != null ? 0 : options.maxReconnectAttempts ?? 5;
+ *     this.idleReconnect       = options.fetch != null ? null : options.idleReconnect ?? "auto";
+ *
+ * `streamingFetch()` returns `undefined` on web but `expo/fetch` on native, so
+ * NATIVE run streams had zero reconnect attempts: one dropped connection killed the
+ * stream permanently. Constructing the SSE adapter directly (it is exported, and
+ * declares a public `getState()` with exactly the `AgentServerAdapter["getState"]`
+ * signature) lets us pass `fetchFactory` instead — `resolveFetch()` checks it first
+ * and it does not trip that guard — and set the reconnect options explicitly.
  */
 export function makeReopenTransport(
   client: Client,
   settings: Settings,
   initialThreadId: string | undefined,
 ): AgentServerAdapter {
-  const adapter = new HttpAgentServerAdapter({
+  const adapter = new ProtocolSseTransportAdapter({
     apiUrl: resolveBaseUrl(settings.apiUrl),
     defaultHeaders: buildAuthHeaders(settings),
-    fetch: streamingFetch(),
+    // Per-request token refresh. Critically this also covers the SSE RECONNECT:
+    // when an idle tab wakes and the transport re-subscribes, that request used to
+    // carry the token snapshot from mount, get a 401, and close the stream for good.
+    onRequest: authRequestHook(settings, liveToken),
+    // `fetchFactory`, NOT `fetch` — see the docblock above. `streamingFetch()` is
+    // `undefined` on web, and the factory's return value is used verbatim, so the
+    // `globalThis.fetch` fallback is required.
+    fetchFactory: () => withConnectionTracking(streamingFetch() ?? globalThis.fetch),
+    maxReconnectAttempts: 5,
+    idleReconnect: 'auto',
+    onReconnect: ({ attempt }) => setReconnecting(attempt),
     // The fix: bound at construction, so `getState()` (called from the
     // controller constructor, before `setThreadId`) sees the reopened thread.
     threadId: initialThreadId,
   });
+  // A freshly-built transport is by definition not mid-reconnect; without this a
+  // manual Reconnect would rebuild the transport and leave the pill stuck.
+  setOnline();
 
   // The stock SSE checkpoint read (GET /threads/{id}/state). Correct but ~27s
   // on the deployed node — used only for threads that must hydrate as ACTIVE.

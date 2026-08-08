@@ -27,12 +27,13 @@ import { Button, Card, Text } from '@/components/ui';
 import type { AgentDef } from '@/lib/agent/registry';
 import { palette } from '@/theme/colors';
 
-type RunState = 'running' | 'loading' | 'error' | 'done';
+type RunState = 'running' | 'reconnecting' | 'loading' | 'error' | 'done';
 
 export function RunRecap({
   agent,
   values,
   busy,
+  reconnecting,
   loading,
   failed,
   onStop,
@@ -40,6 +41,11 @@ export function RunRecap({
   agent: AgentDef;
   values: Record<string, string>;
   busy: boolean;
+  /**
+   * The event stream dropped and the SDK is retrying. Ranked ABOVE `busy` below: a
+   * reconnecting run is still busy, and the more specific state is the useful one.
+   */
+  reconnecting?: boolean;
   /** Thread-state fetch in flight (reopen hydration) — shown as "Loading". */
   loading?: boolean;
   /**
@@ -56,7 +62,15 @@ export function RunRecap({
   const filled = agent.inputs.filter((f) => values[f.key]?.trim());
   // Order matters: a resumed/retried run is "running" again even if the last
   // attempt failed, and hydration outranks a stale error from the prior mount.
-  const state: RunState = busy ? 'running' : loading ? 'loading' : failed ? 'error' : 'done';
+  const state: RunState = reconnecting
+    ? 'reconnecting'
+    : busy
+      ? 'running'
+      : loading
+        ? 'loading'
+        : failed
+          ? 'error'
+          : 'done';
   // `push` (not `setParams`/`replace`) reliably mounts a NEW screen instance —
   // the same idiom the Calls tab's `openThread` uses — so the pinned `threadId`
   // prop and `useRunStream`'s internal state actually reset for a fresh run.
@@ -137,7 +151,7 @@ function StatusPill({ state, reduceMotion }: { state: RunState; reduceMotion: bo
     <View className="flex-row items-center gap-1.5 rounded-pill border border-butter-500/40 bg-butter-500/15 px-2.5 py-1">
       <PulseDot reduceMotion={reduceMotion} />
       <Text className="font-heading text-xs text-butter-600">
-        {state === 'running' ? 'Running' : 'Loading'}
+        {state === 'running' ? 'Running' : state === 'reconnecting' ? 'Reconnecting…' : 'Loading'}
       </Text>
     </View>
   );

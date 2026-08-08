@@ -22,6 +22,7 @@ import { RunErrorCard, RunSurface } from '@/features/agent-shared/run-surface';
 import { RunViewToggle } from '@/features/agent-shared/run-view-toggle';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
+import { useConnection } from '@/lib/agent/connection-status';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { HydrationSkeleton, RunResults } from './run-results';
@@ -52,7 +53,11 @@ export function AgentRunner({
   // `threadId` (the prop) is pinned at screen mount — undefined for a fresh run.
   // `liveThreadId` follows the run: useRunStream updates it via onThreadId when
   // a new thread is created, so per-thread data hooks below follow the live run.
-  const { stream, submitRun, threadId: liveThreadId } = useRunStream(agent, { assistantId, threadId });
+  const { stream, submitRun, reconnect, threadId: liveThreadId } = useRunStream(agent, {
+    assistantId,
+    threadId,
+  });
+  const reconnecting = useConnection((s) => s.status === 'reconnecting');
   // Pre-submit draft only — never merged with the reopened run's saved inputs.
   // A reopened/finished run shows those via the read-only `RunRecap` instead.
   const [draft, setDraft] = useState<Record<string, string>>(initialValues ?? {});
@@ -162,13 +167,14 @@ export function AgentRunner({
             values={savedInputs}
             busy={busy}
             loading={stream.isThreadLoading}
+            reconnecting={reconnecting}
             failed={stream.error != null}
             onStop={() => stream.stop()}
           />
 
           <RunViewToggle agentId={agent.id} />
 
-          <RunErrorCard error={stream.error} />
+          <RunErrorCard error={stream.error} onRetry={reconnect} />
 
           {stream.isThreadLoading ? (
             /* Reopened thread, state fetch in flight — hold the layout's shape. */
