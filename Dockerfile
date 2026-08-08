@@ -15,7 +15,7 @@ COPY . .
 ENV EXPO_PUBLIC_API_URL=/api
 RUN npx expo export -p web --output-dir dist
 
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 # Writes /runtime-config.js from env at container start (public Supabase config,
