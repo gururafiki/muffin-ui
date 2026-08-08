@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { Badge, Card, ProgressBar, Text } from '@/components/ui';
+import { Badge, Button, Card, ProgressBar, Text } from '@/components/ui';
 import { RunStreamProvider } from '@/lib/agent/stream-context';
 import type { RunStream } from '@/lib/agent/stream-types';
 import { palette } from '@/theme/colors';
@@ -34,13 +34,31 @@ export function RunSurface({
   return <RunStreamProvider stream={stream}>{children}</RunStreamProvider>;
 }
 
-/** The run's error, as a card — renders nothing while healthy. */
-export function RunErrorCard({ error }: { error: unknown }) {
+/**
+ * The run's error, as a card — renders nothing while healthy.
+ *
+ * `onRetry` renders a Reconnect action. It is the escape hatch for the case the
+ * SDK's own reconnect budget cannot cover: once `maxReconnectAttempts` is exhausted
+ * the transport closes the event queue with the error and nothing will retry it on
+ * its own. Reconnecting rebuilds the transport (re-hydrate + fresh event pump); it
+ * never re-submits, so it is safe on a run that is still executing server-side.
+ */
+export function RunErrorCard({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   if (error == null) return null;
   return (
-    <Card tone="outline" className="gap-1">
+    <Card tone="outline" className="gap-2">
       <Badge label="error" tone="bearish" />
       <Text variant="muted">{error instanceof Error ? error.message : String(error)}</Text>
+      {onRetry ? (
+        <>
+          <Text variant="muted" className="text-xs">
+            The run may still be going on the server — reconnecting picks it back up.
+          </Text>
+          <View className="flex-row">
+            <Button title="Reconnect" variant="secondary" size="sm" onPress={onRetry} />
+          </View>
+        </>
+      ) : null}
     </Card>
   );
 }

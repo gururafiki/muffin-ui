@@ -20,19 +20,32 @@ export function useSignInRequiredToRun(): boolean {
   return !!anonKey && !session;
 }
 
-/** Inline "sign in to run" card shown in place of the Run action. */
+/**
+ * Inline "sign in to run" card shown in place of the Run action.
+ *
+ * Two voices, because two very different things bring a user here. A first-time
+ * visitor is being told the rules; someone whose hour-long token quietly lapsed is
+ * being told what just happened to them — and telling THEM "sign in to run agents"
+ * reads as if the app forgot they were ever signed in. `expired` comes from the auth
+ * store (see `lib/auth/expiry.ts`), which tells an expiry apart from a sign-out.
+ */
 export function SignInToRunNotice() {
   const router = useRouter();
+  const expired = useAuth((s) => s.expired);
   return (
     <Card tone="outline" className="gap-2">
       <Text variant="heading" className="text-base">
-        Sign in to run agents
+        {expired ? 'Your session expired' : 'Sign in to run agents'}
       </Text>
       <Text variant="muted">
-        Browsing shared runs is open to everyone, but starting a new one needs an account. Your API
-        keys stay on this device.
+        {expired
+          ? 'You were signed out after a spell of inactivity. Sign in again to keep running agents — nothing on this page is lost.'
+          : 'Browsing shared runs is open to everyone, but starting a new one needs an account. Your API keys stay on this device.'}
       </Text>
-      <Button title="Sign in / Create account" onPress={() => router.push('/auth')} />
+      <Button
+        title={expired ? 'Sign in again' : 'Sign in / Create account'}
+        onPress={() => router.push('/auth')}
+      />
     </Card>
   );
 }

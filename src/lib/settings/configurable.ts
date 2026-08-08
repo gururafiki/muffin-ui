@@ -1,3 +1,4 @@
+import { composeAuthHeaders } from '@/lib/auth/headers';
 import { getAuthSession } from '@/lib/auth/store';
 
 import type { Settings } from './store';
@@ -103,18 +104,18 @@ export function buildPresetConfigurable(settings: Settings): Record<string, unkn
  *
  * This is the single chokepoint for outbound API headers: `makeClient`,
  * `makeReopenTransport` and (through the memoized client) `useRunStream` all
- * read it, so a credential added here reaches every request path.
+ * read it, so a credential added here reaches every request path. The header
+ * composition itself lives in `lib/auth/headers.ts`, shared with the per-request
+ * hook so the two can never disagree.
+ *
+ * NOTE this is the SYNCHRONOUS snapshot that seeds `defaultHeaders`, and it is only
+ * as fresh as the last `onAuthStateChange` — not good enough on its own, because
+ * both the run-stream client and the hydration transport are memoized for the life
+ * of the screen, so a snapshot taken at mount was still being sent an hour later
+ * with an expired token. The per-request refresh that fixes that is
+ * `authRequestHook` (`lib/auth/request-hook.ts`), wired as `onRequest` at the same
+ * two call sites; this snapshot only has to make the first request correct.
  */
 export function buildAuthHeaders(settings: Settings): Record<string, string> {
-  const token = getAuthSession()?.accessToken ?? settings.authToken.trim();
-  const cfId = settings.cfAccessClientId.trim();
-  const cfSecret = settings.cfAccessClientSecret.trim();
-  return {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    // Both halves or neither — a lone id is not a credential and would just
-    // look like a malformed request at the edge.
-    ...(cfId && cfSecret
-      ? { 'CF-Access-Client-Id': cfId, 'CF-Access-Client-Secret': cfSecret }
-      : {}),
-  };
+  return composeAuthHeaders(getAuthSession()?.accessToken ?? settings.authToken, settings);
 }

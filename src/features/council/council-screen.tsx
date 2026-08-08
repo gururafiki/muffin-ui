@@ -20,6 +20,7 @@ import { HydrationCard, RunErrorCard, RunSurface } from '@/features/agent-shared
 import { SubagentActivity } from '@/features/agent-shared/subagent-activity';
 import { SubgraphDetail } from '@/features/agent-shared/subgraph-detail';
 import { useRunStream } from '@/features/agent-shared/use-run-stream';
+import { useConnection } from '@/lib/agent/connection-status';
 import { buildOverrides, initialOverrides } from '@/lib/agent/overrides';
 import type { AgentDef } from '@/lib/agent/registry';
 import { parseArray, zPersonaSignal } from '@/lib/agent/schemas';
@@ -125,7 +126,8 @@ export function CouncilScreen({
 
   // `threadId` (prop) is pinned at mount; `liveThreadId` follows a fresh run so
   // per-thread hooks attach live without re-gating (see agent-runner + the route).
-  const { stream, submitRun, threadId: liveThreadId } = useRunStream(agent, { threadId });
+  const { stream, submitRun, reconnect, threadId: liveThreadId } = useRunStream(agent, { threadId });
+  const reconnecting = useConnection((s) => s.status === 'reconnecting');
   const values = stream.values as Record<string, unknown> | undefined;
   const busy = stream.isLoading;
   const signInRequired = useSignInRequiredToRun();
@@ -241,6 +243,7 @@ export function CouncilScreen({
         agent={agent}
         values={{ ticker: savedTicker, query: savedQuery }}
         busy={busy}
+        reconnecting={reconnecting}
         loading={stream.isThreadLoading}
         failed={stream.error != null}
         onStop={() => stream.stop()}
@@ -248,7 +251,7 @@ export function CouncilScreen({
 
       <RunViewToggle agentId={agent.id} />
 
-      <RunErrorCard error={stream.error} />
+      <RunErrorCard error={stream.error} onRetry={reconnect} />
 
       {stream.isThreadLoading ? (
         /* Reopened session hydrating — hold the arena's ACTUAL shape. This used to be a

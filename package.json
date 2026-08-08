@@ -66,7 +66,8 @@
     "build:web": "expo export -p web --output-dir dist",
     "verify:offline": "tsx scripts/run-timeline-check.ts",
     "verify:skeletons": "node scripts/skeleton-check.mjs",
-    "check": "npm run typecheck && npm run lint:all && npm run verify:offline"
+    "check": "npm run typecheck && npm run lint:all && npm run verify:offline && npm run verify:auth",
+    "verify:auth": "tsx scripts/auth-check.ts"
   },
   "private": true
 }
