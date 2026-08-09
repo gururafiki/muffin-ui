@@ -16,53 +16,9 @@
 //
 // Serves `dist/` locally and MOCKS Supabase, so it needs no credentials and no
 // deployment — run `npx expo export -p web --output-dir dist` first.
-import { createServer } from 'node:http';
-import { readdir, readFile } from 'node:fs/promises';
-import { extname, join, posix, resolve } from 'node:path';
-
 import puppeteer from 'puppeteer-core';
 
-const DIST = resolve(process.cwd(), 'dist');
-
-/**
- * Every servable file, request-path -> absolute path, built by walking DIST once.
- *
- * The request path is used ONLY as a Map key — it never reaches the filesystem. The
- * obvious `join(DIST, req.url)` is a path-traversal hole (CodeQL js/path-injection:
- * `/../../etc/passwd` resolves outside DIST), and a `startsWith(DIST)` guard fixes
- * the bug but is not recognised as a sanitizer, so the alert persists. An allowlist
- * removes the taint entirely and cannot be got wrong later.
- *
- * (skeleton-check.mjs, which this was modelled on, still has the unguarded join.)
- */
-async function indexDist(dir = DIST, prefix = '') {
-  const out = new Map();
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return out; // no dist/ yet — every request 404s, which the caller reports
-  }
-  for (const entry of entries) {
-    const request = posix.join(prefix, entry.name);
-    if (entry.isDirectory()) {
-      for (const [k, v] of await indexDist(join(dir, entry.name), request)) out.set(k, v);
-    } else {
-      out.set(`/${request}`, join(dir, entry.name));
-    }
-  }
-  return out;
-}
-
-const TYPES = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.ttf': 'font/ttf',
-  '.svg': 'image/svg+xml',
-};
+import { serveDist } from './lib/serve-dist.mjs';
 
 // A structurally valid unsigned HS256 JWT. supabase-js only needs the anon key to be
 // present and parseable to construct a client; every request is intercepted below.
@@ -125,8 +81,33 @@ const INSTRUMENT_ROWS = {
   '1y': [
     ['AAPL', '17.7700'],
     ['SAP', '-8.8800'],
+    ['BTC', '55.4000'],
   ],
 };
+
+/** The multi-asset rows the Markets tab reads (crypto + an UNPRICED cash row). */
+const NON_EQUITY = [
+  {
+    symbol: 'BTC',
+    name: 'Bitcoin',
+    sector_id: null,
+    industry: null,
+    country: null,
+    asset_type: 'crypto',
+    priced: true,
+    sort_order: 106,
+  },
+  {
+    symbol: 'USD',
+    name: 'US Dollar (cash)',
+    sector_id: null,
+    industry: null,
+    country: 'United States',
+    asset_type: 'cash',
+    priced: false,
+    sort_order: 112,
+  },
+];
 
 /** Minimal server classification: one scheme, one region group, three members. */
 const CLASSIFICATION = {
@@ -198,44 +179,22 @@ const rowsFor = (period) => {
   }));
 };
 
-async function serve({ supabase }) {
-  const files = await indexDist();
-  if (files.size === 0) throw new Error(`no files in ${DIST} — run: npx expo export -p web`);
-  return new Promise((ok) => {
-    const server = createServer(async (req, res) => {
-      const url = (req.url || '/').split('?')[0];
-
-      // Generated at deploy time by deploy/40-runtime-config.sh, so it is absent
-      // from a static export. This is also how the app is told where Supabase is.
-      if (url === '/runtime-config.js') {
-        const cfg = supabase
-          ? `window.__MUFFIN_CONFIG__=${JSON.stringify({
-              supabaseUrl: `http://localhost:${server.address().port}/supabase`,
-              supabaseAnonKey: FAKE_ANON,
-            })};`
-          : '/* no supabase configured */';
-        res.writeHead(200, { 'content-type': 'text/javascript' });
-        return res.end(cfg);
-      }
-
-      // Extensionless routes fall back to the SPA shell, exactly as nginx does; a
-      // genuinely missing ASSET must 404 rather than quietly becoming HTML.
-      const isAsset = extname(url) !== '';
-      const candidate =
-        files.get(url) ??
-        (isAsset ? undefined : files.get(`${url}.html`) ?? files.get('/index.html'));
-      if (candidate) {
-        const body = await readFile(candidate);
-        res.writeHead(200, {
-          'content-type': TYPES[extname(candidate)] ?? 'application/octet-stream',
-        });
-        return res.end(body);
-      }
-      res.writeHead(404).end('not found');
-    });
-    server.listen(0, () => ok({ server, port: server.address().port }));
+/** Local `dist/` with a runtime-config that points the app at our mock Supabase. */
+const serve = ({ supabase }) => {
+  let port;
+  return serveDist({
+    runtimeConfig: () =>
+      supabase
+        ? `window.__MUFFIN_CONFIG__=${JSON.stringify({
+            supabaseUrl: `http://localhost:${port}/supabase`,
+            supabaseAnonKey: FAKE_ANON,
+          })};`
+        : '/* no supabase configured */',
+  }).then((handle) => {
+    port = handle.port;
+    return handle;
   });
-}
+};
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -274,6 +233,10 @@ async function openPage(browser, port, path, { mockRows }) {
       seen.push(u);
       const period = /period=eq\.([a-z0-9]+)/.exec(u)?.[1] ?? '1y';
       const scope = /scope=eq\.([a-z]+)/.exec(u)?.[1] ?? 'sector';
+      // The stock page reads one scope_id across ALL periods; without honouring the
+      // filter the mock hands it every instrument's row and the page shows another
+      // ticker's number.
+      const scopeId = /scope_id=eq\.([A-Z.]+)/.exec(u)?.[1];
       let body = [];
       if (mockRows) {
         const dated = (scopeName, table) =>
@@ -297,16 +260,27 @@ async function openPage(browser, port, path, { mockRows }) {
         status: 200,
         contentType: 'application/json',
         headers: { 'access-control-allow-origin': '*' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(scopeId ? body.filter((x) => x.scope_id === scopeId) : body),
       });
     }
     if (u.includes('/supabase/rest/v1/instruments')) {
       seen.push(u);
+      // The sector page filters by sector_id; the Markets tab and the stock page
+      // read the whole universe.
+      const single = /symbol=eq\.([A-Z.]+)/.exec(u)?.[1];
+      const all = [...INSTRUMENTS, ...NON_EQUITY];
+      const body = !mockRows
+        ? []
+        : single
+          ? all.filter((i) => i.symbol === single)
+          : u.includes('sector_id=eq.')
+            ? INSTRUMENTS
+            : all;
       return r.respond({
         status: 200,
         contentType: 'application/json',
         headers: { 'access-control-allow-origin': '*' },
-        body: JSON.stringify(mockRows ? INSTRUMENTS : []),
+        body: JSON.stringify(body),
       });
     }
     // Classification tables (schemes / groups / members).
@@ -487,6 +461,49 @@ try {
       console.log(`  screenshot -> ${process.env.SCREENSHOT_SECTOR}`);
     }
 
+    await page.close();
+    server.close();
+  }
+  // --- 6. Markets tab: the asset universe is server-backed and BADGED ----------
+  {
+    const { server, port } = await serve({ supabase: true });
+    console.log('\nmarkets tab (asset universe)');
+    const { page, body, errors, seen } = await openPage(browser, port, '/markets', { mockRows: true });
+
+    check('the universe was read', seen.some((u) => u.includes('/instruments')));
+    check('a non-equity asset is listed', has(body, 'Bitcoin'));
+    check('its live return renders', has(body, '55.4'), 'BTC 55.40 -> +55.4%');
+    // This list previously showed ~50 authored values with NO caveat at all.
+    check('provenance replaces the missing caveat', has(body, 'yfinance'));
+    // `priced = false`: a price return would be meaningless, not merely missing.
+    check('an unpriced asset is listed', has(body, 'US Dollar'));
+    check('the unpriced asset shows no number', !/US Dollar[^\n]*[+-]\d/.test(body));
+    check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
+    await page.close();
+    server.close();
+  }
+
+  // --- 7. Stock page: profile + the full performance strip ---------------------
+  {
+    const { server, port } = await serve({ supabase: true });
+    console.log('\nstock page (profile + performance strip)');
+    const { page, body, errors, seen } = await openPage(browser, port, '/stock/AAPL', { mockRows: true });
+
+    check('the instrument was read', seen.some((u) => u.includes('symbol=eq.AAPL')));
+    check('its performance was read', seen.some((u) => u.includes('scope_id=eq.AAPL')));
+    check('the company name renders', has(body, 'Apple Inc.'));
+    // Server data must win over route params — none were passed on this link.
+    check('the REAL sub-sector renders', has(body, 'Consumer Electronics'));
+    check('the country renders', has(body, 'United States'));
+    check('a return renders in the strip', has(body, '17.8'));
+    check('market cap is formatted', /\$\d+\.\d{2}[TBM]/.test(body), (body.match(/\$[\d.]+[TBM]/) || [])[0] ?? '');
+    check('the agent launchers survive', has(body, 'Investor Council') || has(body, 'Criteria'));
+    check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
+
+    if (process.env.SCREENSHOT_STOCK) {
+      await page.screenshot({ path: process.env.SCREENSHOT_STOCK, fullPage: true });
+      console.log(`  screenshot -> ${process.env.SCREENSHOT_STOCK}`);
+    }
     await page.close();
     server.close();
   }

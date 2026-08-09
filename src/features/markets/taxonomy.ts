@@ -305,8 +305,5 @@ function equityAssets(): AssetRef[] {
 
 export const ASSETS: AssetRef[] = [...equityAssets(), ...OTHER_ASSETS];
 
-export const assetsByType = (type: AssetType | 'all'): AssetRef[] =>
-  type === 'all' ? ASSETS : ASSETS.filter((a) => a.assetType === type);
-
 export const assetTypeMeta = (id: AssetType): AssetTypeMeta | undefined =>
   ASSET_TYPES.find((t) => t.id === id);

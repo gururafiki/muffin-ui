@@ -5,10 +5,22 @@ import { Icon } from '@/components/icons';
 import { Badge, Card, Screen, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { AGENTS } from '@/lib/agent/registry';
+import { useInstrument } from '@/features/markets/api/use-instrument';
+import { Freshness } from '@/features/markets/freshness';
+import { PerformanceStrip } from '@/features/markets/performance-strip';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
 const STOCK_AGENT_IDS = ['council', 'criteria_analysis', 'stock_evaluation'];
+
+/** 4.57e12 -> "$4.57T". Market caps span nine orders of magnitude here. */
+function formatCap(v: number): string {
+  const units: [number, string][] = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M']];
+  for (const [scale, suffix] of units) {
+    if (v >= scale) return `$${(v / scale).toFixed(2)}${suffix}`;
+  }
+  return `$${v.toFixed(0)}`;
+}
 
 export default function StockScreen() {
   const params = useLocalSearchParams<{
@@ -20,8 +32,15 @@ export default function StockScreen() {
   }>();
   const router = useRouter();
   const symbol = (params.ticker ?? '').toUpperCase();
-  const sector = params.sector ? getSector(params.sector) : undefined;
-  const asset = params.assetType ? assetTypeMeta(params.assetType as AssetType) : undefined;
+  const detail = useInstrument(symbol);
+  const inst = detail.instrument;
+
+  // Server data wins over the route params: a deep link carries whatever the
+  // linking screen happened to know, while `market.instruments` is the record.
+  const sector = getSector(inst?.sector_id ?? params.sector ?? '');
+  const assetType = (inst?.asset_type ?? params.assetType) as AssetType | undefined;
+  const asset = assetType ? assetTypeMeta(assetType) : undefined;
+  const country = inst?.country ?? params.country;
 
   const stockAgents = AGENTS.filter((a) => STOCK_AGENT_IDS.includes(a.id));
 
@@ -45,19 +64,42 @@ export default function StockScreen() {
       <Text variant="display" className="pt-4">
         {symbol}
       </Text>
+      {inst?.name ? <Text variant="muted">{inst.name}</Text> : null}
 
-      {sector || params.country || params.market || asset ? (
+      {sector || country || params.market || asset || inst?.industry ? (
         <View className="mt-1 flex-row flex-wrap gap-2">
           {asset ? <Badge label={asset.name} tone="info" /> : null}
           {sector ? <Badge label={sector.name} tone="info" /> : null}
-          {params.country ? <Badge label={params.country} tone="info" /> : null}
+          {/* The provider's industry — the real sub-sector. */}
+          {inst?.industry ? <Badge label={inst.industry} tone="info" /> : null}
+          {country ? <Badge label={country} tone="info" /> : null}
           {params.market ? (
             <Badge label={params.market === 'developed' ? 'Developed' : 'Emerging'} tone="info" />
           ) : null}
         </View>
       ) : null}
 
-      <Text variant="muted" className="mt-2">
+      {detail.returns.length > 0 ? (
+        <Card className="mt-4 gap-3">
+          <View className="flex-row items-center justify-between">
+            <Text variant="heading">Performance</Text>
+            <Freshness sample={false} asOf={detail.asOf} source={detail.source} />
+          </View>
+          <PerformanceStrip returns={detail.returns} />
+          {inst?.market_cap ? (
+            <Text variant="muted" className="text-xs">
+              Market cap {formatCap(inst.market_cap)}
+            </Text>
+          ) : null}
+        </Card>
+      ) : detail.found && inst?.priced === false ? (
+        // Cash and bond yields have no price return — say so rather than showing 0%.
+        <Text variant="muted" className="mt-3">
+          No price return for this instrument.
+        </Text>
+      ) : null}
+
+      <Text variant="muted" className="mt-4">
         Run an analysis agent for this stock.
       </Text>
 

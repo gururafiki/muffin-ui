@@ -274,12 +274,12 @@ instead. That distinction is enforced by `npm run verify:market`.
 | **Group page → country growth** | **`market.performance` scope=`country`** ← single-country ETF price returns computed from yfinance daily closes | **Real** — 1D…5Y, with age + source; a country with no server row shows **no number** |
 | Globe country pills, ETF tickers | `features/markets/taxonomy.ts` | Authored |
 | **Markets + country → sector performance** | **`market.performance` (Supabase/PostgREST) ← OpenBB `equity/compare/groups`, provider finviz** | **Real** — per timeframe, with age + source shown; falls back to authored numbers (badged SAMPLE) when the table is empty |
-| Markets → sector donut weights | `taxonomy.ts` `SECTOR_WEIGHTS` | **Sample** — badged in-app |
-| Markets → asset universe change % | `taxonomy.ts` `ASSETS` (~50 rows) | **Sample — NOT badged** (known gap) |
+| Markets → sector donut weights | `taxonomy.ts` `SECTOR_WEIGHTS` | **Sample** — badged in-app. **Blocked**: `etf/sectors` is FMP-only and premium (402 on the deployment's key); `index/sectors` is TMX (Canada) only |
+| **Markets → asset universe** | **`market.instruments`** (every asset type) + **`market.performance`** scope=`instrument` | **Real** — and now *badged* when it falls back. Cash and bond yields are `priced = false` and show **no** number, because a price return for them is meaningless rather than missing |
+| **Stock page `/stock/[ticker]`** | `market.instruments` + all periods of `market.performance` | **Real** — name, sector, the provider's industry, country, market cap and a full performance strip. Server data wins over the deep-link params |
 | **Sector page → stocks, sub-sectors, movers** | **`market.instruments`** (curated universe, provider-enriched) + **`market.performance`** scope=`instrument` | **Real** — the sub-sector chips are the provider's actual industries ("Consumer Electronics", "Software - Application"), replacing the authored slugs that had nothing behind them |
 | Region movers panel | `taxonomy.ts` `changePct` | **Sample** — badged in-app |
 | Country → sector list change % | `market.performance` when live, else `taxonomy.ts` | **Real when live.** A sector with no server row shows **no number** rather than an authored one — live and authored values are never mixed in one list |
-| Stock page badges (sector/country/type) | route params from `taxonomy.ts` | Authored |
 | Portfolio: accounts, holdings, prices, goals | `features/wealth/portfolio.ts` `DEMO_ACCOUNTS` / `DEMO_GOALS`, seeded into a persisted zustand store | **Seeded demo, editable, on-device.** Prices are static and never refresh |
 | Portfolio cloud backup / restore | Supabase `user_backups` (RLS, owner-only) | **Real** — opt-in; API keys and endpoints are stripped on upload *and* restore |
 | Agents / runner / Timeline / Overview | LangGraph API — `threads.search`, `POST /threads/{id}/history`, `GET /assistants/{id}/graph`, SSE streaming | **Real** |

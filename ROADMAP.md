@@ -1216,9 +1216,22 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
       endpoint (402) and cboe's symbol enum has no `^GSPC`.
     - **The industry field is `industry_category`, not `industry`** — `industry` exists on the
       yfinance profile response and is always null.
-  - **Remaining slices:** the Markets asset universe (`OTHER_ASSETS`, ~50 authored rows, still
-    the one place invented numbers show unbadged), the donut weights
-    (`etf/sectors?symbol=IVV`, needs FMP), and the stock page.
+  - **[DONE 2026-08-09 — asset universe + stock page]** The multi-asset universe moved into
+    `market.instruments` (one table, `asset_type` distinguishes them, so one refresh covers
+    everything) — closing the last surface where invented numbers rendered with **no caveat at
+    all**. All ten non-equity symbols work keyless on yfinance batched history, including
+    `BTC-USD`, `ETH-USD` and `CL=F` for WTI.
+    - **`priced = false`** marks cash and bond yields: a price return for them is *meaningless*,
+      not merely missing (a 10Y "+4.1%" reads as a gain when the yield merely moved). They stay
+      in the list with no number, and the refresh skips them.
+    - **The stock page is real** (was a launcher with zero market data — todos.md P0): name,
+      sector, the provider's industry, country, market cap and a full performance strip across
+      every available period. Server data wins over the deep-link params, which only carry
+      whatever the linking screen happened to know.
+  - **Sector donut weights remain SAMPLE — blocked, not deferred.** `etf/sectors` is FMP-only
+    and **premium** (402 on this key) and `index/sectors` is TMX (Canadian listings) only.
+    Deriving weights from our own 35 curated tickers would be a *different* number wearing the
+    index's name, so the badge stays until there is a real source.
   - **Sector coverage is US-listed only.** `equity/compare/groups` is finviz-only and its own
     docs say US-listed; the panel should eventually say so rather than implying global.
   - **Globe drill-down is 19 countries deep, out of 177 map paths** (M28). Tapping any country

@@ -5,6 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { Button, Card, Chip, Screen, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
+import { useAssetUniverse } from '@/features/markets/api/use-asset-universe';
 import { useSectorPerformance } from '@/features/markets/api/use-sector-performance';
 import { DrillList } from '@/features/markets/drill-list';
 import { Freshness } from '@/features/markets/freshness';
@@ -13,7 +14,6 @@ import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker'
 import { SectorPie } from '@/features/markets/sector-pie';
 import {
   ASSET_TYPES,
-  assetsByType,
   assetTypeMeta,
   getSector,
   SECTOR_WEIGHTS,
@@ -29,10 +29,10 @@ export default function MarketsScreen() {
   const goSector = (id: string) =>
     router.push({ pathname: '/sector/[sectorId]', params: { sectorId: id } });
 
-  const assets = assetsByType(assetFilter);
-
   const period = useActivePeriod();
   const sectors = useSectorPerformance(period);
+  const universe = useAssetUniverse(period, assetFilter);
+  const assets = universe.items;
 
   return (
     <Screen>
@@ -85,9 +85,15 @@ export default function MarketsScreen() {
         )}
       </Card>
 
-      <Text variant="label" className="mt-5">
-        Asset universe
-      </Text>
+      <View className="mt-5 flex-row items-center justify-between">
+        <Text variant="label">Asset universe</Text>
+        <Freshness
+          sample={universe.sample}
+          asOf={universe.asOf}
+          source={universe.source}
+          refreshing={universe.refreshing}
+        />
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
         <View className="flex-row gap-2 pr-4">
           <Chip label="All" active={assetFilter === 'all'} onPress={() => setAssetFilter('all')} />
@@ -108,11 +114,15 @@ export default function MarketsScreen() {
           items={assets.map((a) => ({
             key: a.symbol,
             title: `${a.symbol} · ${a.name}`,
-            subtitle: [a.sectorId ? getSector(a.sectorId)?.name : assetTypeMeta(a.assetType)?.name, a.country, a.style]
+            // Prefer the provider's real industry over the asset-type label.
+            subtitle: [
+              a.industry ?? (a.sectorId ? getSector(a.sectorId)?.name : assetTypeMeta(a.assetType)?.name),
+              a.country,
+            ]
               .filter(Boolean)
               .join(' · '),
             icon: assetTypeMeta(a.assetType)?.icon,
-            changePct: a.changePct,
+            changePct: a.changePct ?? undefined,
           }))}
           onSelect={(symbol) => {
             const a = assets.find((x) => x.symbol === symbol);
@@ -121,7 +131,6 @@ export default function MarketsScreen() {
               params: {
                 ticker: symbol,
                 sector: a?.sectorId ?? '',
-                market: a?.market ?? '',
                 country: a?.country ?? '',
                 assetType: a?.assetType ?? '',
               },
