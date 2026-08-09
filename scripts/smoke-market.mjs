@@ -312,13 +312,17 @@ async function openPage(browser, port, path, { mockRows }) {
       // read the whole universe.
       const single = /symbol=eq\.([A-Z.]+)/.exec(u)?.[1];
       const all = [...INSTRUMENTS, ...NON_EQUITY];
-      const body = !mockRows
+      // PostgREST applies `country=eq.` server-side; the mock must too, or the
+      // country-filter assertion below would pass on an unfiltered list.
+      const country = decodeURIComponent(/country=eq\.([^&]+)/.exec(u)?.[1] ?? '');
+      let body = !mockRows
         ? []
         : single
           ? all.filter((i) => i.symbol === single)
           : u.includes('sector_id=eq.')
             ? INSTRUMENTS
             : all;
+      if (country) body = body.filter((i) => i.country === country);
       return r.respond({
         status: 200,
         contentType: 'application/json',
@@ -499,6 +503,10 @@ try {
     check('provenance is shown', has(body, 'yfinance'));
     check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 
+    // The instruments query must carry the sector AND respect a page range.
+    const instReq = seen.find((u) => u.includes('/instruments') && u.includes('sector_id=eq.'));
+    check('the sector query is paged', !!instReq);
+
     if (process.env.SCREENSHOT_SECTOR) {
       await page.screenshot({ path: process.env.SCREENSHOT_SECTOR, fullPage: true });
       console.log(`  screenshot -> ${process.env.SCREENSHOT_SECTOR}`);
@@ -578,6 +586,29 @@ try {
       await page.screenshot({ path: process.env.SCREENSHOT_STOCK, fullPage: true });
       console.log(`  screenshot -> ${process.env.SCREENSHOT_STOCK}`);
     }
+    await page.close();
+    server.close();
+  }
+  // --- 8. Sector page reached FROM A COUNTRY filters to that country ----------
+  {
+    const { server, port } = await serve({ supabase: true });
+    console.log('\nsector page via a country (?countryId=germany)');
+    const { page, body, errors, seen } = await openPage(
+      browser,
+      port,
+      '/sector/information-technology?countryId=germany',
+      { mockRows: true },
+    );
+
+    check(
+      'the query is filtered by country',
+      seen.some((u) => u.includes('/instruments') && u.includes('country=eq.Germany')),
+      seen.find((u) => u.includes('/instruments'))?.split('?')[1]?.slice(0, 90) ?? '(none)',
+    );
+    // SAP is the German name in the fixture; AAPL/NVDA are US and must be gone.
+    check('the German name is listed', has(body, 'SAP'));
+    check('US names are NOT listed', !has(body, 'Apple Inc.') && !has(body, 'NVIDIA'));
+    check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
     await page.close();
     server.close();
   }
