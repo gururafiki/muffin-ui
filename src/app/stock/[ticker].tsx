@@ -1,11 +1,18 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Screen, Text } from '@/components/ui';
+import { Badge, Card, Screen, Segmented, Text } from '@/components/ui';
+import { TimeSeriesChart } from '@/lib/agent/renderers/chart';
 import { palette } from '@/theme/colors';
 import { AGENTS } from '@/lib/agent/registry';
 import { useInstrument } from '@/features/markets/api/use-instrument';
+import {
+  CHART_RANGES,
+  useInstrumentPrices,
+  type ChartRange,
+} from '@/features/markets/api/use-instrument-prices';
 import { Freshness } from '@/features/markets/freshness';
 import { PerformanceStrip } from '@/features/markets/performance-strip';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
@@ -34,6 +41,8 @@ export default function StockScreen() {
   const symbol = (params.ticker ?? '').toUpperCase();
   const detail = useInstrument(symbol);
   const inst = detail.instrument;
+  const [range, setRange] = useState<ChartRange>('1y');
+  const prices = useInstrumentPrices(symbol, range);
 
   // Server data wins over the route params: a deep link carries whatever the
   // linking screen happened to know, while `market.instruments` is the record.
@@ -86,6 +95,19 @@ export default function StockScreen() {
             <Freshness sample={false} asOf={detail.asOf} source={detail.source} />
           </View>
           <PerformanceStrip returns={detail.returns} />
+
+          {/* Only rendered when there is actually a series — no empty chart frame. */}
+          {prices.series ? (
+            <View className="gap-2">
+              <Segmented
+                options={CHART_RANGES.map((r) => ({ id: r.id, label: r.label }))}
+                value={range}
+                onChange={setRange}
+              />
+              <TimeSeriesChart data={prices.series} />
+            </View>
+          ) : null}
+
           {inst?.market_cap ? (
             <Text variant="muted" className="text-xs">
               Market cap {formatCap(inst.market_cap)}
