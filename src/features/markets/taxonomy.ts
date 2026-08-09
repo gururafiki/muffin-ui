@@ -195,10 +195,6 @@ export const sortMovers = (items: MoverItem[]) =>
 
 export const countriesAsMovers = (regionId: string): MoverItem[] =>
   countriesInRegion(regionId).map((c) => ({ key: c.id, label: c.name, sublabel: c.flag, changePct: c.changePct }));
-export const sectorsAsMovers = (): MoverItem[] =>
-  SECTORS.map((s) => ({ key: s.id, label: s.name, icon: s.icon, changePct: s.changePct }));
-export const stocksAsMovers = (sectorId: string): MoverItem[] =>
-  stocksInSector(sectorId).map((s) => ({ key: s.ticker, label: `${s.ticker} · ${s.name}`, sublabel: s.country, changePct: s.changePct }));
 
 // ── Analyse query templates (fed to the research agent) ──────────────────────
 export const analyseGlobalMacro = () =>

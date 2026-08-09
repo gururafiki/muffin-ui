@@ -4,10 +4,9 @@ import Svg, { Path } from 'react-native-svg';
 
 import { mapColors, palette } from '@/theme/colors';
 import {
-  getScheme,
   UNCLASSIFIED_COLOR,
   type LensId,
-  type SchemeId,
+  type Scheme,
 } from './classification';
 import { viewBoxForIsos } from './geo-utils';
 import { WORLD_GEO, WORLD_VIEWBOX } from './world-geo';
@@ -18,13 +17,15 @@ import { WORLD_GEO, WORLD_VIEWBOX } from './world-geo';
  * single group (region screen). Tapping a country selects it.
  */
 export function WorldMap({
-  scheme: schemeId,
+  scheme,
   lens,
   focusGroup,
   selectedIso,
   onSelectCountry,
 }: {
-  scheme: SchemeId;
+  /** A RESOLVED scheme, not an id — the caller owns whether it came from the
+   *  server (`useScheme`) or the bundled fallback, so this stays presentational. */
+  scheme: Scheme;
   lens: LensId;
   /** Zoom to this group and dim everything else. */
   focusGroup?: string;
@@ -32,7 +33,6 @@ export function WorldMap({
   onSelectCountry?: (iso: string) => void;
 }) {
   const dark = useColorScheme() === 'dark';
-  const scheme = getScheme(schemeId);
 
   const { fills, groups, viewBox } = useMemo(() => {
     const fills: Record<string, string> = {};

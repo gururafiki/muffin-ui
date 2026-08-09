@@ -10,7 +10,9 @@
     "@langchain/react": "^1.0.29",
     "@shopify/flash-list": "2.3.2",
     "@supabase/supabase-js": "^2.112.1",
+    "@tanstack/query-sync-storage-persister": "^5.101.4",
     "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query-persist-client": "^5.101.4",
     "clsx": "^2.1.1",
     "expo": "~56.0.12",
     "expo-clipboard": "~56.0.4",
@@ -66,6 +68,7 @@
     "build:web": "expo export -p web --output-dir dist",
     "verify:offline": "tsx scripts/run-timeline-check.ts",
     "verify:skeletons": "node scripts/skeleton-check.mjs",
+    "verify:market": "node scripts/smoke-market.mjs",
     "check": "npm run typecheck && npm run lint:all && npm run verify:offline && npm run verify:auth",
     "verify:auth": "tsx scripts/auth-check.ts"
   },
