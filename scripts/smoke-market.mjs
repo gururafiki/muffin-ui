@@ -18,11 +18,25 @@
 // deployment — run `npx expo export -p web --output-dir dist` first.
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, join, resolve } from 'node:path';
+import { extname, resolve, sep } from 'node:path';
 
 import puppeteer from 'puppeteer-core';
 
 const DIST = resolve(process.cwd(), 'dist');
+
+/**
+ * Resolve a REQUEST path inside DIST, or null if it escapes.
+ *
+ * `join(DIST, url)` is a path-traversal hole (CodeQL js/path-injection): a request
+ * for `/../../etc/passwd` resolves outside the served directory. Only a local test
+ * server, but the fix is two lines and an unguarded join is the kind of thing that
+ * gets copied into somewhere that matters. (The same pattern is still present in
+ * skeleton-check.mjs, which this script was modelled on.)
+ */
+function underDist(requestPath) {
+  const full = resolve(DIST, `.${requestPath.startsWith('/') ? requestPath : `/${requestPath}`}`);
+  return full === DIST || full.startsWith(DIST + sep) ? full : null;
+}
 const TYPES = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -186,9 +200,11 @@ function serve({ supabase }) {
       }
 
       const isAsset = extname(url) !== '';
-      const candidates = isAsset
-        ? [join(DIST, url)]
-        : [join(DIST, url), join(DIST, `${url}.html`), join(DIST, 'index.html')];
+      const candidates = (
+        isAsset ? [url] : [url, `${url}.html`, '/index.html']
+      )
+        .map((p) => underDist(p))
+        .filter((p) => p !== null);
       for (const candidate of candidates) {
         try {
           const body = await readFile(candidate);
