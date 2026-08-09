@@ -36,3 +36,11 @@ jobs:
       - run: npm ci
       - name: Typecheck, lint, offline verification
         run: npm run check
+      # `npm run check` is typecheck + eslint + pure-logic scripts — none of it
+      # bundles the app. A PR could therefore make the app completely
+      # unbuildable and still go green: Dependabot's tailwindcss 3->4 bump (#46)
+      # passed every check while `expo export` died on "NativeWind only supports
+      # Tailwind CSS v3" and emitted zero files. Building here is what turns
+      # that from a post-merge surprise into a failed check.
+      - name: Build the web bundle
+        run: npm run build:web
