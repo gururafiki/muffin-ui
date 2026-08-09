@@ -3,8 +3,9 @@ import { Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Icon } from '@/components/icons';
-import { Badge, Card, Text } from '@/components/ui';
+import { Card, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
+import { Freshness } from './freshness';
 import { changeTone, sortMovers, type MoverItem } from './taxonomy';
 
 const toneColor = { bullish: palette.bullish, bearish: palette.bearish, neutral: palette.neutral };
@@ -51,17 +52,35 @@ function MoverRow({
   );
 }
 
-/** Best/worst movers with animated bars. Numbers are SAMPLE data. */
+/**
+ * Best/worst movers with animated bars.
+ *
+ * Provenance is a PROP, not an assumption: panels fed from `market.performance`
+ * show their age and source, panels still fed from the authored taxonomy show
+ * "sample". Defaults to sample so a call site that has not been migrated yet cannot
+ * accidentally present authored numbers as live.
+ */
 export function MoversPanel({
   title,
   items,
   count = 3,
   onSelect,
+  sample = true,
+  asOf,
+  source,
+  refreshing,
+  right,
 }: {
   title: string;
   items: MoverItem[];
   count?: number;
   onSelect?: (key: string) => void;
+  sample?: boolean;
+  asOf?: Date | null;
+  source?: string | null;
+  refreshing?: boolean;
+  /** Extra control rendered under the header — e.g. the timeframe picker. */
+  right?: React.ReactNode;
 }) {
   const sorted = sortMovers(items);
   const best = sorted.slice(0, count);
@@ -72,8 +91,9 @@ export function MoversPanel({
     <Card className="gap-3">
       <View className="flex-row items-center justify-between">
         <Text variant="heading">{title}</Text>
-        <Badge label="sample" tone="info" />
+        <Freshness sample={sample} asOf={asOf} source={source} refreshing={refreshing} />
       </View>
+      {right}
 
       <Text variant="label">Top performers</Text>
       <View className="gap-2">

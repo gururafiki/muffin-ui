@@ -1173,8 +1173,54 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
   Done in M8: Supabase JWT auth + optional sign-in, per-user threads (read-shared,
   create-authenticated), verified `user_id` derived server-side, DB cutover to Supabase,
   cloud backup, Resend SMTP (real confirmation e-mails).
-- **M5:** live market data (needs a backend screening/discovery graph) for the movers panels;
-  richer sub-sector pages (markdown styling for `research-result` shipped with M10).
+- **M5:** live market data for the movers panels; richer sub-sector pages (markdown styling for
+  `research-result` shipped with M10).
+  - **[DONE 2026-08-09 — sector performance]** The premise that this "needs a backend
+    screening/discovery graph" was wrong: it needed a *data* path, not an agent. Sector performance
+    now comes from `market.performance` in Supabase, read straight over PostgREST
+    (`features/markets/api/`), refreshed from a new internal `openbb-api` service by a
+    `market-refresh` edge function. **Timeframe control** (1D–1Y) persisted in `map-view-store`;
+    live values show age + source instead of the `SAMPLE` badge; the authored numbers stay as an
+    offline/first-load seed. Query cache persisted via `persistQueryClient` over the existing
+    MMKV/localStorage adapter, so a cold start on mobile doesn't re-fetch. Guarded by
+    `npm run verify:market`.
+  - **[DONE 2026-08-09 — classifications + country growth]** The 3 schemes, 32 groups and 667
+    ISO memberships now live in `market.classification_*` and are **editable in Supabase
+    Studio** (memberships upsert `do nothing` so a redeploy cannot revert a correction).
+    `WorldMap` takes a resolved `Scheme` instead of an id, so the globe, legend and group
+    pages all colour from server data with the bundled constants as fallback.
+    Country growth is scope=`country` in `market.performance`, computed from **~5.2y of
+    yfinance daily closes in ONE batched call** (19 ETFs, ~4 MB, ~5 s) — which is why
+    countries offer 3Y/5Y where sectors stop at 1Y.
+    - **Both "obvious" providers were dead ends:** finviz's per-symbol `price_performance` is
+      broken upstream (mangles the symbol) and fmp's `etf/price_performance` is a **premium**
+      endpoint that 402s on the free key. Computing returns from history is the workaround,
+      and it is also the only option that yields multi-year windows.
+    - These are **price** returns (dividends excluded) — fine for headline country
+      performance, but it understates high-yield markets. Total return would need an adjusted
+      series.
+    - **Hong Kong has no SVG path in `world-geo.ts`** (too small at this scale) despite being
+      a modelled, drillable country. The seed generator unions the map ISOs with `COUNTRIES`
+      so HK is not silently dropped — anything else walking `WORLD_GEO` alone will lose it.
+  - **[DONE 2026-08-09 — sector constituents + real sub-sectors]** `market.instruments` holds
+    the universe: `sector_id` is a **curated** placement (`do nothing` on conflict, so it is
+    editable in Studio), while `name` / `industry` / `country` / `market_cap` /
+    `provider_sector` are fetched from `equity/profile`. The sector page's sub-sector chips are
+    now the provider's real industries, replacing the authored slugs (`software-saas`) that had
+    nothing behind them. `provider_sector` is stored NEXT TO `sector_id` rather than
+    overwriting it — yfinance says "Financial Services" where muffin says "financials", so a
+    genuine disagreement stays visible instead of silently clobbering an editorial choice.
+    - **`equity/screener` was rejected for this**: yfinance's returns no sector/industry/country
+      columns at all and its ordering is day-gainers, not representative companies. Index
+      constituents would have been ideal but **both** providers are gated — fmp's is a premium
+      endpoint (402) and cboe's symbol enum has no `^GSPC`.
+    - **The industry field is `industry_category`, not `industry`** — `industry` exists on the
+      yfinance profile response and is always null.
+  - **Remaining slices:** the Markets asset universe (`OTHER_ASSETS`, ~50 authored rows, still
+    the one place invented numbers show unbadged), the donut weights
+    (`etf/sectors?symbol=IVV`, needs FMP), and the stock page.
+  - **Sector coverage is US-listed only.** `equity/compare/groups` is finviz-only and its own
+    docs say US-listed; the panel should eventually say so rather than implying global.
   - **Globe drill-down is 19 countries deep, out of 177 map paths** (M28). Tapping any country
     outside `taxonomy.ts`'s `COUNTRIES` gives pills + Analyse but no "Open ⟨country⟩" — the country
     page has nothing to render. Either widen the modelled set or make the map paths without a

@@ -3,8 +3,12 @@ import { View } from 'react-native';
 
 import { Card, Screen, Text } from '@/components/ui';
 import { AnalyseButton } from '@/features/markets/analyse-button';
-import { getScheme, groupById, type LensId, type SchemeId } from '@/features/markets/classification';
+import { COUNTRY_PERIODS, useCountryPerformance } from '@/features/markets/api/use-country-performance';
+import { useScheme } from '@/features/markets/api/use-classification';
+import { groupById, type LensId, type SchemeId } from '@/features/markets/classification';
 import { DrillList } from '@/features/markets/drill-list';
+import { Freshness } from '@/features/markets/freshness';
+import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { WORLD_GEO } from '@/features/markets/world-geo';
 import { WorldMap } from '@/features/markets/world-map';
 import { analyseRegion, COUNTRIES, getCountryByIso } from '@/features/markets/taxonomy';
@@ -14,8 +18,16 @@ export default function GroupScreen() {
   const router = useRouter();
   const schemeId = (params.scheme ?? 'msci') as SchemeId;
   const lens = (params.lens ?? 'region') as LensId;
-  const scheme = getScheme(schemeId);
+
+  // Hooks run before the early return below — `group` can be undefined.
+  const { scheme } = useScheme(schemeId);
+  const period = useActivePeriod(COUNTRY_PERIODS);
+  const perf = useCountryPerformance(period);
+
   const group = groupById(scheme, lens, params.groupId);
+
+  const goCountry = (id: string) =>
+    router.push({ pathname: '/country/[countryId]', params: { countryId: id } });
 
   if (!group) {
     return (
@@ -32,9 +44,6 @@ export default function GroupScreen() {
   const otherNames = WORLD_GEO.filter(
     (c) => inGroup(c.iso) && !getCountryByIso(c.iso),
   ).map((c) => c.name);
-
-  const goCountry = (id: string) =>
-    router.push({ pathname: '/country/[countryId]', params: { countryId: id } });
 
   return (
     <Screen>
@@ -55,7 +64,7 @@ export default function GroupScreen() {
 
       <View className="mt-4">
         <WorldMap
-          scheme={schemeId}
+          scheme={scheme}
           lens={lens}
           focusGroup={group.id}
           onSelectCountry={(iso) => {
@@ -71,9 +80,18 @@ export default function GroupScreen() {
 
       {modelled.length > 0 ? (
         <>
-          <Text variant="label" className="mt-5">
-            Markets we model
-          </Text>
+          <View className="mt-5 flex-row items-center justify-between">
+            <Text variant="label">Markets we model</Text>
+            <Freshness
+              sample={perf.sample}
+              asOf={perf.asOf}
+              source={perf.source}
+              refreshing={perf.refreshing}
+            />
+          </View>
+          <View className="mt-2">
+            <PeriodPicker periods={COUNTRY_PERIODS} />
+          </View>
           <View className="mt-2">
             <DrillList
               items={modelled.map((c) => ({
@@ -81,7 +99,10 @@ export default function GroupScreen() {
                 title: c.name,
                 subtitle: c.market === 'developed' ? 'Developed market' : 'Emerging market',
                 leading: c.flag,
-                changePct: c.changePct,
+                // Live value for the active period. Once live, a country with no
+                // server row shows NO number rather than its authored one — mixing
+                // the two unlabelled is what the sample badge exists to prevent.
+                changePct: perf.sample ? c.changePct : perf.byIso.get(c.iso),
               }))}
               onSelect={goCountry}
             />

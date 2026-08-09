@@ -31,9 +31,9 @@ Calls · Settings** — plus stacked detail screens (stock, sector, country, reg
 account, goal, the agent runner, call detail, `/auth`, `/verify`). It follows **light/dark**
 system theme.
 
-Three of the six tabs run entirely on-device with **no backend at all** — see
-[Real vs. sample data](#real-vs-sample-data) before reading any number on them as a market
-quote.
+Globe and Portfolio still run entirely on-device with **no backend at all**, and Markets is
+partly live (sector performance). See [Real vs. sample data](#real-vs-sample-data) before
+reading any number as a market quote — anything not live is badged **SAMPLE**.
 
 ### 🌍 Globe (home tab)
 Navigate the investable world by geography. *Reference data, authored — see the data table.*
@@ -54,7 +54,16 @@ Navigate the investable world by geography. *Reference data, authored — see th
 - **Analyse global macro** — one-tap Research run on the macro backdrop.
 
 ### 📊 Markets tab
-Sector weights and your multi-asset universe. *Sample performance data — see the data table.*
+Sector weights and your multi-asset universe. *Sector performance is live; the rest is
+sample data — see the data table.*
+- **Sector performance** — best/worst sectors with animated bars, from **live market data**
+  (`market.performance`, refreshed from OpenBB). Instead of a SAMPLE badge it shows the
+  data's **age and source** ("5m ago · finviz").
+  - **Timeframe pills** — **1D · 1W · 1M · 3M · 6M · YTD · 1Y**; the choice is persisted and
+    shared with the country page. (finviz's grouped performance has no multi-year windows,
+    so 3Y/5Y/10Y are not offered for sectors.)
+  - Before the backend has any rows — or with no Supabase configured — it falls back to the
+    authored numbers and is badged **SAMPLE** again, so a fallback is never mistaken for live.
 - **Sector breakdown** — an interactive **SVG donut** of sector weights, badged **SAMPLE**.
   **Tap a slice** → that sector's icon, weight %, **sub-sector chips**, and an
   **Open ⟨sector⟩** button.
@@ -251,17 +260,25 @@ and generic **markdown / JSON / step-timeline / to-do** renderers.
 
 ## Real vs. sample data
 
-The agent surfaces are real. The market and wealth surfaces are **not connected to any
-backend** — they run on authored constants and an on-device store. Live market data needs a
-backend screening/discovery graph that does not exist yet (ROADMAP M5).
+The agent surfaces are real. **Classifications, country growth and sector performance are now
+real too** — served from the `market` schema in Supabase, refreshed from OpenBB by the
+`market-refresh` edge function (muffin-deployment). Sector constituents, the asset universe and
+all of wealth still run on authored constants and an on-device store (ROADMAP M5/M6).
+
+Anything not yet live is **badged SAMPLE in-app**; anything live shows its **age and source**
+instead. That distinction is enforced by `npm run verify:market`.
 
 | Screen / panel | Source | Real? |
 |---|---|---|
-| Globe map, classification schemes | `features/markets/classification.ts` — MSCI / FTSE / World Bank ISO-3166 membership lists | **Authored reference data** (real-world taxonomy, hand-maintained; no prices involved) |
+| **Globe map, classification schemes, group memberships** | **`market.classification_*` (Supabase/PostgREST)** — 3 schemes, 32 groups, 667 ISO-3166 memberships; falls back to `features/markets/classification.ts` | **Server-backed reference data**, editable in Supabase Studio. MSCI is accurate; FTSE / World Bank remain a best-effort starting point |
+| **Group page → country growth** | **`market.performance` scope=`country`** ← single-country ETF price returns computed from yfinance daily closes | **Real** — 1D…5Y, with age + source; a country with no server row shows **no number** |
 | Globe country pills, ETF tickers | `features/markets/taxonomy.ts` | Authored |
+| **Markets + country → sector performance** | **`market.performance` (Supabase/PostgREST) ← OpenBB `equity/compare/groups`, provider finviz** | **Real** — per timeframe, with age + source shown; falls back to authored numbers (badged SAMPLE) when the table is empty |
 | Markets → sector donut weights | `taxonomy.ts` `SECTOR_WEIGHTS` | **Sample** — badged in-app |
 | Markets → asset universe change % | `taxonomy.ts` `ASSETS` (~50 rows) | **Sample — NOT badged** (known gap) |
-| Sector / country / region movers panels | `taxonomy.ts` `changePct` | **Sample** — badged in-app |
+| **Sector page → stocks, sub-sectors, movers** | **`market.instruments`** (curated universe, provider-enriched) + **`market.performance`** scope=`instrument` | **Real** — the sub-sector chips are the provider's actual industries ("Consumer Electronics", "Software - Application"), replacing the authored slugs that had nothing behind them |
+| Region movers panel | `taxonomy.ts` `changePct` | **Sample** — badged in-app |
+| Country → sector list change % | `market.performance` when live, else `taxonomy.ts` | **Real when live.** A sector with no server row shows **no number** rather than an authored one — live and authored values are never mixed in one list |
 | Stock page badges (sector/country/type) | route params from `taxonomy.ts` | Authored |
 | Portfolio: accounts, holdings, prices, goals | `features/wealth/portfolio.ts` `DEMO_ACCOUNTS` / `DEMO_GOALS`, seeded into a persisted zustand store | **Seeded demo, editable, on-device.** Prices are static and never refresh |
 | Portfolio cloud backup / restore | Supabase `user_backups` (RLS, owner-only) | **Real** — opt-in; API keys and endpoints are stripped on upload *and* restore |
@@ -401,6 +418,7 @@ three:
 | `node scripts/verify-readme.mjs [--only=<screen>] [--live]` | Optional (`--live` requires CF Access) | **Walks every feature bullet in this README** and prints a pass/differ/fail table to `.verify-shots/`. Client-side screens need nothing; run pages need CF Access; `MUFFIN_EMAIL`/`MUFFIN_PASSWORD` unlock the sign-in-gated screens. **`--live` drives the deployed site** (`muffin.<domain>`) instead of the local `dist/` — use it to verify a deploy, since a local build of the same commit proves the source is good, not that the right image reached the node |
 | `node scripts/hydration-check.mjs` | No | Visits every route in both colour schemes and reports which prerendered HTML was served — the React #418 diagnostic |
 | `node scripts/skeleton-check.mjs` (`npm run verify:skeletons`) | No | Hangs the API so loading states stay up, and asserts the skeleton bars have non-zero geometry |
+| `node scripts/smoke-market.mjs` (`npm run verify:market`) | **No** — mocks Supabase | Market data end-to-end in a browser: the authored fallback stays badged SAMPLE, live rows replace it with age + source, a **quoted** `numeric` still renders (the `z.coerce` guard), and switching the timeframe issues a new query and changes the numbers. `SCREENSHOT=<path>` also captures the live state |
 
 Credentials come from the environment (`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`,
 `SUPABASE_ANON_KEY`, `MUFFIN_EMAIL`, `MUFFIN_PASSWORD`) and are never committed.

@@ -5,10 +5,9 @@ import { Pressable, View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { Button, Card, MuffinLogo, ScallopDivider, Screen, Segmented, Text } from '@/components/ui';
 import { AnalyseButton } from '@/features/markets/analyse-button';
+import { useScheme } from '@/features/markets/api/use-classification';
 import {
-  getScheme,
   groupById,
-  SCHEMES,
   type LensId,
   type SchemeId,
 } from '@/features/markets/classification';
@@ -22,7 +21,9 @@ export default function HomeScreen() {
   const router = useRouter();
   const { scheme: schemeId, lens, setScheme, setLens } = useMapView();
   const [selectedIso, setSelectedIso] = useState<string | null>(null);
-  const scheme = getScheme(schemeId);
+  // Schemes, groups and memberships come from `market.*` (Supabase), falling back
+  // to the bundled constants so the globe still paints offline / pre-configuration.
+  const { scheme, schemes } = useScheme(schemeId);
   const groups = scheme.groups[lens];
 
   const sel = selectedIso
@@ -59,7 +60,7 @@ export default function HomeScreen() {
         <View className="gap-1.5">
           <Text variant="label">Classification</Text>
           <Segmented
-            options={SCHEMES.map((s) => ({ id: s.id, label: s.name }))}
+            options={schemes.map((s) => ({ id: s.id, label: s.name }))}
             value={schemeId}
             onChange={(id: SchemeId) => setScheme(id)}
           />
@@ -83,7 +84,7 @@ export default function HomeScreen() {
       {/* Map */}
       <View className="mt-4">
         <WorldMap
-          scheme={schemeId}
+          scheme={scheme}
           lens={lens}
           selectedIso={selectedIso}
           onSelectCountry={(iso) => setSelectedIso((cur) => (cur === iso ? null : iso))}

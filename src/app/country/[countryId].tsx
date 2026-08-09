@@ -2,17 +2,24 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
 import { Badge, Card, Screen, Text } from '@/components/ui';
+import { useSectorPerformance } from '@/features/markets/api/use-sector-performance';
 import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
-import { analyseCountry, getCountry, getRegion, SECTORS, sectorsAsMovers } from '@/features/markets/taxonomy';
+import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
+import { analyseCountry, getCountry, getRegion, SECTORS } from '@/features/markets/taxonomy';
 
 export default function CountryScreen() {
   const { countryId } = useLocalSearchParams<{ countryId: string }>();
   const router = useRouter();
   const country = getCountry(countryId);
   const region = country ? getRegion(country.regionId) : undefined;
+
+  // Hooks must run before the early return below — `country` can be undefined.
+  const period = useActivePeriod();
+  const sectors = useSectorPerformance(period);
+  const changeById = new Map(sectors.items.map((i) => [i.key, i.changePct]));
 
   const goSector = (id: string) =>
     router.push({ pathname: '/sector/[sectorId]', params: { sectorId: id, countryId: country?.id ?? '' } });
@@ -46,7 +53,16 @@ export default function CountryScreen() {
       </Card>
 
       <View className="mt-4">
-        <MoversPanel title="Sector performance" items={sectorsAsMovers()} onSelect={goSector} />
+        <MoversPanel
+          title="Sector performance"
+          items={sectors.items}
+          onSelect={goSector}
+          sample={sectors.sample}
+          asOf={sectors.asOf}
+          source={sectors.source}
+          refreshing={sectors.refreshing}
+          right={<PeriodPicker />}
+        />
       </View>
 
       <View className="mt-4">
@@ -63,7 +79,12 @@ export default function CountryScreen() {
             title: s.name,
             subtitle: `${s.subSectors.length} sub-sectors`,
             icon: s.icon,
-            changePct: s.changePct,
+            // Once the panel above is live, this list is live too: a sector the
+            // server has no row for shows NO number rather than falling back to
+            // its authored one. Mixing them would put a real +11.1% and an
+            // authored +9.4% side by side with nothing to tell them apart —
+            // exactly what the sample badge exists to prevent.
+            changePct: sectors.sample ? s.changePct : changeById.get(s.id),
           }))}
           onSelect={goSector}
         />

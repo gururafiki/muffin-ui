@@ -3,9 +3,13 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
-import { Badge, Button, Card, Chip, Screen, Text } from '@/components/ui';
+import { Button, Card, Chip, Screen, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
+import { useSectorPerformance } from '@/features/markets/api/use-sector-performance';
 import { DrillList } from '@/features/markets/drill-list';
+import { Freshness } from '@/features/markets/freshness';
+import { MoversPanel } from '@/features/markets/movers-panel';
+import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { SectorPie } from '@/features/markets/sector-pie';
 import {
   ASSET_TYPES,
@@ -27,6 +31,9 @@ export default function MarketsScreen() {
 
   const assets = assetsByType(assetFilter);
 
+  const period = useActivePeriod();
+  const sectors = useSectorPerformance(period);
+
   return (
     <Screen>
       <Text variant="title" className="pt-4">
@@ -34,10 +41,25 @@ export default function MarketsScreen() {
       </Text>
       <Text variant="muted">Sector weights and your multi-asset universe.</Text>
 
+      <View className="mt-4">
+        <MoversPanel
+          title="Sector performance"
+          items={sectors.items}
+          onSelect={goSector}
+          sample={sectors.sample}
+          asOf={sectors.asOf}
+          source={sectors.source}
+          refreshing={sectors.refreshing}
+          right={<PeriodPicker />}
+        />
+      </View>
+
       <Card className="mt-4 gap-3">
         <View className="flex-row items-center justify-between">
           <Text variant="heading">Sector breakdown</Text>
-          <Badge label="sample" tone="info" />
+          {/* Weights are still SECTOR_WEIGHTS, an authored map — only the
+              performance numbers above are live so far. */}
+          <Freshness sample />
         </View>
         <SectorPie selectedId={selectedSector} onSelect={setSelectedSector} />
 

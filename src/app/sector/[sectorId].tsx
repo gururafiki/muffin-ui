@@ -8,7 +8,11 @@ import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb, type Crumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
-import { analyseSector, getCountry, getRegion, getSector, stocksAsMovers, stocksInSector } from '@/features/markets/taxonomy';
+import { SECTOR_PERIODS } from '@/features/markets/api/periods';
+import { useSectorConstituents } from '@/features/markets/api/use-sector-constituents';
+import { Freshness } from '@/features/markets/freshness';
+import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
+import { analyseSector, getCountry, getRegion, getSector } from '@/features/markets/taxonomy';
 
 export default function SectorScreen() {
   const params = useLocalSearchParams<{ sectorId: string; countryId?: string }>();
@@ -16,6 +20,10 @@ export default function SectorScreen() {
   const sector = getSector(params.sectorId);
   const country = params.countryId ? getCountry(params.countryId) : undefined;
   const region = country ? getRegion(country.regionId) : undefined;
+
+  // Hooks run before the early return below — `sector` can be undefined.
+  const period = useActivePeriod(SECTOR_PERIODS);
+  const constituents = useSectorConstituents(params.sectorId ?? '', period);
 
   const goStock = (ticker: string) =>
     router.push({
@@ -43,8 +51,17 @@ export default function SectorScreen() {
   if (country) crumbs.push({ label: country.name, href: { pathname: '/country/[countryId]', params: { countryId: country.id } } });
   crumbs.push({ label: sector.name });
 
-  const stocks = stocksInSector(sector.id);
+  const stocks = constituents.items;
   const contextName = country ? `${sector.name} · ${country.name}` : sector.name;
+  // Real industries from the provider when we have them; the authored slugs
+  // (which had nothing behind them) only as the pre-server fallback.
+  const subSectors = constituents.subSectors.length > 0 ? constituents.subSectors : sector.subSectors;
+  const movers = stocks
+    .filter((s) => s.changePct !== null)
+    // No `sublabel`: MoversPanel PREFIXES it before the label (it is meant for a
+    // flag emoji), so a country name there reads "United States AAPL · Apple Inc.".
+    // The list below already carries industry · country.
+    .map((s) => ({ key: s.symbol, label: `${s.symbol} · ${s.name}`, changePct: s.changePct as number }));
 
   return (
     <Screen>
@@ -61,30 +78,50 @@ export default function SectorScreen() {
           </Text>
         </View>
         <View className="flex-row flex-wrap gap-2">
-          {sector.subSectors.map((s) => (
-            <Chip key={s} label={s.replace(/-/g, ' ')} />
+          {subSectors.map((s) => (
+            // Only de-hyphenate authored SLUGS ('software-saas'). A real provider
+            // industry ('Software - Application') already has spaces, and the same
+            // replace turned its separator into a double space.
+            <Chip key={s} label={s.includes(' ') ? s : s.replace(/-/g, ' ')} />
           ))}
         </View>
       </Card>
 
       <View className="mt-4">
-        <MoversPanel title="Stock performance" items={stocksAsMovers(sector.id)} onSelect={goStock} count={4} />
+        <MoversPanel
+          title="Stock performance"
+          items={movers}
+          onSelect={goStock}
+          count={4}
+          sample={constituents.sample}
+          asOf={constituents.asOf}
+          source={constituents.source}
+          refreshing={constituents.refreshing}
+          right={<PeriodPicker periods={SECTOR_PERIODS} />}
+        />
       </View>
 
       <View className="mt-4">
         <AnalyseButton title="Analyse sector performance" query={analyseSector(sector.name, country?.name)} />
       </View>
 
-      <Text variant="label" className="mt-5">
-        Stocks
-      </Text>
+      <View className="mt-5 flex-row items-center justify-between">
+        <Text variant="label">Stocks</Text>
+        <Freshness
+          sample={constituents.sample}
+          asOf={constituents.asOf}
+          source={constituents.source}
+          refreshing={constituents.refreshing}
+        />
+      </View>
       <View className="mt-2">
         <DrillList
           items={stocks.map((s) => ({
-            key: s.ticker,
-            title: `${s.ticker} · ${s.name}`,
-            subtitle: s.country,
-            changePct: s.changePct,
+            key: s.symbol,
+            title: `${s.symbol} · ${s.name}`,
+            // The provider's real industry is the sub-sector; country second.
+            subtitle: [s.industry, s.country].filter(Boolean).join(' · '),
+            changePct: s.changePct ?? undefined,
           }))}
           onSelect={goStock}
         />
