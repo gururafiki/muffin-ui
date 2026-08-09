@@ -17,26 +17,43 @@
 // Serves `dist/` locally and MOCKS Supabase, so it needs no credentials and no
 // deployment — run `npx expo export -p web --output-dir dist` first.
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { extname, resolve, sep } from 'node:path';
+import { readdir, readFile } from 'node:fs/promises';
+import { extname, join, posix, resolve } from 'node:path';
 
 import puppeteer from 'puppeteer-core';
 
 const DIST = resolve(process.cwd(), 'dist');
 
 /**
- * Resolve a REQUEST path inside DIST, or null if it escapes.
+ * Every servable file, request-path -> absolute path, built by walking DIST once.
  *
- * `join(DIST, url)` is a path-traversal hole (CodeQL js/path-injection): a request
- * for `/../../etc/passwd` resolves outside the served directory. Only a local test
- * server, but the fix is two lines and an unguarded join is the kind of thing that
- * gets copied into somewhere that matters. (The same pattern is still present in
- * skeleton-check.mjs, which this script was modelled on.)
+ * The request path is used ONLY as a Map key — it never reaches the filesystem. The
+ * obvious `join(DIST, req.url)` is a path-traversal hole (CodeQL js/path-injection:
+ * `/../../etc/passwd` resolves outside DIST), and a `startsWith(DIST)` guard fixes
+ * the bug but is not recognised as a sanitizer, so the alert persists. An allowlist
+ * removes the taint entirely and cannot be got wrong later.
+ *
+ * (skeleton-check.mjs, which this was modelled on, still has the unguarded join.)
  */
-function underDist(requestPath) {
-  const full = resolve(DIST, `.${requestPath.startsWith('/') ? requestPath : `/${requestPath}`}`);
-  return full === DIST || full.startsWith(DIST + sep) ? full : null;
+async function indexDist(dir = DIST, prefix = '') {
+  const out = new Map();
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out; // no dist/ yet — every request 404s, which the caller reports
+  }
+  for (const entry of entries) {
+    const request = posix.join(prefix, entry.name);
+    if (entry.isDirectory()) {
+      for (const [k, v] of await indexDist(join(dir, entry.name), request)) out.set(k, v);
+    } else {
+      out.set(`/${request}`, join(dir, entry.name));
+    }
+  }
+  return out;
 }
+
 const TYPES = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -181,7 +198,9 @@ const rowsFor = (period) => {
   }));
 };
 
-function serve({ supabase }) {
+async function serve({ supabase }) {
+  const files = await indexDist();
+  if (files.size === 0) throw new Error(`no files in ${DIST} — run: npx expo export -p web`);
   return new Promise((ok) => {
     const server = createServer(async (req, res) => {
       const url = (req.url || '/').split('?')[0];
@@ -199,22 +218,18 @@ function serve({ supabase }) {
         return res.end(cfg);
       }
 
+      // Extensionless routes fall back to the SPA shell, exactly as nginx does; a
+      // genuinely missing ASSET must 404 rather than quietly becoming HTML.
       const isAsset = extname(url) !== '';
-      const candidates = (
-        isAsset ? [url] : [url, `${url}.html`, '/index.html']
-      )
-        .map((p) => underDist(p))
-        .filter((p) => p !== null);
-      for (const candidate of candidates) {
-        try {
-          const body = await readFile(candidate);
-          res.writeHead(200, {
-            'content-type': TYPES[extname(candidate)] ?? 'application/octet-stream',
-          });
-          return res.end(body);
-        } catch {
-          /* next candidate */
-        }
+      const candidate =
+        files.get(url) ??
+        (isAsset ? undefined : files.get(`${url}.html`) ?? files.get('/index.html'));
+      if (candidate) {
+        const body = await readFile(candidate);
+        res.writeHead(200, {
+          'content-type': TYPES[extname(candidate)] ?? 'application/octet-stream',
+        });
+        return res.end(body);
       }
       res.writeHead(404).end('not found');
     });
