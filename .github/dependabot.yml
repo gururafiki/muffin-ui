@@ -45,6 +45,14 @@ updates:
       #                  (reading 'Intrinsic')` inside `eslint .`, while
       #                  `tsc --noEmit` itself passed.
       # Both move with the SDK upgrade, as a set. Minor/patch flow normally.
+      # tailwindcss is owned by NativeWind, which compiles it for React Native.
+      # nativewind@4.2.6 (the current `latest`) hard-refuses v4 —
+      # `expo export` dies on "NativeWind only supports Tailwind CSS v3" and
+      # produces nothing. Tailwind v4 needs NativeWind v5, which is published
+      # only as 5.0.0-preview.4. Moving the whole styling system onto an
+      # unreleased major is a project, not a bump; it lands when v5 is stable.
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
       - dependency-name: "typescript"
