@@ -45,15 +45,27 @@ export const zInstrument = z.looseObject({
 });
 export type Instrument = z.infer<typeof zInstrument>;
 
-async function fetchInstruments(sectorId: string): Promise<Instrument[]> {
+async function fetchInstruments(
+  sectorId: string,
+  country: string | undefined,
+  limit: number,
+): Promise<Instrument[]> {
   const supabase = getSupabase();
   if (!supabase) throw new MarketUnavailableError();
-  const { data, error } = await supabase
+  let q = supabase
     .schema('market')
     .from('instruments')
     .select('symbol,name,sector_id,provider_sector,industry,country,market_cap,sort_order')
-    .eq('sector_id', sectorId)
-    .order('sort_order');
+    .eq('sector_id', sectorId);
+  // Drilling in from a country page means "this sector IN this country" — without
+  // this the page showed US names under /sector/...?countryId=mexico.
+  if (country) q = q.eq('country', country);
+  const { data, error } = await q
+    // Largest first: on a paged list the first page should be the names people
+    // recognise, not whatever the seed order happened to be.
+    .order('market_cap', { ascending: false, nullsFirst: false })
+    .order('symbol')
+    .range(0, limit - 1);
   if (error) throw new Error(`market.instruments read failed: ${error.message}`);
   return parseArray(zInstrument, data ?? [], 'market.instruments');
 }
@@ -75,14 +87,27 @@ export interface SectorConstituents {
   source: string | null;
   sample: boolean;
   refreshing: boolean;
+  /** True when the server may hold more rows than `limit` returned. */
+  hasMore: boolean;
+  loadingMore: boolean;
 }
 
-export function useSectorConstituents(sectorId: string, period: Period): SectorConstituents {
+/** Rows per page. Small enough that "load more" is meaningful on a phone. */
+export const SECTOR_PAGE_SIZE = 20;
+
+export function useSectorConstituents(
+  sectorId: string,
+  period: Period,
+  options: { country?: string; limit?: number } = {},
+): SectorConstituents {
   const queryClient = useQueryClient();
+  const { country, limit = SECTOR_PAGE_SIZE } = options;
 
   const instruments = useQuery({
-    queryKey: ['market', 'instruments', sectorId],
-    queryFn: () => fetchInstruments(sectorId),
+    // country + limit are part of the key: a different filter or page size is a
+    // different result set, not the same one refetched.
+    queryKey: ['market', 'instruments', sectorId, country ?? null, limit],
+    queryFn: () => fetchInstruments(sectorId, country, limit),
     staleTime: 24 * 60 * 60_000,
     gcTime: 30 * 24 * 60 * 60_000,
     retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,
@@ -117,7 +142,9 @@ export function useSectorConstituents(sectorId: string, period: Period): SectorC
   const rows = instruments.data ?? [];
   if (rows.length === 0) {
     // Bundled seed — authored tickers and authored numbers, badged accordingly.
-    const seed = stocksInSector(sectorId);
+    // Filtered by country too, or drilling in from a country would fall back to
+    // the full authored list and show the very rows this is meant to exclude.
+    const seed = stocksInSector(sectorId).filter((s) => !country || s.country === country);
     return {
       items: seed.map((s) => ({
         symbol: s.ticker,
@@ -131,6 +158,8 @@ export function useSectorConstituents(sectorId: string, period: Period): SectorC
       source: null,
       sample: true,
       refreshing: refresh.isPending,
+      hasMore: false,
+      loadingMore: false,
     };
   }
 
@@ -154,5 +183,8 @@ export function useSectorConstituents(sectorId: string, period: Period): SectorC
     source: perfRows.find((r) => r.source)?.source ?? null,
     sample: false,
     refreshing: refresh.isPending,
+    // A full page probably means there is another; the next fetch settles it.
+    hasMore: rows.length >= limit,
+    loadingMore: instruments.isFetching && !instruments.isPending,
   };
 }

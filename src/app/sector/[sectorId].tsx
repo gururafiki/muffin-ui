@@ -1,15 +1,20 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
+import { useState } from 'react';
+
 import { Icon } from '@/components/icons';
-import { Card, Chip, Screen, Text } from '@/components/ui';
+import { Button, Card, Chip, Screen, Text } from '@/components/ui';
 import { palette } from '@/theme/colors';
 import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb, type Crumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
 import { SECTOR_PERIODS } from '@/features/markets/api/periods';
-import { useSectorConstituents } from '@/features/markets/api/use-sector-constituents';
+import {
+  SECTOR_PAGE_SIZE,
+  useSectorConstituents,
+} from '@/features/markets/api/use-sector-constituents';
 import { Freshness } from '@/features/markets/freshness';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { analyseSector, getCountry, getRegion, getSector } from '@/features/markets/taxonomy';
@@ -23,7 +28,12 @@ export default function SectorScreen() {
 
   // Hooks run before the early return below — `sector` can be undefined.
   const period = useActivePeriod(SECTOR_PERIODS);
-  const constituents = useSectorConstituents(params.sectorId ?? '', period);
+  const [limit, setLimit] = useState(SECTOR_PAGE_SIZE);
+  // Drilling in from a country page means "this sector IN this country".
+  const constituents = useSectorConstituents(params.sectorId ?? '', period, {
+    country: country?.name,
+    limit,
+  });
 
   const goStock = (ticker: string) =>
     router.push({
@@ -127,7 +137,21 @@ export default function SectorScreen() {
         />
       </View>
 
-      {stocks.length === 0 ? <Text variant="muted" className="mt-2">No representative stocks yet for {contextName}.</Text> : null}
+      {constituents.hasMore ? (
+        <View className="mt-3">
+          <Button
+            title={constituents.loadingMore ? 'Loading…' : 'Load more'}
+            variant="secondary"
+            onPress={() => setLimit((n) => n + SECTOR_PAGE_SIZE)}
+          />
+        </View>
+      ) : null}
+
+      {stocks.length === 0 ? (
+        <Text variant="muted" className="mt-2">
+          No stocks yet for {contextName}.
+        </Text>
+      ) : null}
     </Screen>
   );
 }
