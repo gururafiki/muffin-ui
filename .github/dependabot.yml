@@ -31,6 +31,24 @@ updates:
       # exists to prevent.
       - dependency-name: "eslint-config-expo"
       - dependency-name: "@expo/*"
+      # eslint and typescript MAJORS are SDK-coupled too, because
+      # eslint-config-expo owns the toolchain underneath them and no released
+      # version supports the next major of either:
+      #   eslint 10   -> eslint-plugin-react@7.37.5 (latest) peers on
+      #                  `eslint: ... || ^9.7`. It has no eslint 10 support at
+      #                  all, and it arrives via eslint-config-expo. #34 died on
+      #                  `Error while loading rule 'react/display-name'`.
+      #   typescript 7 -> @typescript-eslint/typescript-estree@8.66.0 (latest)
+      #                  peers on `typescript: >=4.8.4 <6.1.0`. TS 7 is the
+      #                  native port and typescript-eslint reads TS internals;
+      #                  #36 died on `Cannot read properties of undefined
+      #                  (reading 'Intrinsic')` inside `eslint .`, while
+      #                  `tsc --noEmit` itself passed.
+      # Both move with the SDK upgrade, as a set. Minor/patch flow normally.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "react"
       - dependency-name: "react-dom"
       - dependency-name: "react-native"
