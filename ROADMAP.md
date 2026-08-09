@@ -1225,9 +1225,16 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
       not merely missing (a 10Y "+4.1%" reads as a gain when the yield merely moved). They stay
       in the list with no number, and the refresh skips them.
     - **The stock page is real** (was a launcher with zero market data — todos.md P0): name,
-      sector, the provider's industry, country, market cap and a full performance strip across
-      every available period. Server data wins over the deep-link params, which only carry
-      whatever the linking screen happened to know.
+      sector, the provider's industry, country, market cap, a full performance strip across every
+      available period, and a **price chart** reusing the agent renderers' `TimeSeriesChart`
+      rather than adding a second charting path. Server data wins over the deep-link params,
+      which only carry whatever the linking screen happened to know.
+      - `market.prices` stores a **~400-day** window (~280 bars), which is what 1M/3M/6M/1Y need;
+        the 3Y/5Y numbers still come from `market.performance`, so the chart never offers a range
+        it cannot draw. The refresh already downloaded this history and discarded it.
+      - The chart window anchors on the **last bar**, not `Date.now()` — wall-clock in render is
+        impure (React Compiler rejects it), and anchoring on the data means a slightly stale
+        series still draws a full month instead of shrinking toward empty.
   - **Sector donut weights remain SAMPLE — blocked, not deferred.** `etf/sectors` is FMP-only
     and **premium** (402 on this key) and `index/sectors` is TMX (Canadian listings) only.
     Deriving weights from our own 35 curated tickers would be a *different* number wearing the

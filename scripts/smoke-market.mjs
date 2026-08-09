@@ -263,6 +263,24 @@ async function openPage(browser, port, path, { mockRows }) {
         body: JSON.stringify(scopeId ? body.filter((x) => x.scope_id === scopeId) : body),
       });
     }
+    if (u.includes('/supabase/rest/v1/prices')) {
+      seen.push(u);
+      // ~280 synthetic daily bars, the shape 08-instrument-prices.sql stores.
+      const rows = [];
+      const start = new Date('2025-07-07T00:00:00Z').getTime();
+      for (let i = 0; i < 280; i++) {
+        rows.push({
+          date: new Date(start + i * 86400000).toISOString().slice(0, 10),
+          close: (100 + Math.sin(i / 12) * 18 + i * 0.08).toFixed(4),
+        });
+      }
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(mockRows ? rows : []),
+      });
+    }
     if (u.includes('/supabase/rest/v1/instruments')) {
       seen.push(u);
       // The sector page filters by sector_id; the Markets tab and the stock page
@@ -498,6 +516,29 @@ try {
     check('a return renders in the strip', has(body, '17.8'));
     check('market cap is formatted', /\$\d+\.\d{2}[TBM]/.test(body), (body.match(/\$[\d.]+[TBM]/) || [])[0] ?? '');
     check('the agent launchers survive', has(body, 'Investor Council') || has(body, 'Criteria'));
+
+    // --- the price chart ------------------------------------------------------
+    check('market.prices was read', seen.some((u) => u.includes('/prices')));
+    const svgPaths = await page.evaluate(
+      () => document.querySelectorAll('svg polyline, svg path').length,
+    );
+    check('the chart drew a line', svgPaths > 0, `${svgPaths} svg shapes`);
+    check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
+    // Switching range must actually reslice: 1M shows ~30 days, 1Y ~365.
+    const before = await page.evaluate(() => document.body.innerText);
+    const clicked = await page.evaluate(() => {
+      for (const el of document.querySelectorAll('div, span')) {
+        if (el.textContent?.trim() === '1M' && el.children.length === 0) {
+          (el.closest('[role="button"]') ?? el).click();
+          return true;
+        }
+      }
+      return false;
+    });
+    check('the 1M range control exists', clicked);
+    await new Promise((r) => setTimeout(r, 1200));
+    const after = await page.evaluate(() => document.body.innerText);
+    check('switching range changes the chart window', after !== before);
     check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 
     if (process.env.SCREENSHOT_STOCK) {
