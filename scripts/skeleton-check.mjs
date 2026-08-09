@@ -12,60 +12,11 @@
 // Requires a fresh `npx expo export -p web --output-dir dist` and system Chrome, like the
 // other smoke scripts. Serves `dist/` locally, so no credentials and no deployment needed —
 // the API is blocked anyway, which is the entire point.
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { extname, join, resolve } from 'node:path';
-
 import puppeteer from 'puppeteer-core';
 
-const DIST = resolve(process.cwd(), 'dist');
-const TYPES = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.ttf': 'font/ttf',
-  '.svg': 'image/svg+xml',
-};
+import { serveDist } from './lib/serve-dist.mjs';
 
-/** Static server for the export, with the SPA fallback the real nginx does. */
-function serve() {
-  return new Promise((ok) => {
-    const server = createServer(async (req, res) => {
-      const url = (req.url || '/').split('?')[0];
-
-      // Generated at deploy time by `deploy/40-runtime-config.sh`, so it is absent from a
-      // static export. Serve an empty stub: without this the SPA fallback below returned
-      // index.html for it, the browser parsed HTML as JavaScript, and the page died with
-      // "Unexpected token '<'" before any skeleton rendered.
-      if (url === '/runtime-config.js') {
-        res.writeHead(200, { 'content-type': 'text/javascript' });
-        return res.end('/* stub */');
-      }
-
-      // Only extensionless routes fall back to the SPA shell — an asset that is genuinely
-      // missing must 404, exactly as nginx does, rather than quietly become HTML.
-      const isAsset = extname(url) !== '';
-      const candidates = isAsset
-        ? [join(DIST, url)]
-        : [join(DIST, url), join(DIST, `${url}.html`), join(DIST, 'index.html')];
-      for (const candidate of candidates) {
-        try {
-          const body = await readFile(candidate);
-          if (process.env.DEBUG_SERVE) console.log(`  [200] ${url} -> ${candidate.replace(DIST, '')}`);
-          res.writeHead(200, { 'content-type': TYPES[extname(candidate)] ?? 'application/octet-stream' });
-          return res.end(body);
-        } catch {
-          /* try the next candidate */
-        }
-      }
-      if (process.env.DEBUG_SERVE) console.log(`  [404] ${url}`);
-      res.writeHead(404).end('not found');
-    });
-    server.listen(0, () => ok({ server, port: server.address().port }));
-  });
-}
+const serve = () => serveDist({ debug: !!process.env.DEBUG_SERVE });
 
 /**
  * Surfaces whose loading state is reachable in a bare export.
