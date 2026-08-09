@@ -263,6 +263,31 @@ async function openPage(browser, port, path, { mockRows }) {
         body: JSON.stringify(scopeId ? body.filter((x) => x.scope_id === scopeId) : body),
       });
     }
+    if (u.includes('/threads/search')) {
+      seen.push(u);
+      const mk = (id, graph, ticker, status) => ({
+        thread_id: id,
+        created_at: new Date(Date.now() - 3600_000).toISOString(),
+        updated_at: new Date().toISOString(),
+        status,
+        metadata: { graph_id: graph },
+        extracted: { ticker },
+      });
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(
+          mockRows
+            ? [
+                mk('t-1', 'council', 'AAPL', 'idle'),
+                mk('t-2', 'criteria_analysis', 'AAPL', 'idle'),
+                mk('t-3', 'council', 'MSFT', 'idle'),
+              ]
+            : [],
+        ),
+      });
+    }
     if (u.includes('/supabase/rest/v1/prices')) {
       seen.push(u);
       // ~280 synthetic daily bars, the shape 08-instrument-prices.sql stores.
@@ -516,6 +541,14 @@ try {
     check('a return renders in the strip', has(body, '17.8'));
     check('market cap is formatted', /\$\d+\.\d{2}[TBM]/.test(body), (body.match(/\$[\d.]+[TBM]/) || [])[0] ?? '');
     check('the agent launchers survive', has(body, 'Investor Council') || has(body, 'Criteria'));
+
+    // --- past runs for this ticker --------------------------------------------
+    check('threads were searched', seen.some((u) => u.includes('/threads/search')));
+    check('the past-analysis section renders', has(body, 'Past analysis'));
+    // Both AAPL runs, and NOT the MSFT one that shares the thread list.
+    const councilCount = (body.match(/Investor Council/gi) || []).length;
+    check('this ticker\'s runs are listed', councilCount >= 2, `${councilCount} council mentions`);
+    check('another ticker\'s run is filtered out', !has(body, 'MSFT'));
 
     // --- the price chart ------------------------------------------------------
     check('market.prices was read', seen.some((u) => u.includes('/prices')));

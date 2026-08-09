@@ -1235,6 +1235,13 @@ unit, image build); Sentry receiving events; Maestro suite passing; OTA updates 
       - The chart window anchors on the **last bar**, not `Date.now()` — wall-clock in render is
         impure (React Compiler rejects it), and anchoring on the data means a slightly stale
         series still draws a full month instead of shrinking toward empty.
+      - **Past agent runs for the ticker** sit above the launchers — what has already been
+        concluded is more useful than starting again. It reuses the Calls tab's `threads.search`
+        under the SAME query key (one fetch serves both) and filters on the `ticker` the search
+        already extracts. `CallCard` was extracted rather than copied. **Limit:** the filter runs
+        over the 50 most recent threads, because `extract` is for display and not a queryable
+        index — making it complete would mean promoting `ticker` into thread metadata at run
+        start, a muffin-agent change.
   - **Sector donut weights remain SAMPLE — blocked, not deferred.** `etf/sectors` is FMP-only
     and **premium** (402 on this key) and `index/sectors` is TMX (Canadian listings) only.
     Deriving weights from our own 35 curated tickers would be a *different* number wearing the
