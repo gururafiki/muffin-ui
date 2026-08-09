@@ -6,6 +6,8 @@ import { Icon } from '@/components/icons';
 import { Badge, Card, Screen, Segmented, Text } from '@/components/ui';
 import { TimeSeriesChart } from '@/lib/agent/renderers/chart';
 import { palette } from '@/theme/colors';
+import { CallCard, openThreadRoute } from '@/features/agent-calls/call-card';
+import { useTickerRuns } from '@/features/agent-calls/use-ticker-runs';
 import { AGENTS } from '@/lib/agent/registry';
 import { useInstrument } from '@/features/markets/api/use-instrument';
 import {
@@ -43,6 +45,7 @@ export default function StockScreen() {
   const inst = detail.instrument;
   const [range, setRange] = useState<ChartRange>('1y');
   const prices = useInstrumentPrices(symbol, range);
+  const past = useTickerRuns(symbol);
 
   // Server data wins over the route params: a deep link carries whatever the
   // linking screen happened to know, while `market.instruments` is the record.
@@ -121,8 +124,28 @@ export default function StockScreen() {
         </Text>
       ) : null}
 
+      {/* Past work on this name, before the launchers — what has already been
+          concluded is more useful than starting again. Absent when there is none:
+          an empty "no runs yet" panel on every unanalysed ticker is noise. */}
+      {past.runs.length > 0 ? (
+        <>
+          <Text variant="label" className="mt-5">
+            Past analysis · {symbol}
+          </Text>
+          <View className="mt-2 gap-2.5">
+            {past.runs.slice(0, 5).map((thread) => (
+              <CallCard
+                key={thread.thread_id}
+                thread={thread}
+                onOpen={(t) => openThreadRoute(router, t)}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
+
       <Text variant="muted" className="mt-4">
-        Run an analysis agent for this stock.
+        {past.runs.length > 0 ? 'Or run another agent.' : 'Run an analysis agent for this stock.'}
       </Text>
 
       <View className="mt-4 gap-3">
