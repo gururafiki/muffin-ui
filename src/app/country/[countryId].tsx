@@ -77,7 +77,10 @@ export default function CountryScreen() {
           items={SECTORS.map((s) => ({
             key: s.id,
             title: s.name,
-            subtitle: `${s.subSectors.length} sub-sectors`,
+            // No "N sub-sectors" subtitle: that counted the AUTHORED slugs
+            // ('software-saas'), which the sector page stopped showing because nothing
+            // backs them. Advertising a taxonomy depth that does not exist here while the
+            // page it links to shows none would be the same claim made twice.
             icon: s.icon,
             // Once the panel above is live, this list is live too: a sector the
             // server has no row for shows NO number rather than falling back to

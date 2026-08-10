@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { View } from 'react-native';
 import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 
@@ -42,12 +41,25 @@ interface Slice {
   weight: number;
 }
 
-function buildSlices(): Slice[] {
-  const total = SECTORS.reduce((s, sec) => s + (SECTOR_WEIGHTS[sec.id] ?? 1), 0);
+/**
+ * Build the slices from real weights when they are available, and from the authored map otherwise.
+ *
+ * Real weights are ordered by size and only include sectors the fund actually holds, so the slice
+ * list is NOT `SECTORS` — a sector a fund holds none of must not appear as a zero-width wedge that
+ * still takes a colour and a legend entry.
+ */
+function buildSlices(weights?: { sectorId: string; weightPct: number }[]): Slice[] {
+  const source =
+    weights && weights.length > 0
+      ? weights
+          .map((w) => ({ sector: SECTORS.find((s) => s.id === w.sectorId), weight: w.weightPct }))
+          .filter((x): x is { sector: Sector; weight: number } => !!x.sector)
+      : SECTORS.map((sector) => ({ sector, weight: SECTOR_WEIGHTS[sector.id] ?? 1 }));
+
+  const total = source.reduce((s, x) => s + x.weight, 0);
   let angle = 0;
-  return SECTORS.map((sector, i) => {
-    const weight = SECTOR_WEIGHTS[sector.id] ?? 1;
-    const sweep = (weight / total) * 360;
+  return source.map(({ sector, weight }, i) => {
+    const sweep = total > 0 ? (weight / total) * 360 : 0;
     const slice = { sector, start: angle, end: angle + sweep, color: SLICE_COLORS[i % SLICE_COLORS.length], weight };
     angle += sweep;
     return slice;
@@ -58,11 +70,16 @@ function buildSlices(): Slice[] {
 export function SectorPie({
   selectedId,
   onSelect,
+  weights,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Real, renormalised weights. Omitted -> the authored map, which the caller badges SAMPLE. */
+  weights?: { sectorId: string; weightPct: number }[];
 }) {
-  const [slices] = useState(buildSlices);
+  // NOT `useState(buildSlices)`: that captures the first render's value forever, so the donut would
+  // keep drawing the authored weights after the real ones arrive.
+  const slices = buildSlices(weights);
   const selected = slices.find((s) => s.sector.id === selectedId);
 
   return (
@@ -88,7 +105,7 @@ export function SectorPie({
                   fontWeight="bold"
                   textAnchor="middle"
                   fill={palette.white}>
-                  {s.weight}%
+                  {s.weight.toFixed(0)}%
                 </SvgText>
               ) : null}
             </G>
@@ -99,7 +116,7 @@ export function SectorPie({
           {selected ? selected.sector.name.split(' ')[0] : 'Sectors'}
         </SvgText>
         <SvgText x={C} y={C + 15} fontSize={12} textAnchor="middle" fill={palette.inkMuted}>
-          {selected ? `${selected.weight}% wt` : 'tap a slice'}
+          {selected ? `${selected.weight.toFixed(1)}% wt` : 'tap a slice'}
         </SvgText>
       </Svg>
     </View>
