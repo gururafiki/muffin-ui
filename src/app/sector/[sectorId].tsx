@@ -31,11 +31,21 @@ export default function SectorScreen() {
   const [limit, setLimit] = useState(SECTOR_PAGE_SIZE);
   // Drilling in from a country page means "this sector IN this country".
   const constituents = useSectorConstituents(params.sectorId ?? '', period, {
-    country: country?.name,
+    countryIso2: country?.iso,
     limit,
   });
 
-  const goStock = (ticker: string) =>
+  // Rows are keyed by `security_id` (a holding with no US listing has no ticker, and several such
+  // rows would collide on an empty key), so the tap has to resolve the symbol back. A security
+  // whose ticker OpenFIGI has not resolved has no stock page to open — so the tap does nothing
+  // rather than routing to /stock/undefined.
+  const goStock = (key: string) => {
+    const ticker = stocks.find((s) => s.id === key)?.symbol;
+    if (!ticker) return;
+    goTicker(ticker);
+  };
+
+  const goTicker = (ticker: string) =>
     router.push({
       pathname: '/stock/[ticker]',
       params: {
@@ -65,13 +75,17 @@ export default function SectorScreen() {
   const contextName = country ? `${sector.name} · ${country.name}` : sector.name;
   // Real industries from the provider when we have them; the authored slugs
   // (which had nothing behind them) only as the pre-server fallback.
-  const subSectors = constituents.subSectors.length > 0 ? constituents.subSectors : sector.subSectors;
+  // NO fallback to `sector.subSectors`. Those are authored slugs ('software-saas') with nothing
+  // behind them — the same fake taxonomy the live sub-sectors were introduced to replace. Since
+  // the constituents now come from fund holdings, which carry no industry, the honest render is
+  // no chips at all rather than three invented ones. Sub-industry depth is tracked in todos.md.
+  const subSectors = constituents.subSectors;
   const movers = stocks
     .filter((s) => s.changePct !== null)
     // No `sublabel`: MoversPanel PREFIXES it before the label (it is meant for a
     // flag emoji), so a country name there reads "United States AAPL · Apple Inc.".
     // The list below already carries industry · country.
-    .map((s) => ({ key: s.symbol, label: `${s.symbol} · ${s.name}`, changePct: s.changePct as number }));
+    .map((s) => ({ key: s.id, label: s.symbol ? `${s.symbol} · ${s.name}` : s.name, changePct: s.changePct as number }));
 
   return (
     <Screen>
@@ -87,6 +101,7 @@ export default function SectorScreen() {
             {sector.name}
           </Text>
         </View>
+        {subSectors.length > 0 ? (
         <View className="flex-row flex-wrap gap-2">
           {subSectors.map((s) => (
             // Only de-hyphenate authored SLUGS ('software-saas'). A real provider
@@ -95,6 +110,7 @@ export default function SectorScreen() {
             <Chip key={s} label={s.includes(' ') ? s : s.replace(/-/g, ' ')} />
           ))}
         </View>
+        ) : null}
       </Card>
 
       <View className="mt-4">
@@ -127,11 +143,17 @@ export default function SectorScreen() {
       <View className="mt-2">
         <DrillList
           items={stocks.map((s) => ({
-            key: s.symbol,
-            title: `${s.symbol} · ${s.name}`,
-            // The provider's real industry is the sub-sector; country second.
-            subtitle: [s.industry, s.country].filter(Boolean).join(' · '),
+            // `security_id`, not the symbol: a holding with no US listing has no ticker at all,
+            // and several such rows would collide on an empty key.
+            key: s.id,
+            title: s.symbol ? `${s.symbol} · ${s.name}` : s.name,
+            // Weight in the sector fund is the honest size signal here — it comes from the fund's
+            // own filing, where market cap would need a paid provider.
+            subtitle: [s.country, s.weight != null ? `${s.weight.toFixed(2)}% of fund` : null]
+              .filter(Boolean)
+              .join(' · '),
             changePct: s.changePct ?? undefined,
+            disabled: !s.symbol,
           }))}
           onSelect={goStock}
         />

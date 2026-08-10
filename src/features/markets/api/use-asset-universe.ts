@@ -26,7 +26,7 @@ import {
   type PerformanceRow,
 } from './market-client';
 import type { Period } from './periods';
-import { zInstrument } from './use-sector-constituents';
+import { zInstrument } from './market-instruments';
 
 const RESOURCE = 'instrument-performance';
 const INSTRUMENT_KEY = ['market', 'performance', 'instrument'] as const;

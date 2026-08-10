@@ -16,7 +16,7 @@ import { getSupabase } from '@/lib/auth/client';
 
 import { MarketUnavailableError, zPerformanceRow, type PerformanceRow } from './market-client';
 import { PERIODS, type Period } from './periods';
-import { zInstrument, type Instrument } from './use-sector-constituents';
+import { zInstrument, type Instrument } from './market-instruments';
 
 async function fetchInstrument(symbol: string) {
   const supabase = getSupabase();
