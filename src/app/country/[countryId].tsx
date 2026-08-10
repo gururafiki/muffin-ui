@@ -8,6 +8,7 @@ import { Breadcrumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
+import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { analyseCountry, getCountry, getRegion, SECTORS } from '@/features/markets/taxonomy';
 
 export default function CountryScreen() {
@@ -53,15 +54,27 @@ export default function CountryScreen() {
       </Card>
 
       <View className="mt-4">
+        {/* NAMED AS US, because it is. `scope=sector` comes from finviz's `equity/compare/groups`,
+            which is US-listed ONLY — so on a South Korea page these are US sector returns. Left
+            unlabelled it reads as "Korea's sectors", which is why none of them matched EWY's
+            +121.9%. Per-country sector returns are tracked in todos.md. */}
         <MoversPanel
-          title="Sector performance"
+          title="US sector performance"
           items={sectors.items}
           onSelect={goSector}
           sample={sectors.sample}
           asOf={sectors.asOf}
           source={sectors.source}
           refreshing={sectors.refreshing}
-          right={<PeriodPicker />}
+          right={
+            <View className="flex-row items-center gap-2">
+              <RefreshButton
+                resources={[...PAGE_RESOURCES.country]}
+                invalidate={[['market', 'performance', 'country'], ['market', 'performance', 'sector']]}
+              />
+              <PeriodPicker />
+            </View>
+          }
         />
       </View>
 

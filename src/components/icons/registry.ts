@@ -193,6 +193,7 @@ export const iconRegistry = {
   eye: EyeIcon,
   'eye-slash': EyeSlashIcon,
   'paper-plane': PaperPlaneTiltIcon,
+  refresh: ArrowsClockwiseIcon,
   'arrow-down': ArrowDownIcon,
   'arrow-right': ArrowRightIcon,
   'arrow-left': ArrowLeftIcon,

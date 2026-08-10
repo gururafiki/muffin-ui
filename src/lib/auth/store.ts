@@ -9,6 +9,18 @@ export interface AuthSession {
   accessToken: string;
   userId: string;
   email?: string;
+  /**
+   * True when Supabase says this user is an admin.
+   *
+   * Read from `app_metadata`, NOT `user_metadata`: a user can edit their own `user_metadata`
+   * through the normal auth API, so a role kept there is self-assignable and worth nothing.
+   * `app_metadata` is writable only with the service key.
+   *
+   * This flag decides what the UI OFFERS, never what it is allowed to do — `market-refresh`
+   * checks the same claim server-side on the verified token. A client-side boolean is a
+   * convenience, not a permission.
+   */
+  isAdmin: boolean;
 }
 
 interface AuthState {
@@ -43,10 +55,13 @@ export function beginIntentionalSignOut(): void {
 
 function toAuthSession(session: Session | null): AuthSession | null {
   if (!session?.access_token || !session.user?.id) return null;
+  const app = session.user.app_metadata as Record<string, unknown> | undefined;
+  const roles = app?.roles;
   return {
     accessToken: session.access_token,
     userId: session.user.id,
     email: session.user.email ?? undefined,
+    isAdmin: app?.role === 'admin' || (Array.isArray(roles) && roles.includes('admin')),
   };
 }
 

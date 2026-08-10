@@ -17,6 +17,7 @@ import {
 } from '@/features/markets/api/use-sector-constituents';
 import { Freshness } from '@/features/markets/freshness';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
+import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { analyseSector, getCountry, getRegion, getSector } from '@/features/markets/taxonomy';
 
 export default function SectorScreen() {
@@ -39,6 +40,13 @@ export default function SectorScreen() {
   // rows would collide on an empty key), so the tap has to resolve the symbol back. A security
   // whose ticker OpenFIGI has not resolved has no stock page to open — so the tap does nothing
   // rather than routing to /stock/undefined.
+  // Grow the page as the reader nears the bottom. Guarded on `loadingMore` because the scroll
+  // handler fires continuously: without it one flick would queue several pages at once.
+  const loadMore = () => {
+    if (!constituents.hasMore || constituents.loadingMore) return;
+    setLimit((n) => n + SECTOR_PAGE_SIZE);
+  };
+
   const goStock = (key: string) => {
     const ticker = stocks.find((s) => s.id === key)?.symbol;
     if (!ticker) return;
@@ -88,7 +96,7 @@ export default function SectorScreen() {
     .map((s) => ({ key: s.id, label: s.symbol ? `${s.symbol} · ${s.name}` : s.name, changePct: s.changePct as number }));
 
   return (
-    <Screen>
+    <Screen onEndReached={loadMore}>
       <Stack.Screen options={{ title: sector.name }} />
       <Breadcrumb crumbs={crumbs} />
 
@@ -133,12 +141,18 @@ export default function SectorScreen() {
 
       <View className="mt-5 flex-row items-center justify-between">
         <Text variant="label">Stocks</Text>
-        <Freshness
-          sample={constituents.sample}
-          asOf={constituents.asOf}
-          source={constituents.source}
-          refreshing={constituents.refreshing}
-        />
+        <View className="flex-row items-center gap-2">
+          <Freshness
+            sample={constituents.sample}
+            asOf={constituents.asOf}
+            source={constituents.source}
+            refreshing={constituents.refreshing}
+          />
+          <RefreshButton
+            resources={[...PAGE_RESOURCES.sector]}
+            invalidate={[['market', 'sector-constituents'], ['market', 'performance', 'instrument']]}
+          />
+        </View>
       </View>
       <View className="mt-2">
         <DrillList
@@ -159,12 +173,16 @@ export default function SectorScreen() {
         />
       </View>
 
+      {/* Infinite scroll grows the page automatically (see `loadMore`); this stays as the
+          explicit affordance for anyone who does not scroll — a keyboard or screen-reader user
+          has no scroll gesture to trigger it, and "the list just ends" is indistinguishable from
+          "that is all there is". */}
       {constituents.hasMore ? (
         <View className="mt-3">
           <Button
             title={constituents.loadingMore ? 'Loading…' : 'Load more'}
             variant="secondary"
-            onPress={() => setLimit((n) => n + SECTOR_PAGE_SIZE)}
+            onPress={loadMore}
           />
         </View>
       ) : null}

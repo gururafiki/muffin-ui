@@ -5,10 +5,12 @@ import { Card, Screen, Text } from '@/components/ui';
 import { AnalyseButton } from '@/features/markets/analyse-button';
 import { COUNTRY_PERIODS, useCountryPerformance } from '@/features/markets/api/use-country-performance';
 import { useScheme } from '@/features/markets/api/use-classification';
+import { useGroupPerformance } from '@/features/markets/api/use-group-performance';
 import { groupById, type LensId, type SchemeId } from '@/features/markets/classification';
 import { DrillList } from '@/features/markets/drill-list';
 import { Freshness } from '@/features/markets/freshness';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
+import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { WORLD_GEO } from '@/features/markets/world-geo';
 import { WorldMap } from '@/features/markets/world-map';
 import { analyseRegion, COUNTRIES, getCountryByIso } from '@/features/markets/taxonomy';
@@ -23,6 +25,8 @@ export default function GroupScreen() {
   const { scheme } = useScheme(schemeId);
   const period = useActivePeriod(COUNTRY_PERIODS);
   const perf = useCountryPerformance(period);
+  // Growth for the tier itself, from its proxy fund — the same treatment sectors and countries get.
+  const growth = useGroupPerformance(schemeId, params.groupId ?? '', period);
 
   const group = groupById(scheme, lens, params.groupId);
 
@@ -58,6 +62,27 @@ export default function GroupScreen() {
               {scheme.name} · {scheme.lensLabel[lens]}
               {group.etf ? ` · ETF ${group.etf}` : ''}
             </Text>
+          </View>
+          {/* No number is the honest render for a group with no investable proxy — the World Bank
+              income bands have no ETF, so there is nothing to price. */}
+          {growth.changePct !== null ? (
+            <Text
+              className={growth.changePct >= 0 ? 'font-heading text-bullish' : 'font-heading text-bearish'}>
+              {growth.changePct >= 0 ? '+' : ''}
+              {growth.changePct.toFixed(1)}%
+            </Text>
+          ) : null}
+        </View>
+        <View className="flex-row items-center justify-between">
+          <PeriodPicker />
+          <View className="flex-row items-center gap-2">
+            {growth.changePct !== null ? (
+              <Freshness sample={growth.sample} asOf={growth.asOf} source={growth.source} />
+            ) : null}
+            <RefreshButton
+              resources={[...PAGE_RESOURCES.group]}
+              invalidate={[['market', 'performance', 'group']]}
+            />
           </View>
         </View>
       </Card>
