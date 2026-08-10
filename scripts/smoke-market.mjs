@@ -44,6 +44,24 @@ const COUNTRY_ROWS = {
  * NVDA deliberately has no performance row below, to prove a missing value renders
  * as nothing rather than as its authored +41.3%.
  */
+/**
+ * `market.fund_sector_weight` for IVV, as production reports it: essentially fully classified
+ * (0.29% unclassified), because the S&P 500 IS the universe the 11 US sector SPDRs cover.
+ */
+const FUND_SECTOR_WEIGHT = [
+  { fund_symbol: 'IVV', sector_id: 'information-technology', weight_pct: 32.81, as_of: '2026-03-31' },
+  { fund_symbol: 'IVV', sector_id: 'financials', weight_pct: 12.56, as_of: '2026-03-31' },
+  { fund_symbol: 'IVV', sector_id: 'communication-services', weight_pct: 10.26, as_of: '2026-03-31' },
+  { fund_symbol: 'IVV', sector_id: 'health-care', weight_pct: 9.44, as_of: '2026-03-31' },
+  { fund_symbol: 'IVV', sector_id: 'unclassified', weight_pct: 0.29, as_of: '2026-03-31' },
+];
+
+/** The guard case: a global fund most of which has no sector. Must NOT be drawn. */
+const FUND_SECTOR_WEIGHT_UNCOVERED = [
+  { fund_symbol: 'IVV', sector_id: 'information-technology', weight_pct: 26.72, as_of: '2026-03-31' },
+  { fund_symbol: 'IVV', sector_id: 'unclassified', weight_pct: 30.39, as_of: '2026-03-31' },
+];
+
 const SECTOR_CONSTITUENTS = [
   // Heaviest first, as the view orders them. NVDA deliberately has NO performance row below, to
   // prove a missing value renders as nothing rather than as its authored +41.3%.
@@ -216,7 +234,7 @@ const check = (label, ok, detail = '') => {
 /** Assert case-insensitively: the design system uppercases labels and badges. */
 const has = (body, text) => body.toLowerCase().includes(text.toLowerCase());
 
-async function openPage(browser, port, path, { mockRows }) {
+async function openPage(browser, port, path, { mockRows, uncoveredWeights = false }) {
   const page = await browser.newPage();
   await page.setViewport({ width: 420, height: 1200 });
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
@@ -310,6 +328,16 @@ async function openPage(browser, port, path, { mockRows }) {
           close: (100 + Math.sin(i / 12) * 18 + i * 0.08).toFixed(4),
         });
       }
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(mockRows ? rows : []),
+      });
+    }
+    if (u.includes('/supabase/rest/v1/fund_sector_weight')) {
+      seen.push(u);
+      const rows = uncoveredWeights ? FUND_SECTOR_WEIGHT_UNCOVERED : FUND_SECTOR_WEIGHT;
       return r.respond({
         status: 200,
         contentType: 'application/json',
@@ -549,12 +577,38 @@ try {
     await page.close();
     server.close();
   }
+  // --- 6b. The donut REFUSES under-classified data ------------------------------
+  // Sector classification comes from the 11 US sector SPDRs, so it covers US large caps and
+  // little else: measured in production, IVV is 0.29% unclassified but MSCI World is 30% and
+  // developed-ex-US is 100%. Drawing those would silently overstate every sector. This asserts
+  // the guard fires rather than trusting that it would.
+  {
+    const { server, port } = await serve({ supabase: true });
+    console.log('\nmarkets tab (allocation coverage guard)');
+    const { page, body, errors } = await openPage(browser, port, '/markets', {
+      mockRows: true,
+      uncoveredWeights: true,
+    });
+
+    check('an under-classified fund is NOT drawn as fact', !has(body, 'S&P 500'));
+    check('it falls back to the sample badge', has(body, 'sample'));
+    check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
+    await page.close();
+    server.close();
+  }
   // --- 6. Markets tab: the asset universe is server-backed and BADGED ----------
   {
     const { server, port } = await serve({ supabase: true });
     console.log('\nmarkets tab (asset universe)');
     const { page, body, errors, seen } = await openPage(browser, port, '/markets', { mockRows: true });
 
+    check('the fund allocation was read', seen.some((u) => u.includes('/fund_sector_weight')));
+    // The donut was an authored map badged SAMPLE. It is now the fund's filed holdings — and it
+    // must NAME the index, because one index's allocation under a generic title is the exact
+    // conflation this data was meant to remove.
+    check('the donut names its index', has(body, 'S&P 500'));
+    // 32.81 renormalised over the classified slices (total 65.07) -> 50.4%.
+    check('the real allocation is drawn', has(body, '50') || has(body, '32.8'));
     check('the universe was read', seen.some((u) => u.includes('/instruments')));
     check('a non-equity asset is listed', has(body, 'Bitcoin'));
     check('its live return renders', has(body, '55.4'), 'BTC 55.40 -> +55.4%');
