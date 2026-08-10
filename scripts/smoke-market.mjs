@@ -44,6 +44,17 @@ const COUNTRY_ROWS = {
  * NVDA deliberately has no performance row below, to prove a missing value renders
  * as nothing rather than as its authored +41.3%.
  */
+const SECTOR_CONSTITUENTS = [
+  // Heaviest first, as the view orders them. NVDA deliberately has NO performance row below, to
+  // prove a missing value renders as nothing rather than as its authored +41.3%.
+  { security_id: '11111111-1111-4111-8111-111111111111', name: 'NVIDIA Corp.', symbol: 'NVDA', country_iso2: 'US', weight: 15.5, as_of: '2026-03-31' },
+  { security_id: '22222222-2222-4222-8222-222222222222', name: 'Apple Inc.', symbol: 'AAPL', country_iso2: 'US', weight: 13.63, as_of: '2026-03-31' },
+  { security_id: '33333333-3333-4333-8333-333333333333', name: 'SAP SE', symbol: 'SAP', country_iso2: 'DE', weight: 1.24, as_of: '2026-03-31' },
+  // No ticker: OpenFIGI resolves the US line, and most non-US listings have none. The row must
+  // still render, by name, and must not read "undefined · Tokyo Electron".
+  { security_id: '44444444-4444-4444-8444-444444444444', name: 'Tokyo Electron Ltd', symbol: null, country_iso2: 'JP', weight: 0.91, as_of: '2026-03-31' },
+];
+
 const INSTRUMENTS = [
   {
     symbol: 'AAPL',
@@ -306,6 +317,20 @@ async function openPage(browser, port, path, { mockRows }) {
         body: JSON.stringify(mockRows ? rows : []),
       });
     }
+    if (u.includes('/supabase/rest/v1/sector_constituents')) {
+      seen.push(u);
+      // PostgREST applies `country_iso2=eq.` server-side; the mock must too, or the country-filter
+      // assertion below would pass on an unfiltered list.
+      const iso = /country_iso2=eq\.([A-Z]{2})/.exec(u)?.[1];
+      let body = mockRows ? SECTOR_CONSTITUENTS : [];
+      if (iso) body = body.filter((r) => r.country_iso2 === iso);
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(body),
+      });
+    }
     if (u.includes('/supabase/rest/v1/instruments')) {
       seen.push(u);
       // The sector page filters by sector_id; the Markets tab and the stock page
@@ -489,22 +514,31 @@ try {
       { mockRows: true },
     );
 
-    check('market.instruments was queried', seen.some((u) => u.includes('/instruments')));
+    check(
+      'market.sector_constituents was queried',
+      seen.some((u) => u.includes('/sector_constituents')),
+    );
     check('instrument performance was queried', seen.some((u) => u.includes('scope=eq.instrument')));
-    // The provider's real industries replace the authored slugs.
-    check('real sub-sectors are shown', has(body, 'Consumer Electronics') && has(body, 'Semiconductors'));
-    check('the authored slugs are gone', !has(body, 'software-saas') && !has(body, 'software saas'));
-    check('the country/industry subtitle renders', has(body, 'Germany'));
+    // The list is now fund holdings, not the 35 curated tickers.
+    check('fund constituents are listed', has(body, 'NVIDIA') && has(body, 'Tokyo Electron'));
+    // The authored sub-sector slugs must NOT come back as a fallback: fund holdings carry no
+    // industry, and three invented chips are the fake taxonomy this work removed.
+    check('no authored sub-sector slugs', !has(body, 'software saas') && !has(body, 'software-saas'));
+    // Weight in the sector fund replaces market cap as the size signal.
+    check('the fund weight renders', has(body, '13.63% of fund') || has(body, '13.63'));
+    // A holding with no resolved US ticker must render by NAME, never as "undefined · ...".
+    check('a security with no ticker still renders', has(body, 'Tokyo Electron'));
+    check('no row renders an undefined symbol', !has(body, 'undefined ·'));
     // AAPL 17.77 -> "+17.8%", SAP -8.88 -> "-8.9%".
     check('live instrument returns rendered', has(body, '17.8') && has(body, '8.9'));
-    // NVDA has an instruments row but NO performance row: it must show no number
-    // rather than the authored +41.3%.
-    check('an instrument with no performance row shows no number', !has(body, '41.3'));
+    // NVDA is a constituent but has NO performance row: it must show no number rather than the
+    // authored +41.3%.
+    check('a constituent with no performance row shows no number', !has(body, '41.3'));
     check('provenance is shown', has(body, 'yfinance'));
     check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 
-    // The instruments query must carry the sector AND respect a page range.
-    const instReq = seen.find((u) => u.includes('/instruments') && u.includes('sector_id=eq.'));
+    // The constituents query must carry the sector AND respect a page range.
+    const instReq = seen.find((u) => u.includes('/sector_constituents') && u.includes('sector_id=eq.'));
     check('the sector query is paged', !!instReq);
 
     if (process.env.SCREENSHOT_SECTOR) {
@@ -602,8 +636,8 @@ try {
 
     check(
       'the query is filtered by country',
-      seen.some((u) => u.includes('/instruments') && u.includes('country=eq.Germany')),
-      seen.find((u) => u.includes('/instruments'))?.split('?')[1]?.slice(0, 90) ?? '(none)',
+      seen.some((u) => u.includes('/sector_constituents') && u.includes('country_iso2=eq.DE')),
+      seen.find((u) => u.includes('/sector_constituents'))?.split('?')[1]?.slice(0, 90) ?? '(none)',
     );
     // SAP is the German name in the fixture; AAPL/NVDA are US and must be gone.
     check('the German name is listed', has(body, 'SAP'));

@@ -13,6 +13,15 @@ export interface DrillItem {
   leading?: string; // flag glyph (countries)
   changePct?: number;
   tag?: string;
+  /**
+   * No drill-down target: the row renders as plain content, without the chevron and without being
+   * pressable.
+   *
+   * A security whose US ticker has not been resolved has no stock page to open — most non-US
+   * listings have none at all. A chevron on such a row promises a destination that does not
+   * exist, and a `Pressable` that does nothing reads as a broken tap.
+   */
+  disabled?: boolean;
 }
 
 const toneColor = { bullish: palette.bullish, bearish: palette.bearish, neutral: palette.neutral };
@@ -27,8 +36,8 @@ export function DrillList({
 }) {
   return (
     <View className="gap-2.5">
-      {items.map((it) => (
-        <Pressable key={it.key} onPress={() => onSelect(it.key)} className="active:opacity-80">
+      {items.map((it) => {
+        const body = (
           <Card tone="sticker" className="flex-row items-center gap-3">
             {it.icon ? (
               <View className="h-10 w-10 items-center justify-center rounded-crumb bg-frosting-100 dark:bg-night-surface-muted">
@@ -49,10 +58,19 @@ export function DrillList({
             ) : it.tag ? (
               <Text variant="muted">{it.tag}</Text>
             ) : null}
-            <Icon name="chevron-right" size={20} color={palette.frosting[300]} weight="bold" />
+            {it.disabled ? null : (
+              <Icon name="chevron-right" size={20} color={palette.frosting[300]} weight="bold" />
+            )}
           </Card>
-        </Pressable>
-      ))}
+        );
+        return it.disabled ? (
+          <View key={it.key}>{body}</View>
+        ) : (
+          <Pressable key={it.key} onPress={() => onSelect(it.key)} className="active:opacity-80">
+            {body}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

@@ -1,14 +1,23 @@
 /**
- * The instruments shown under a sector, joined to their performance.
+ * The securities shown under a sector, joined to their performance.
  *
- * Two server sources, one hook:
- *   * `market.instruments` — the curated universe (`sector_id`) enriched by the
- *     refresh with the provider's real `industry`, `country` and market cap.
- *   * `market.performance` scope=`instrument` — returns for the active period.
+ * The list now comes from `market.sector_constituents` — securities the SECTOR SPDR actually
+ * holds, per its SEC N-PORT filing. That replaces `market.instruments`, a 35-row hand-authored
+ * table which is why a sector page used to show two or three names. There are 514 constituents
+ * across the 11 sectors, each with the weight the fund reports.
  *
- * The SUB-SECTOR chips on the sector page come from the distinct `industry` values
- * here, replacing `taxonomy.ts`'s authored slugs (`software-saas`, `semiconductors`)
- * which had nothing behind them.
+ * RANKED BY FUND WEIGHT, not market cap. Market cap needs a paid provider (FMP gates it per
+ * symbol), whereas weight is a fact from a filing — and for a cap-weighted sector fund the two
+ * orderings are nearly the same, so the first page is still the recognisable names.
+ *
+ * `market.performance` (scope=`instrument`) still supplies the % change, and it only covers the
+ * curated instruments — so most rows show NO number rather than an invented one, which is the
+ * same rule the rest of these screens follow.
+ *
+ * SUB-SECTOR CHIPS ARE GONE from the live path. They came from `instruments.industry`, which
+ * exists for 35 securities out of 9,786; chips that partition 7% of a list imply a grouping the
+ * data cannot support. Sub-industry depth is tracked in the umbrella `todos.md` — the model
+ * (`taxonomy_node.parent_id`) already holds the tree, nothing populates level 2 yet.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
@@ -16,7 +25,7 @@ import { z } from 'zod';
 
 import { parseArray } from '@/lib/agent/schemas';
 import { getSupabase } from '@/lib/auth/client';
-import { stocksInSector } from '@/features/markets/taxonomy';
+import { getCountryByIso, stocksInSector } from '@/features/markets/taxonomy';
 
 import {
   fetchPerformance,
@@ -32,56 +41,60 @@ const RESOURCE = 'instrument-performance';
 const INSTRUMENT_KEY = ['market', 'performance', 'instrument'] as const;
 const NO_ROWS: PerformanceRow[] = [];
 
-/** Mirrors `market.instruments` (05-market-instruments.sql). */
-export const zInstrument = z.looseObject({
-  symbol: z.string(),
-  name: z.string().nullish(),
-  sector_id: z.string().nullish(),
-  provider_sector: z.string().nullish(),
-  industry: z.string().nullish(),
-  country: z.string().nullish(),
-  market_cap: z.coerce.number().nullish(),
-  sort_order: z.coerce.number().nullish(),
+/** Mirrors the `market.sector_constituents` view (13-derived-classification.sql). */
+export const zSectorConstituentRow = z.looseObject({
+  security_id: z.string(),
+  name: z.string(),
+  symbol: z.string().nullish(),
+  country_iso2: z.string().nullish(),
+  // `z.coerce` guards the driver, not a live bug: PostgREST sends `numeric` as a JSON number
+  // today, but a version that quoted it would make every row fail to parse and silently empty
+  // the page.
+  weight: z.coerce.number().nullish(),
+  as_of: z.string().nullish(),
 });
-export type Instrument = z.infer<typeof zInstrument>;
+export type SectorConstituentRow = z.infer<typeof zSectorConstituentRow>;
 
-async function fetchInstruments(
+async function fetchConstituents(
   sectorId: string,
-  country: string | undefined,
+  countryIso2: string | undefined,
   limit: number,
-): Promise<Instrument[]> {
+): Promise<SectorConstituentRow[]> {
   const supabase = getSupabase();
   if (!supabase) throw new MarketUnavailableError();
   let q = supabase
     .schema('market')
-    .from('instruments')
-    .select('symbol,name,sector_id,provider_sector,industry,country,market_cap,sort_order')
+    .from('sector_constituents')
+    .select('security_id,name,symbol,country_iso2,weight,as_of')
     .eq('sector_id', sectorId);
-  // Drilling in from a country page means "this sector IN this country" — without
-  // this the page showed US names under /sector/...?countryId=mexico.
-  if (country) q = q.eq('country', country);
+  // Drilling in from a country page means "this sector IN this country". Filtered on ISO-2 rather
+  // than the country's display name: the server stores the code, and a name would have to match a
+  // provider's spelling exactly.
+  if (countryIso2) q = q.eq('country_iso2', countryIso2);
   const { data, error } = await q
-    // Largest first: on a paged list the first page should be the names people
-    // recognise, not whatever the seed order happened to be.
-    .order('market_cap', { ascending: false, nullsFirst: false })
-    .order('symbol')
+    // Heaviest first: on a paged list the first page should be the names people recognise.
+    .order('weight', { ascending: false, nullsFirst: false })
+    .order('name')
     .range(0, limit - 1);
-  if (error) throw new Error(`market.instruments read failed: ${error.message}`);
-  return parseArray(zInstrument, data ?? [], 'market.instruments');
+  if (error) throw new Error(`market.sector_constituents read failed: ${error.message}`);
+  return parseArray(zSectorConstituentRow, data ?? [], 'market.sector_constituents');
 }
 
 export interface SectorConstituent {
-  symbol: string;
+  /** Stable key: a security always has one, a resolved ticker is not guaranteed. */
+  id: string;
+  /** Null until OpenFIGI resolves one — most non-US listings have no US symbol at all. */
+  symbol: string | null;
   name: string;
-  /** The provider's real industry — the sub-sector. */
-  industry: string | null;
   country: string | null;
+  /** The security's weight in the sector fund, as a percent. */
+  weight: number | null;
   changePct: number | null;
 }
 
 export interface SectorConstituents {
   items: SectorConstituent[];
-  /** Distinct industries present, for the sub-sector chips. */
+  /** Distinct sub-sectors present. Empty on the live path — see the file header. */
   subSectors: string[];
   asOf: Date | null;
   source: string | null;
@@ -98,16 +111,17 @@ export const SECTOR_PAGE_SIZE = 20;
 export function useSectorConstituents(
   sectorId: string,
   period: Period,
-  options: { country?: string; limit?: number } = {},
+  options: { countryIso2?: string; limit?: number } = {},
 ): SectorConstituents {
   const queryClient = useQueryClient();
-  const { country, limit = SECTOR_PAGE_SIZE } = options;
+  const { countryIso2, limit = SECTOR_PAGE_SIZE } = options;
 
-  const instruments = useQuery({
-    // country + limit are part of the key: a different filter or page size is a
-    // different result set, not the same one refetched.
-    queryKey: ['market', 'instruments', sectorId, country ?? null, limit],
-    queryFn: () => fetchInstruments(sectorId, country, limit),
+  const constituents = useQuery({
+    // country + limit are part of the key: a different filter or page size is a different result
+    // set, not the same one refetched.
+    queryKey: ['market', 'sector-constituents', sectorId, countryIso2 ?? null, limit],
+    queryFn: () => fetchConstituents(sectorId, countryIso2, limit),
+    // Holdings come from quarterly filings — there is nothing to gain from refetching them often.
     staleTime: 24 * 60 * 60_000,
     gcTime: 30 * 24 * 60 * 60_000,
     retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,
@@ -129,7 +143,10 @@ export function useSectorConstituents(
 
   const perfRows = performance.data ?? NO_ROWS;
   const stale =
-    !performance.isPending && !performance.isError && (instruments.data?.length ?? 0) > 0 && isStale(perfRows);
+    !performance.isPending &&
+    !performance.isError &&
+    (constituents.data?.length ?? 0) > 0 &&
+    isStale(perfRows);
 
   const triggeredFor = useRef<Period | null>(null);
   const { mutate: startRefresh } = refresh;
@@ -139,18 +156,23 @@ export function useSectorConstituents(
     startRefresh();
   }, [stale, period, startRefresh]);
 
-  const rows = instruments.data ?? [];
+  const rows = constituents.data ?? [];
   if (rows.length === 0) {
-    // Bundled seed — authored tickers and authored numbers, badged accordingly.
-    // Filtered by country too, or drilling in from a country would fall back to
-    // the full authored list and show the very rows this is meant to exclude.
-    const seed = stocksInSector(sectorId).filter((s) => !country || s.country === country);
+    // Bundled seed — authored tickers and authored numbers, badged accordingly. Filtered by
+    // country too, or drilling in from a country would fall back to the full authored list and
+    // show the very rows this is meant to exclude.
+    // The authored seed identifies a country by DISPLAY NAME ("United States"), while the server
+    // stores ISO-2 — so the filter is translated rather than applied to the wrong field, which
+    // would match nothing and render an empty page instead of the sample.
+    const seedCountry = countryIso2 ? getCountryByIso(countryIso2)?.name : undefined;
+    const seed = stocksInSector(sectorId).filter((s) => !seedCountry || s.country === seedCountry);
     return {
       items: seed.map((s) => ({
+        id: s.ticker,
         symbol: s.ticker,
         name: s.name,
-        industry: null,
-        country: s.country,
+        country: countryIso2 ?? null,
+        weight: null,
         changePct: s.changePct,
       })),
       subSectors: [],
@@ -164,27 +186,26 @@ export function useSectorConstituents(
   }
 
   const byId = new Map(perfRows.map((r) => [r.scope_id, r.change_pct]));
-  const items: SectorConstituent[] = rows.map((i) => ({
-    symbol: i.symbol,
-    name: i.name ?? i.symbol,
-    industry: i.industry ?? null,
-    country: i.country ?? null,
-    // null (not the authored number) when the server has no row — the list must
-    // never mix live and authored values unlabelled.
-    changePct: byId.get(i.symbol) ?? null,
+  const items: SectorConstituent[] = rows.map((r) => ({
+    id: r.security_id,
+    symbol: r.symbol ?? null,
+    name: r.name,
+    country: r.country_iso2 ?? null,
+    weight: r.weight ?? null,
+    // null (not an authored number) when the server has no row — the list must never mix live and
+    // authored values unlabelled.
+    changePct: r.symbol ? (byId.get(r.symbol) ?? null) : null,
   }));
-
-  const subSectors = [...new Set(rows.map((i) => i.industry).filter((v): v is string => !!v))].sort();
 
   return {
     items,
-    subSectors,
+    subSectors: [],
     asOf: latestAsOf(perfRows),
     source: perfRows.find((r) => r.source)?.source ?? null,
     sample: false,
     refreshing: refresh.isPending,
     // A full page probably means there is another; the next fetch settles it.
     hasMore: rows.length >= limit,
-    loadingMore: instruments.isFetching && !instruments.isPending,
+    loadingMore: constituents.isFetching && !constituents.isPending,
   };
 }
