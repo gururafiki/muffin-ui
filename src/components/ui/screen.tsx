@@ -17,7 +17,20 @@ type ScreenProps = ViewProps & {
    * do nothing on exactly the screens where a retry matters most.
    */
   refreshControl?: ScrollViewProps['refreshControl'];
+  /**
+   * Called when the scroll position nears the bottom — for infinite lists.
+   *
+   * On `Screen` rather than on the list, because these pages are a ScrollView with a list INSIDE
+   * them, not a FlatList: the scroll container is the page. `scrollEventThrottle` is set for iOS,
+   * where the default fires the handler roughly once and infinite scroll would stall after one
+   * page.
+   */
+  onEndReached?: () => void;
 };
+
+/** How close to the bottom counts as "reached" — about one card, so the next page is already
+ * loading by the time the last one is read. */
+const END_THRESHOLD = 320;
 
 /**
  * Page wrapper: applies the bakery background, safe-area insets and an optional
@@ -30,6 +43,7 @@ export function Screen({
   contentClassName,
   plaid,
   refreshControl,
+  onEndReached,
   children,
   ...props
 }: ScreenProps) {
@@ -47,6 +61,20 @@ export function Screen({
       {scroll ? (
         <ScrollView
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={
+            onEndReached
+              ? (e) => {
+                  const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+                  if (
+                    contentOffset.y + layoutMeasurement.height >=
+                    contentSize.height - END_THRESHOLD
+                  ) {
+                    onEndReached();
+                  }
+                }
+              : undefined
+          }
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
           refreshControl={refreshControl}>

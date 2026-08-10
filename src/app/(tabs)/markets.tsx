@@ -15,6 +15,7 @@ import { DrillList } from '@/features/markets/drill-list';
 import { Freshness } from '@/features/markets/freshness';
 import { MoversPanel } from '@/features/markets/movers-panel';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
+import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { SectorPie } from '@/features/markets/sector-pie';
 import {
   ASSET_TYPES,
@@ -70,7 +71,13 @@ export default function MarketsScreen() {
           <Text variant="heading">
             {allocation.sample ? 'Sector breakdown' : `Sector breakdown · ${DONUT_FUND_LABEL}`}
           </Text>
-          <Freshness sample={allocation.sample} asOf={allocation.asOf} />
+          <View className="flex-row items-center gap-2">
+            <Freshness sample={allocation.sample} asOf={allocation.asOf} />
+            <RefreshButton
+              resources={[...PAGE_RESOURCES.markets]}
+              invalidate={[['market', 'fund-sector-weight'], ['market', 'performance', 'sector']]}
+            />
+          </View>
         </View>
         <SectorPie
           selectedId={selectedSector}

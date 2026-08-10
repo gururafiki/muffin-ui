@@ -603,6 +603,9 @@ try {
     const { page, body, errors, seen } = await openPage(browser, port, '/markets', { mockRows: true });
 
     check('the fund allocation was read', seen.some((u) => u.includes('/fund_sector_weight')));
+    // The refresh control is ADMIN-ONLY and this session is anonymous. Asserted because the
+    // server rejects a non-admin token, so a visible button would be a button that always fails.
+    check('no refresh control for an anonymous visitor', !has(body, 'refresh'));
     // The donut was an authored map badged SAMPLE. It is now the fund's filed holdings — and it
     // must NAME the index, because one index's allocation under a generic title is the exact
     // conflation this data was meant to remove.
