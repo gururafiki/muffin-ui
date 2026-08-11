@@ -62,6 +62,18 @@ const FUND_SECTOR_WEIGHT_UNCOVERED = [
   { fund_symbol: 'IVV', sector_id: 'unclassified', weight_pct: 30.39, as_of: '2026-03-31' },
 ];
 
+/** Filler so the list is longer than one page; paging cannot be tested against 4 rows. */
+const FILLER = Array.from({ length: 40 }, (_, i) => ({
+  security_id: `ffff0000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+  name: `Filler Holding ${i + 1}`,
+  symbol: `FIL${i}`,
+  industry: 'Semiconductors',
+  country_iso2: 'US',
+  weight: 0.5,
+  fund_symbol: 'XLK',
+  as_of: '2026-03-31',
+}));
+
 const SECTOR_CONSTITUENTS = [
   // Heaviest first, as the view orders them. NVDA deliberately has NO performance row below, to
   // prove a missing value renders as nothing rather than as its authored +41.3%.
@@ -369,8 +381,13 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
       // PostgREST applies `country_iso2=eq.` server-side; the mock must too, or the country-filter
       // assertion below would pass on an unfiltered list.
       const iso = /country_iso2=eq\.([A-Z]{2})/.exec(u)?.[1];
-      let body = mockRows ? SECTOR_CONSTITUENTS : [];
+      let body = mockRows ? [...SECTOR_CONSTITUENTS, ...FILLER] : [];
       if (iso) body = body.filter((r) => r.country_iso2 === iso);
+      // Honour the page window. supabase-js `.range()` sends a `Range` header, and a stub that
+      // ignores it returns the same rows for every page — so "growing the list" never grows and
+      // a guard against the list SHRINKING can never fail. Verified by reintroducing the bug.
+      const range = /(\d+)-(\d+)/.exec(r.headers()['range'] ?? '');
+      if (range) body = body.slice(Number(range[1]), Number(range[2]) + 1);
       return r.respond({
         status: 200,
         contentType: 'application/json',
