@@ -13,6 +13,7 @@ import {
 } from '@/features/markets/classification';
 import { nameForIso } from '@/features/markets/geo-utils';
 import { useMapView } from '@/features/markets/map-view-store';
+import { useCountries } from '@/features/markets/api/use-countries';
 import { analyseCountry, analyseGlobalMacro, getCountryByIso } from '@/features/markets/taxonomy';
 import { WorldMap } from '@/features/markets/world-map';
 import { palette } from '@/theme/colors';
@@ -24,6 +25,10 @@ export default function HomeScreen() {
   // Schemes, groups and memberships come from `market.*` (Supabase), falling back
   // to the bundled constants so the globe still paints offline / pre-configuration.
   const { scheme, schemes } = useScheme(schemeId);
+  // Mounted for its SIDE EFFECT as much as its value: it publishes `market.countries` into the
+  // registry that `getCountryByIso` below reads. Without it the globe resolves only the 19
+  // bundled countries, so tapping Poland would find nothing.
+  useCountries();
   const groups = scheme.groups[lens];
 
   const sel = selectedIso

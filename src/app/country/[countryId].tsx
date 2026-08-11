@@ -9,7 +9,7 @@ import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
-import { analyseCountry, getCountry, getRegion, SECTORS } from '@/features/markets/taxonomy';
+import { analyseCountry, getCountry, getRegion, marketLabel, SECTORS } from '@/features/markets/taxonomy';
 
 export default function CountryScreen() {
   const { countryId } = useLocalSearchParams<{ countryId: string }>();
@@ -50,7 +50,7 @@ export default function CountryScreen() {
         <Text variant="title">
           {country.flag} {country.name}
         </Text>
-        <Badge label={country.market === 'developed' ? 'Developed market' : 'Emerging market'} tone="info" />
+        <Badge label={marketLabel(country.market)} tone="info" />
       </Card>
 
       <View className="mt-4">

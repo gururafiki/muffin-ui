@@ -10,7 +10,26 @@
 
 import type { IconName } from '@/components/icons';
 
-export type Market = 'developed' | 'emerging';
+/**
+ * MSCI models THREE tiers and the classification data stores all three; this type listed two
+ * because the original 19 countries happened to be developed or emerging. Adding frontier-market
+ * ETFs (Vietnam, Nigeria) made the omission real — a frontier country would otherwise be dropped
+ * from the globe for having a tier the app refused to name.
+ */
+export type Market = 'developed' | 'emerging' | 'frontier';
+
+/**
+ * The tier's display label.
+ *
+ * A helper rather than a ternary at each call site, because the three call sites all read
+ * `market === 'developed' ? 'Developed market' : 'Emerging market'` — which silently labels a
+ * FRONTIER country "Emerging market". A binary conditional over a three-value type is a bug that
+ * type-checks.
+ */
+export const marketLabel = (market: Market): string =>
+  ({ developed: 'Developed market', emerging: 'Emerging market', frontier: 'Frontier market' })[
+    market
+  ] ?? 'Market';
 
 export type RegionId =
   | 'north-america'
@@ -91,8 +110,28 @@ export const COUNTRIES: Country[] = [
   { id: 'united-arab-emirates', name: 'United Arab Emirates', regionId: 'mea', iso: 'AE', flag: '🇦🇪', market: 'emerging', changePct: 4.6 },
 ];
 
+/**
+ * The countries the app currently offers.
+ *
+ * `COUNTRIES` above is the BUNDLED fallback — what renders before the server answers and if
+ * Supabase is unreachable. `registerCountries` swaps in `market.countries`, which knows about 45
+ * rather than 19; without it a group page listed countries ("Also in this group: Poland") that had
+ * data on the server and no page in the app.
+ *
+ * A module-level registry rather than a hook because the lookups below are called from pure
+ * helpers and render paths that are not components. `useCountries` is what fills it.
+ */
+let registry: Country[] = COUNTRIES;
+
+export function registerCountries(list: Country[]): void {
+  // An empty list would silently un-offer every country; the fallback is the better answer.
+  if (list.length > 0) registry = list;
+}
+
+export const allCountries = (): Country[] => registry;
+
 /** Look up a modelled country by ISO-2 (links globe/classification to drill pages). */
-export const getCountryByIso = (iso: string) => COUNTRIES.find((c) => c.iso === iso);
+export const getCountryByIso = (iso: string) => registry.find((c) => c.iso === iso);
 
 export const SECTORS: Sector[] = [
   { id: 'information-technology', name: 'Information Technology', icon: 'sector-tech', subSectors: ['software-saas', 'semiconductors', 'hardware'], changePct: 18.9 },
@@ -170,7 +209,7 @@ export const REPRESENTATIVE_TICKERS: Record<string, StockRef[]> = {
 
 // ── Lookups ────────────────────────────────────────────────────────────────
 export const getRegion = (id: string) => REGIONS.find((r) => r.id === id);
-export const getCountry = (id: string) => COUNTRIES.find((c) => c.id === id);
+export const getCountry = (id: string) => registry.find((c) => c.id === id);
 export const getSector = (id: string) => SECTORS.find((s) => s.id === id);
 export const countriesInRegion = (regionId: string) =>
   COUNTRIES.filter((c) => c.regionId === regionId);
