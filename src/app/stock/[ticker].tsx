@@ -19,6 +19,7 @@ import { Freshness } from '@/features/markets/freshness';
 import { PerformanceStrip } from '@/features/markets/performance-strip';
 import { StockSkeleton } from '@/features/markets/stock-skeleton';
 import { useFundamentals } from '@/features/markets/api/use-fundamentals';
+import { useStatements } from '@/features/markets/api/use-statements';
 import { SecurityRefreshButton } from '@/features/markets/security-refresh-button';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
@@ -46,6 +47,7 @@ export default function StockScreen() {
   const symbol = (params.ticker ?? '').toUpperCase();
   const detail = useInstrument(symbol);
   const fundamentals = useFundamentals(symbol);
+  const statements = useStatements(symbol);
   const inst = detail.instrument;
   const [range, setRange] = useState<ChartRange>('1y');
   const prices = useInstrumentPrices(symbol, range);
@@ -113,6 +115,43 @@ export default function StockScreen() {
               </View>
             ))}
           </View>
+        </Card>
+      ) : null}
+
+      {statements.periods.length > 0 ? (
+        <Card className="mt-4 gap-3">
+          <View className="flex-row items-center justify-between">
+            <Text variant="heading">Income statement</Text>
+            {/* The currency, named ONCE. Samsung's revenue is 97 trillion, and without "KRW"
+                beside it that reads as a company larger than every US mega-cap combined. */}
+            <Text variant="muted" className="text-xs">
+              {statements.periods[0].currency ?? ''} · yfinance
+            </Text>
+          </View>
+          {statements.periods.map((p) => (
+            <View
+              key={p.period}
+              className="gap-0.5 border-t border-frosting-100 pt-2 dark:border-night-surface-muted">
+              <Text variant="muted" className="text-xs">{p.period}</Text>
+              <View className="flex-row flex-wrap">
+                {([
+                  ['Revenue', p.revenue],
+                  ['Gross profit', p.grossProfit],
+                  ['Operating income', p.operatingIncome],
+                  ['Net income', p.netIncome],
+                ] as [string, number | null][])
+                  // A line item this filer did not report is DROPPED, not dashed — filers report
+                  // different sets, which is why the statements are stored as jsonb at all.
+                  .filter((x): x is [string, number] => x[1] != null)
+                  .map(([label, value]) => (
+                    <View key={label} className="w-1/2 py-1 pr-2">
+                      <Text variant="muted" className="text-xs">{label}</Text>
+                      <Text variant="heading">{formatCap(value)}</Text>
+                    </View>
+                  ))}
+              </View>
+            </View>
+          ))}
         </Card>
       ) : null}
 
