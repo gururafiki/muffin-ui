@@ -16,6 +16,7 @@ import {
   type ChartRange,
 } from '@/features/markets/api/use-instrument-prices';
 import { Freshness } from '@/features/markets/freshness';
+import { formatMoney } from '@/features/markets/money';
 import { PerformanceStrip } from '@/features/markets/performance-strip';
 import { StockSkeleton } from '@/features/markets/stock-skeleton';
 import { useFundamentals } from '@/features/markets/api/use-fundamentals';
@@ -25,15 +26,6 @@ import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/tax
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
 const STOCK_AGENT_IDS = ['council', 'criteria_analysis', 'stock_evaluation'];
-
-/** 4.57e12 -> "$4.57T". Market caps span nine orders of magnitude here. */
-function formatCap(v: number): string {
-  const units: [number, string][] = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M']];
-  for (const [scale, suffix] of units) {
-    if (v >= scale) return `$${(v / scale).toFixed(2)}${suffix}`;
-  }
-  return `$${v.toFixed(0)}`;
-}
 
 export default function StockScreen() {
   const params = useLocalSearchParams<{
@@ -122,10 +114,10 @@ export default function StockScreen() {
         <Card className="mt-4 gap-3">
           <View className="flex-row items-center justify-between">
             <Text variant="heading">Income statement</Text>
-            {/* The currency, named ONCE. Samsung's revenue is 97 trillion, and without "KRW"
-                beside it that reads as a company larger than every US mega-cap combined. */}
+            {/* The ISO CODE, even though every figure below already carries a symbol: a symbol
+                cannot disambiguate the seven currencies in this universe that print as "$". */}
             <Text variant="muted" className="text-xs">
-              {statements.periods[0].currency ?? ''} · yfinance
+              {statements.periods[0].currency ? `${statements.periods[0].currency} · ` : ''}yfinance
             </Text>
           </View>
           {statements.periods.map((p) => (
@@ -146,7 +138,7 @@ export default function StockScreen() {
                   .map(([label, value]) => (
                     <View key={label} className="w-1/2 py-1 pr-2">
                       <Text variant="muted" className="text-xs">{label}</Text>
-                      <Text variant="heading">{formatCap(value)}</Text>
+                      <Text variant="heading">{formatMoney(value, p.currency)}</Text>
                     </View>
                   ))}
               </View>
@@ -190,7 +182,7 @@ export default function StockScreen() {
 
           {inst?.market_cap ? (
             <Text variant="muted" className="text-xs">
-              Market cap {formatCap(inst.market_cap)}
+              Market cap {formatMoney(inst.market_cap, inst.currency)}
             </Text>
           ) : null}
         </Card>

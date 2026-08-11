@@ -22,6 +22,9 @@ export const zInstrument = z.looseObject({
   asset_type: z.string().nullish(),
   priced: z.boolean().nullish(),
   price_symbol: z.string().nullish(),
+  // Written by `instrument-profile` from yfinance. It is what labels `market_cap` — NESN's is in
+  // CHF, and an unlabelled figure defaults to reading as dollars.
+  currency: z.string().nullish(),
   // `z.coerce` is a driver guard: PostgREST sends `numeric` as a JSON number today, but a version
   // that quoted it would make every row fail to parse and silently empty the list.
   market_cap: z.coerce.number().nullish(),
