@@ -19,6 +19,7 @@ import { Freshness } from '@/features/markets/freshness';
 import { PerformanceStrip } from '@/features/markets/performance-strip';
 import { StockSkeleton } from '@/features/markets/stock-skeleton';
 import { useFundamentals } from '@/features/markets/api/use-fundamentals';
+import { useStatements } from '@/features/markets/api/use-statements';
 import { SecurityRefreshButton } from '@/features/markets/security-refresh-button';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
@@ -46,6 +47,7 @@ export default function StockScreen() {
   const symbol = (params.ticker ?? '').toUpperCase();
   const detail = useInstrument(symbol);
   const fundamentals = useFundamentals(symbol);
+  const statements = useStatements(symbol);
   const inst = detail.instrument;
   const [range, setRange] = useState<ChartRange>('1y');
   const prices = useInstrumentPrices(symbol, range);
