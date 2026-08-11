@@ -16,15 +16,17 @@ import {
   useSectorConstituents,
 } from '@/features/markets/api/use-sector-constituents';
 import { Freshness } from '@/features/markets/freshness';
+import { useCountry } from '@/features/markets/api/use-countries';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
-import { analyseSector, getCountry, getRegion, getSector } from '@/features/markets/taxonomy';
+import { analyseSector, getRegion, getSector } from '@/features/markets/taxonomy';
 
 export default function SectorScreen() {
   const params = useLocalSearchParams<{ sectorId: string; countryId?: string }>();
   const router = useRouter();
   const sector = getSector(params.sectorId);
-  const country = params.countryId ? getCountry(params.countryId) : undefined;
+  // Same deep-link hazard as the country page: the list is server-side.
+  const { country } = useCountry(params.countryId);
   const region = country ? getRegion(country.regionId) : undefined;
 
   // Hooks run before the early return below — `sector` can be undefined.

@@ -81,6 +81,25 @@ export interface Countries {
   sample: boolean;
 }
 
+/**
+ * Resolve ONE country by its route slug, mounting the query so a deep link works.
+ *
+ * `getCountry` alone reads the registry, and the registry is only populated by a screen that has
+ * already run `useCountries` — so a cold load straight to `/country/poland` resolved against the
+ * bundled 19 and rendered "Unknown country" for a country the server knows. Measured on the
+ * deployed site, not reasoned about.
+ *
+ * `pending` distinguishes "still loading" from "no such country": showing the not-found card while
+ * the list is in flight is the same bug in a different costume.
+ */
+export function useCountry(id: string | undefined): { country: Country | undefined; pending: boolean } {
+  const { items, sample } = useCountries();
+  const country = id ? items.find((c) => c.id === id) : undefined;
+  // Only "pending" while we are still on the bundled fallback AND have not found it there — once
+  // the server list has arrived, a miss is a genuine miss.
+  return { country, pending: !country && sample };
+}
+
 export function useCountries(): Countries {
   const query = useQuery({
     queryKey: ['market', 'countries'],

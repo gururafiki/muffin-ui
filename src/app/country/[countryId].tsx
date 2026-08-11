@@ -7,14 +7,15 @@ import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
+import { useCountry } from '@/features/markets/api/use-countries';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
-import { analyseCountry, getCountry, getRegion, marketLabel, SECTORS } from '@/features/markets/taxonomy';
+import { analyseCountry, getRegion, marketLabel, SECTORS } from '@/features/markets/taxonomy';
 
 export default function CountryScreen() {
   const { countryId } = useLocalSearchParams<{ countryId: string }>();
   const router = useRouter();
-  const country = getCountry(countryId);
+  const { country, pending } = useCountry(countryId);
   const region = country ? getRegion(country.regionId) : undefined;
 
   // Hooks must run before the early return below — `country` can be undefined.
@@ -29,7 +30,9 @@ export default function CountryScreen() {
     return (
       <Screen>
         <Card tone="outline" className="mt-4">
-          <Text variant="heading">Unknown country</Text>
+          {/* The country list is server-side, so a deep link arrives before it does. Saying
+              "unknown" during that window would call a real country nonexistent. */}
+          <Text variant="heading">{pending ? 'Loading country…' : 'Unknown country'}</Text>
         </Card>
       </Screen>
     );
