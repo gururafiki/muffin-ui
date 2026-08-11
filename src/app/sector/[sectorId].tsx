@@ -85,10 +85,8 @@ export default function SectorScreen() {
   const contextName = country ? `${sector.name} · ${country.name}` : sector.name;
   // Real industries from the provider when we have them; the authored slugs
   // (which had nothing behind them) only as the pre-server fallback.
-  // NO fallback to `sector.subSectors`. Those are authored slugs ('software-saas') with nothing
-  // behind them — the same fake taxonomy the live sub-sectors were introduced to replace. Since
-  // the constituents now come from fund holdings, which carry no industry, the honest render is
-  // no chips at all rather than three invented ones. Sub-industry depth is tracked in todos.md.
+  // Still NO fallback to `sector.subSectors` — those are authored slugs with nothing behind them.
+  // The chips are live sub-sectors or nothing.
   const subSectors = constituents.subSectors;
   const movers = stocks
     .filter((s) => s.changePct !== null)
@@ -165,7 +163,8 @@ export default function SectorScreen() {
             title: s.symbol ? `${s.symbol} · ${s.name}` : s.name,
             // Weight in the sector fund is the honest size signal here — it comes from the fund's
             // own filing, where market cap would need a paid provider.
-            subtitle: [s.country, s.weight != null ? `${s.weight.toFixed(2)}% of fund` : null]
+            // Sub-sector first: it is the most specific thing known about the company.
+            subtitle: [s.industry, s.country, s.weight != null ? `${s.weight.toFixed(2)}% of fund` : null]
               .filter(Boolean)
               .join(' · '),
             changePct: s.changePct ?? undefined,
