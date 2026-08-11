@@ -17,6 +17,8 @@ import { MarketUnavailableError } from './market-client';
 const zRow = z.looseObject({
   period_ending: z.string(),
   currency: z.string().nullish(),
+  // The embedded security, for its currency. A many-to-one embed comes back as an object.
+  security: z.looseObject({ currency_code: z.string().nullish() }).nullish(),
   data: z.record(z.string(), z.unknown()),
 });
 
@@ -46,7 +48,9 @@ export function useStatements(symbol: string | undefined) {
       const { data, error } = await supabase
         .schema('market')
         .from('security_statement')
-        .select('period_ending,currency,data,security!inner(security_identifier!inner(value,kind_code))')
+        .select(
+          'period_ending,currency,data,security!inner(currency_code,security_identifier!inner(value,kind_code))',
+        )
         .eq('statement', 'income')
         .eq('security.security_identifier.kind_code', 'ticker')
         .eq('security.security_identifier.value', symbol as string)
@@ -62,7 +66,13 @@ export function useStatements(symbol: string | undefined) {
 
   const periods: StatementPeriod[] = (query.data ?? []).map((r) => ({
     period: r.period_ending,
-    currency: r.currency ?? null,
+    // `security_statement.currency` is null for EVERY row: the income/balance/cash endpoints carry
+    // no currency field at all, so `reported_currency` was a wrong guess when migration 29 was
+    // written. The security's own currency is the honest stand-in — it is the currency the filing
+    // (N-PORT `curCd`) or the metrics response reported for this security, which is what the
+    // statement is denominated in for all but a handful of cross-listed names. It is READ SECOND
+    // so that a provider which starts sending a real per-statement currency immediately wins.
+    currency: r.currency ?? r.security?.currency_code ?? null,
     // Providers name the same line item differently between filers, so each is tried in order
     // rather than assumed — an absent key is a missing number, not a crash.
     revenue: pick(r.data, 'total_revenue', 'operating_revenue', 'revenue'),

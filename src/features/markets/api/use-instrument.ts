@@ -26,7 +26,9 @@ async function fetchInstrument(symbol: string) {
   const [profile, performance] = await Promise.all([
     market
       .from('instruments')
-      .select('symbol,name,sector_id,provider_sector,industry,country,market_cap,asset_type,priced')
+      .select(
+        'symbol,name,sector_id,provider_sector,industry,country,market_cap,currency,asset_type,priced',
+      )
       .eq('symbol', symbol)
       .limit(1),
     market
