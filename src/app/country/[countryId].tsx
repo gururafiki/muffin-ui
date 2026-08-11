@@ -8,9 +8,10 @@ import { Breadcrumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
 import { useCountry } from '@/features/markets/api/use-countries';
+import { useCountrySectorPerformance } from '@/features/markets/api/use-country-sector-performance';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
-import { analyseCountry, getRegion, marketLabel, SECTORS } from '@/features/markets/taxonomy';
+import { analyseCountry, getRegion, getSector, marketLabel, SECTORS } from '@/features/markets/taxonomy';
 
 export default function CountryScreen() {
   const { countryId } = useLocalSearchParams<{ countryId: string }>();
@@ -22,6 +23,18 @@ export default function CountryScreen() {
   const period = useActivePeriod();
   const sectors = useSectorPerformance(period);
   const changeById = new Map(sectors.items.map((i) => [i.key, i.changePct]));
+
+  // The country's own sector returns; `sectors` (US, from finviz) remains the fallback.
+  const own = useCountrySectorPerformance(country?.iso, period);
+  const ownMovers = own.items.map((i) => ({
+    key: i.sectorId,
+    // Coverage travels WITH the number, in the LABEL: a mean over 4 names holding 61% of a fund
+    // is a different claim from one over 31 holding 21%, and the reader cannot tell them apart
+    // otherwise. Not `sublabel` — MoversPanel PREFIXES that (it is meant for a flag emoji), so it
+    // would read "61% Information Technology".
+    label: `${getSector(i.sectorId)?.name ?? i.sectorId} · ${i.weightPct.toFixed(0)}% of fund`,
+    changePct: i.changePct,
+  }));
 
   const goSector = (id: string) =>
     router.push({ pathname: '/sector/[sectorId]', params: { sectorId: id, countryId: country?.id ?? '' } });
@@ -57,17 +70,19 @@ export default function CountryScreen() {
       </Card>
 
       <View className="mt-4">
-        {/* NAMED AS US, because it is. `scope=sector` comes from finviz's `equity/compare/groups`,
-            which is US-listed ONLY — so on a South Korea page these are US sector returns. Left
-            unlabelled it reads as "Korea's sectors", which is why none of them matched EWY's
-            +121.9%. Per-country sector returns are tracked in todos.md. */}
+        {/* THIS COUNTRY's sectors, weighted by its own fund — not America's. The page used to
+            show finviz's `equity/compare/groups`, which is US-listed only, so Korea displayed US
+            sector returns and none of them matched EWY's +121.9%. They do now: Korean technology
+            is the reason, at +309% carrying 61% of the fund.
+            A country with no coverage falls back to the US panel, LABELLED as US — better than an
+            empty card, as long as it never pretends to be local. */}
         <MoversPanel
-          title="US sector performance"
-          items={sectors.items}
+          title={own.empty ? 'US sector performance' : `${country.name} sector performance`}
+          items={own.empty ? sectors.items : ownMovers}
           onSelect={goSector}
-          sample={sectors.sample}
-          asOf={sectors.asOf}
-          source={sectors.source}
+          sample={own.empty ? sectors.sample : false}
+          asOf={own.empty ? sectors.asOf : own.asOf}
+          source={own.empty ? sectors.source : 'weighted constituents'}
           refreshing={sectors.refreshing}
           right={
             <View className="flex-row items-center gap-2">
