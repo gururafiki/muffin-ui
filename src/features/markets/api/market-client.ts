@@ -80,10 +80,16 @@ export async function fetchPerformance(scope: Scope, period: Period): Promise<Pe
  * path must never block on OpenBB, so callers refetch on success and simply keep
  * showing the stale rows if it fails.
  */
-export async function triggerRefresh(resource: string): Promise<void> {
+export async function triggerRefresh(
+  resource: string,
+  /** Extra scope the resource understands — `{ symbol }` for one security, `{ fund }` for one ETF. */
+  scope?: Record<string, string | number>,
+): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
-  const { error } = await supabase.functions.invoke('market-refresh', { body: { resource } });
+  const { error } = await supabase.functions.invoke('market-refresh', {
+    body: { resource, ...(scope ?? {}) },
+  });
   if (error) throw new Error(`market-refresh(${resource}) failed: ${error.message}`);
 }
 

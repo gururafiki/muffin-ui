@@ -18,6 +18,8 @@ import {
 import { Freshness } from '@/features/markets/freshness';
 import { PerformanceStrip } from '@/features/markets/performance-strip';
 import { StockSkeleton } from '@/features/markets/stock-skeleton';
+import { useFundamentals } from '@/features/markets/api/use-fundamentals';
+import { SecurityRefreshButton } from '@/features/markets/security-refresh-button';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
@@ -43,6 +45,7 @@ export default function StockScreen() {
   const router = useRouter();
   const symbol = (params.ticker ?? '').toUpperCase();
   const detail = useInstrument(symbol);
+  const fundamentals = useFundamentals(symbol);
   const inst = detail.instrument;
   const [range, setRange] = useState<ChartRange>('1y');
   const prices = useInstrumentPrices(symbol, range);
@@ -89,7 +92,29 @@ export default function StockScreen() {
       <Text variant="display" className="pt-4">
         {symbol}
       </Text>
-      {inst?.name ? <Text variant="muted">{inst.name}</Text> : null}
+      <View className="flex-row items-center justify-between">
+        {inst?.name ? <Text variant="muted" className="flex-1">{inst.name}</Text> : <View className="flex-1" />}
+        {/* Per-SYMBOL, not the whole universe: the bulk resources are budgeted for backlogs and
+            would refuse on their TTL, and this is the page where a stale number is noticed. */}
+        <SecurityRefreshButton symbol={symbol} />
+      </View>
+
+      {fundamentals.metrics.length > 0 ? (
+        <Card className="mt-4 gap-3">
+          <View className="flex-row items-center justify-between">
+            <Text variant="heading">Fundamentals</Text>
+            <Freshness sample={false} asOf={fundamentals.asOf} source="yfinance" />
+          </View>
+          <View className="flex-row flex-wrap">
+            {fundamentals.metrics.map((m) => (
+              <View key={m.label} className="w-1/2 py-1.5 pr-2">
+                <Text variant="muted" className="text-xs">{m.label}</Text>
+                <Text variant="heading">{m.value}</Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+      ) : null}
 
       {sector || country || params.market || asset || inst?.industry ? (
         <View className="mt-1 flex-row flex-wrap gap-2">
