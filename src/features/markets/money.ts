@@ -66,9 +66,14 @@ function currencyFormatter(code: string, digits: number): Intl.NumberFormat | nu
       maximumFractionDigits: digits,
     });
   } catch {
-    // An unrecognised code makes `Intl` THROW a RangeError, and a throw during render takes a
-    // native build down with no dialog and no JS error (see the `new URL()` rule in CLAUDE.md).
-    // Cached as `null` so a bad code costs one failed construction, not one per render.
+    // MEASURED, because the obvious assumption is wrong: a well-formed but UNKNOWN code does not
+    // throw — `Intl` renders the code itself (`ZZZ 7.80`, separated by U+00A0). Only a MALFORMED
+    // code throws a RangeError, and the caller's `/^[A-Za-z]{3}$/` already rejects those.
+    //
+    // So this catch is for the implementation, not the input: Hermes provides its own ECMA-402
+    // (Android via ICU4J, iOS via Foundation), so it is not V8, and a throw during render takes a
+    // native build down with no dialog and no JS error — the same rule as `new URL()` in
+    // CLAUDE.md. Cached as `null` so a failure costs one construction, not one per render.
     made = null;
   }
   formatters.set(key, made);
