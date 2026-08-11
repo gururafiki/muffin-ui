@@ -14,10 +14,11 @@
  * curated instruments — so most rows show NO number rather than an invented one, which is the
  * same rule the rest of these screens follow.
  *
- * SUB-SECTOR CHIPS ARE GONE from the live path. They came from `instruments.industry`, which
- * exists for 35 securities out of 9,786; chips that partition 7% of a list imply a grouping the
- * data cannot support. Sub-industry depth is tracked in the umbrella `todos.md` — the model
- * (`taxonomy_node.parent_id`) already holds the tree, nothing populates level 2 yet.
+ * SUB-SECTOR CHIPS ARE BACK, and real this time. They come from `taxonomy_node` level 2, written
+ * by `security-industries` from yfinance's `industry_category` — 91 industries such as
+ * "Semiconductors", "Banks - Regional" and "Insurance - Life", each hanging off its own sector.
+ * They were removed when the only source was `instruments.industry`, which covered 35 securities
+ * of 9,786: chips that partition 7% of a list imply a grouping the data cannot support.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
@@ -46,6 +47,7 @@ export const zSectorConstituentRow = z.looseObject({
   security_id: z.string(),
   name: z.string(),
   symbol: z.string().nullish(),
+  industry: z.string().nullish(),
   country_iso2: z.string().nullish(),
   // `z.coerce` guards the driver, not a live bug: PostgREST sends `numeric` as a JSON number
   // today, but a version that quoted it would make every row fail to parse and silently empty
@@ -65,7 +67,7 @@ async function fetchConstituents(
   let q = supabase
     .schema('market')
     .from('sector_constituents')
-    .select('security_id,name,symbol,country_iso2,weight,as_of')
+    .select('security_id,name,symbol,industry,country_iso2,weight,as_of')
     .eq('sector_id', sectorId);
   // Drilling in from a country page means "this sector IN this country". Filtered on ISO-2 rather
   // than the country's display name: the server stores the code, and a name would have to match a
@@ -83,6 +85,8 @@ async function fetchConstituents(
 export interface SectorConstituent {
   /** Stable key: a security always has one, a resolved ticker is not guaranteed. */
   id: string;
+  /** The sub-sector — taxonomy level 2, from the provider's `industry_category`. */
+  industry: string | null;
   /** Null until OpenFIGI resolves one — most non-US listings have no US symbol at all. */
   symbol: string | null;
   name: string;
@@ -94,7 +98,7 @@ export interface SectorConstituent {
 
 export interface SectorConstituents {
   items: SectorConstituent[];
-  /** Distinct sub-sectors present. Empty on the live path — see the file header. */
+  /** Distinct sub-sectors among the rows fetched — the chips on the sector page. */
   subSectors: string[];
   asOf: Date | null;
   source: string | null;
@@ -169,6 +173,7 @@ export function useSectorConstituents(
     return {
       items: seed.map((s) => ({
         id: s.ticker,
+        industry: null,
         symbol: s.ticker,
         name: s.name,
         country: countryIso2 ?? null,
@@ -188,6 +193,7 @@ export function useSectorConstituents(
   const byId = new Map(perfRows.map((r) => [r.scope_id, r.change_pct]));
   const items: SectorConstituent[] = rows.map((r) => ({
     id: r.security_id,
+    industry: r.industry ?? null,
     symbol: r.symbol ?? null,
     name: r.name,
     country: r.country_iso2 ?? null,
@@ -197,9 +203,14 @@ export function useSectorConstituents(
     changePct: r.symbol ? (byId.get(r.symbol) ?? null) : null,
   }));
 
+  // Distinct industries among the rows actually fetched. Scoped to the page on purpose: claiming a
+  // sector's full sub-sector list from 20 rows would be a different, larger claim than the data
+  // behind it.
+  const subSectors = [...new Set(rows.map((r) => r.industry).filter((v): v is string => !!v))].sort();
+
   return {
     items,
-    subSectors: [],
+    subSectors,
     asOf: latestAsOf(perfRows),
     source: perfRows.find((r) => r.source)?.source ?? null,
     sample: false,
