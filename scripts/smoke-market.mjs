@@ -335,6 +335,25 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(mockRows ? rows : []),
       });
     }
+    if (u.includes('/supabase/rest/v1/security_current')) {
+      seen.push(u);
+      // Only answers when a query is present, mirroring the hook's minimum length. The URL is
+      // DECODED first: PostgREST percent-encodes the parens of an `or=(...)` filter, so matching
+      // the raw string finds nothing and the stub silently returns an empty list.
+      const decoded = decodeURIComponent(u);
+      const q = /or=\(([^)]*)\)/.exec(decoded)?.[1] ?? '';
+      const rows = !mockRows || !q ? [] : [
+        { security_id: 'aaaa1111-1111-4111-8111-111111111111', name: 'Samsung Electronics Co., Ltd.', symbol: '005930.KS', sector_id: 'information-technology', country_iso2: 'KR' },
+        // No symbol: must render, must not be tappable.
+        { security_id: 'bbbb2222-2222-4222-8222-222222222222', name: 'Samsung Life Insurance', symbol: null, sector_id: 'financials', country_iso2: 'KR' },
+      ];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     if (u.includes('/supabase/rest/v1/fund_sector_weight')) {
       seen.push(u);
       const rows = uncoveredWeights ? FUND_SECTOR_WEIGHT_UNCOVERED : FUND_SECTOR_WEIGHT;
@@ -579,6 +598,34 @@ try {
     await page.close();
     server.close();
   }
+  // --- 6c. Search actually finds something ------------------------------------
+  // Asserting the box renders proves nothing about whether typing in it works. This types, waits
+  // for the debounce, and checks both a resolvable hit and one with no ticker — the row that must
+  // render without promising a stock page.
+  {
+    const { server, port } = await serve({ supabase: true });
+    console.log('\nmarkets tab (security search)');
+    const { page, body: _b, errors } = await openPage(browser, port, '/markets', { mockRows: true });
+
+    const input = await page.$('input[aria-label="Search securities"]');
+    check('the search input is reachable', !!input);
+    if (input) {
+      await input.type('samsung');
+      // 250ms debounce plus the query; poll rather than sleep a constant.
+      let text = '';
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        text = await page.evaluate(() => document.body.innerText);
+        if (/Samsung Electronics/i.test(text)) break;
+      }
+      check('a resolvable hit is listed', /005930\.KS/.test(text) && /Samsung Electronics/i.test(text));
+      check('a hit with no ticker still renders', /Samsung Life Insurance/i.test(text));
+      check('the sector and country show', /information technology/i.test(text) || /South Korea|KR/.test(text));
+    }
+    check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
+    await page.close();
+    server.close();
+  }
   // --- 6b. The donut REFUSES under-classified data ------------------------------
   // Sector classification comes from the 11 US sector SPDRs, so it covers US large caps and
   // little else: measured in production, IVV is 0.29% unclassified but MSCI World is 30% and
@@ -605,6 +652,10 @@ try {
     const { page, body, errors, seen } = await openPage(browser, port, '/markets', { mockRows: true });
 
     check('the fund allocation was read', seen.some((u) => u.includes('/fund_sector_weight')));
+    // The search box exists and does NOT query on an empty field — a blank query would match
+    // everything and cost a scan per keystroke.
+    check('the search box renders', has(body, 'Find a company'));
+    check('no search request without a query', !seen.some((u) => u.includes('security_current')));
     // The refresh control is ADMIN-ONLY and this session is anonymous. Asserted because the
     // server rejects a non-admin token, so a visible button would be a button that always fails.
     check('no refresh control for an anonymous visitor', !has(body, 'refresh'));
