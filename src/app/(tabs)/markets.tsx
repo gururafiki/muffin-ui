@@ -17,6 +17,7 @@ import { MoversPanel } from '@/features/markets/movers-panel';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { SectorPie } from '@/features/markets/sector-pie';
+import { SecuritySearch } from '@/features/markets/security-search';
 import {
   ASSET_TYPES,
   assetTypeMeta,
@@ -48,6 +49,8 @@ export default function MarketsScreen() {
       <Text variant="title" className="pt-4">
         Markets
       </Text>
+
+      <SecuritySearch onSelect={(ticker) => router.push({ pathname: '/stock/[ticker]', params: { ticker } })} />
       <Text variant="muted">Sector weights and your multi-asset universe.</Text>
 
       <View className="mt-4">
