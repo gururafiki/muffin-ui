@@ -17,6 +17,7 @@ import {
 } from '@/features/markets/api/use-instrument-prices';
 import { Freshness } from '@/features/markets/freshness';
 import { PerformanceStrip } from '@/features/markets/performance-strip';
+import { StockSkeleton } from '@/features/markets/stock-skeleton';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
@@ -69,6 +70,18 @@ export default function StockScreen() {
     }
     router.push({ pathname: '/agents/[assistantId]', params: { assistantId: agentId, ...extra } });
   };
+
+  // The page rendered a bare symbol over blank space while the instrument loaded, which reads as
+  // "no data for this ticker" rather than "still loading" — and the two look identical to someone
+  // who has just tapped a row.
+  if (detail.loading) {
+    return (
+      <Screen>
+        <Stack.Screen options={{ title: symbol }} />
+        <StockSkeleton />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
