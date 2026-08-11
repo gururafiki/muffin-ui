@@ -8,7 +8,7 @@ import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
-import { analyseRegion, countriesAsMovers, countriesInRegion, getRegion } from '@/features/markets/taxonomy';
+import { analyseRegion, countriesAsMovers, countriesInRegion, getRegion, marketLabel } from '@/features/markets/taxonomy';
 
 export default function RegionScreen() {
   const { regionId } = useLocalSearchParams<{ regionId: string }>();
@@ -61,7 +61,7 @@ export default function RegionScreen() {
           items={countries.map((c) => ({
             key: c.id,
             title: c.name,
-            subtitle: c.market === 'developed' ? 'Developed market' : 'Emerging market',
+            subtitle: marketLabel(c.market),
             leading: c.flag,
             changePct: c.changePct,
           }))}

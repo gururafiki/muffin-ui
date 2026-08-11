@@ -13,7 +13,8 @@ import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker'
 import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { WORLD_GEO } from '@/features/markets/world-geo';
 import { WorldMap } from '@/features/markets/world-map';
-import { analyseRegion, COUNTRIES, getCountryByIso } from '@/features/markets/taxonomy';
+import { analyseRegion, getCountryByIso, marketLabel } from '@/features/markets/taxonomy';
+import { useCountries } from '@/features/markets/api/use-countries';
 
 export default function GroupScreen() {
   const params = useLocalSearchParams<{ groupId: string; scheme: SchemeId; lens: LensId }>();
@@ -23,6 +24,7 @@ export default function GroupScreen() {
 
   // Hooks run before the early return below — `group` can be undefined.
   const { scheme } = useScheme(schemeId);
+  const countries = useCountries();
   const period = useActivePeriod(COUNTRY_PERIODS);
   const perf = useCountryPerformance(period);
   // Growth for the tier itself, from its proxy fund — the same treatment sectors and countries get.
@@ -44,7 +46,7 @@ export default function GroupScreen() {
   }
 
   const inGroup = (iso: string) => scheme.groupOf(lens, iso) === group.id;
-  const modelled = COUNTRIES.filter((c) => inGroup(c.iso));
+  const modelled = countries.items.filter((c) => inGroup(c.iso));
   const otherNames = WORLD_GEO.filter(
     (c) => inGroup(c.iso) && !getCountryByIso(c.iso),
   ).map((c) => c.name);
@@ -122,7 +124,7 @@ export default function GroupScreen() {
               items={modelled.map((c) => ({
                 key: c.id,
                 title: c.name,
-                subtitle: c.market === 'developed' ? 'Developed market' : 'Emerging market',
+                subtitle: marketLabel(c.market),
                 leading: c.flag,
                 // Live value for the active period. Once live, a country with no
                 // server row shows NO number rather than its authored one — mixing
