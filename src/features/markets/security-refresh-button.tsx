@@ -9,7 +9,8 @@
  * token, so a button everyone can see is a button that fails for almost everyone.
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pressable } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui';
@@ -17,10 +18,12 @@ import { useAuth } from '@/lib/auth/store';
 import { palette } from '@/theme/colors';
 
 import { triggerRefresh } from './api/market-client';
+import { RESOURCE_INFO } from './refresh-button';
 
 export function SecurityRefreshButton({ symbol }: { symbol: string }) {
   const isAdmin = useAuth((s) => s.session?.isAdmin ?? false);
   const queryClient = useQueryClient();
+  const [showInfo, setShowInfo] = useState(false);
 
   const refresh = useMutation({
     mutationFn: () => triggerRefresh('security-refresh', { symbol }),
@@ -35,14 +38,33 @@ export function SecurityRefreshButton({ symbol }: { symbol: string }) {
   if (!isAdmin) return null;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Refresh ${symbol}`}
-      disabled={refresh.isPending}
-      onPress={() => refresh.mutate()}
-      className="flex-row items-center gap-1.5 rounded-crumb px-2 py-1 active:opacity-70">
-      <Icon name="refresh" size={16} color={refresh.isPending ? palette.frosting[300] : palette.frosting[600]} />
-      <Text variant="muted" className="text-xs">{refresh.isPending ? 'refreshing…' : 'Refresh'}</Text>
-    </Pressable>
+    <View className="items-end">
+      <View className="flex-row items-center gap-1">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="What does refresh do?"
+          onPress={() => setShowInfo((v) => !v)}
+          className="h-5 w-5 items-center justify-center rounded-full border border-frosting-300 active:opacity-70">
+          <Text variant="muted" className="text-[10px]">i</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Refresh ${symbol}`}
+          disabled={refresh.isPending}
+          onPress={() => refresh.mutate()}
+          className="flex-row items-center gap-1.5 rounded-crumb px-2 py-1 active:opacity-70">
+          <Icon name="refresh" size={16} color={refresh.isPending ? palette.frosting[300] : palette.frosting[600]} />
+          <Text variant="muted" className="text-xs">{refresh.isPending ? 'refreshing…' : 'Refresh'}</Text>
+        </Pressable>
+      </View>
+      {showInfo ? (
+        <View className="mt-1 max-w-xs rounded-crumb bg-frosting-50 p-2 dark:bg-night-surface-muted">
+          <Text variant="muted" className="text-[11px]">• {RESOURCE_INFO['security-refresh']}</Text>
+          <Text variant="muted" className="text-[10px] opacity-70">
+            This security only — not the whole universe.
+          </Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
