@@ -22,10 +22,15 @@ export default function CountryScreen() {
   // Hooks must run before the early return below — `country` can be undefined.
   const period = useActivePeriod();
   const sectors = useSectorPerformance(period);
-  const changeById = new Map(sectors.items.map((i) => [i.key, i.changePct]));
-
   // The country's own sector returns; `sectors` (US, from finviz) remains the fallback.
   const own = useCountrySectorPerformance(country?.iso, period);
+
+  // ONE source for both the panel and the list below it. They were separate, so the panel showed
+  // Korean technology at +309% while the list under it showed the US figure of +31.5% — the same
+  // sector, on the same screen, disagreeing by an order of magnitude.
+  const changeById = own.empty
+    ? new Map(sectors.items.map((i) => [i.key, i.changePct]))
+    : new Map(own.items.map((i) => [i.sectorId, i.changePct]));
   const ownMovers = own.items.map((i) => ({
     key: i.sectorId,
     // Coverage travels WITH the number, in the LABEL: a mean over 4 names holding 61% of a fund
@@ -118,7 +123,9 @@ export default function CountryScreen() {
             // its authored one. Mixing them would put a real +11.1% and an
             // authored +9.4% side by side with nothing to tell them apart —
             // exactly what the sample badge exists to prevent.
-            changePct: sectors.sample ? s.changePct : changeById.get(s.id),
+            // A sector the country has no coverage for shows NO number rather than borrowing the
+            // US one — the same rule the constituent lists follow.
+            changePct: own.empty && sectors.sample ? s.changePct : changeById.get(s.id),
           }))}
           onSelect={goSector}
         />
