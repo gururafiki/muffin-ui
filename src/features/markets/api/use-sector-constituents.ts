@@ -20,7 +20,7 @@
  * They were removed when the only source was `instruments.industry`, which covered 35 securities
  * of 9,786: chips that partition 7% of a list imply a grouping the data cannot support.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { z } from 'zod';
 
@@ -130,6 +130,11 @@ export function useSectorConstituents(
     // set, not the same one refetched.
     queryKey: ['market', 'sector-constituents', sectorId, countryIso2 ?? null, limit],
     queryFn: () => fetchConstituents(sectorId, countryIso2, limit),
+    // `limit` is part of the key, so growing the page starts a NEW query with no cached data.
+    // Without this the list momentarily had nothing, fell through to the bundled sample below,
+    // and COLLAPSED — which threw the scroll position back to the top mid-scroll. Keeping the
+    // previous page means the list only ever grows.
+    placeholderData: keepPreviousData,
     // Holdings come from quarterly filings — there is nothing to gain from refetching them often.
     staleTime: 24 * 60 * 60_000,
     gcTime: 30 * 24 * 60 * 60_000,
@@ -166,7 +171,9 @@ export function useSectorConstituents(
   }, [stale, period, startRefresh]);
 
   const rows = constituents.data ?? [];
-  if (rows.length === 0) {
+  // Never fall back to the sample while a fetch is in flight: the seed is a DIFFERENT, shorter
+  // list, so rendering it mid-load replaces the page rather than extending it.
+  if (rows.length === 0 && !constituents.isFetching) {
     // Bundled seed — authored tickers and authored numbers, badged accordingly. Filtered by
     // country too, or drilling in from a country would fall back to the full authored list and
     // show the very rows this is meant to exclude.
