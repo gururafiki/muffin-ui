@@ -65,12 +65,12 @@ const FUND_SECTOR_WEIGHT_UNCOVERED = [
 const SECTOR_CONSTITUENTS = [
   // Heaviest first, as the view orders them. NVDA deliberately has NO performance row below, to
   // prove a missing value renders as nothing rather than as its authored +41.3%.
-  { security_id: '11111111-1111-4111-8111-111111111111', name: 'NVIDIA Corp.', symbol: 'NVDA', industry: 'Semiconductors', country_iso2: 'US', weight: 15.5, as_of: '2026-03-31' },
-  { security_id: '22222222-2222-4222-8222-222222222222', name: 'Apple Inc.', symbol: 'AAPL', industry: 'Consumer Electronics', country_iso2: 'US', weight: 13.63, as_of: '2026-03-31' },
-  { security_id: '33333333-3333-4333-8333-333333333333', name: 'SAP SE', symbol: 'SAP', industry: 'Software - Application', country_iso2: 'DE', weight: 1.24, as_of: '2026-03-31' },
+  { security_id: '11111111-1111-4111-8111-111111111111', name: 'NVIDIA Corp.', symbol: 'NVDA', industry: 'Semiconductors', country_iso2: 'US', weight: 15.5, fund_symbol: 'XLK', as_of: '2026-03-31' },
+  { security_id: '22222222-2222-4222-8222-222222222222', name: 'Apple Inc.', symbol: 'AAPL', industry: 'Consumer Electronics', country_iso2: 'US', weight: 13.63, fund_symbol: 'XLK', as_of: '2026-03-31' },
+  { security_id: '33333333-3333-4333-8333-333333333333', name: 'SAP SE', symbol: 'SAP', industry: 'Software - Application', country_iso2: 'DE', weight: 1.24, fund_symbol: 'XLK', as_of: '2026-03-31' },
   // No ticker: OpenFIGI resolves the US line, and most non-US listings have none. The row must
   // still render, by name, and must not read "undefined · Tokyo Electron".
-  { security_id: '44444444-4444-4444-8444-444444444444', name: 'Tokyo Electron Ltd', symbol: null, country_iso2: 'JP', weight: 0.91, as_of: '2026-03-31' },
+  { security_id: '44444444-4444-4444-8444-444444444444', name: 'Tokyo Electron Ltd', symbol: null, country_iso2: 'JP', weight: 0.91, fund_symbol: 'XLK', as_of: '2026-03-31' },
 ];
 
 const INSTRUMENTS = [
@@ -574,7 +574,9 @@ try {
     // The chips are back, and REAL — taxonomy level 2, not the authored slugs they replaced.
     check('live sub-sector chips render', has(body, 'Semiconductors') && has(body, 'Consumer Electronics'));
     // Weight in the sector fund replaces market cap as the size signal.
-    check('the fund weight renders', has(body, '13.63% of fund') || has(body, '13.63'));
+    check('the fund weight renders', has(body, '13.63'));
+    // A weight must say WHICH fund it is a share of, or it is unattributable.
+    check('the weights name their fund', has(body, 'weights from XLK'));
     // A holding with no resolved US ticker must render by NAME, never as "undefined · ...".
     check('a security with no ticker still renders', has(body, 'Tokyo Electron'));
     check('no row renders an undefined symbol', !has(body, 'undefined ·'));
