@@ -38,6 +38,7 @@ const zRow = z.looseObject({
   change_pct: z.coerce.number().nullish(),
   constituents: z.coerce.number().nullish(),
   weight_covered: z.coerce.number().nullish(),
+  fund_symbol: z.string().nullish(),
   as_of: z.string().nullish(),
 });
 
@@ -55,6 +56,8 @@ export interface CountrySectorPerformance {
   asOf: Date | null;
   /** True when the server has nothing for this country — the caller shows no panel at all. */
   empty: boolean;
+  /** The fund the weights come from, so "61% of fund" says WHICH fund. */
+  fundSymbol: string | null;
 }
 
 async function fetchCountrySectors(iso2: string, period: Period) {
@@ -63,7 +66,7 @@ async function fetchCountrySectors(iso2: string, period: Period) {
   const { data, error } = await supabase
     .schema('market')
     .from('country_sector_performance')
-    .select('country_iso2,sector_id,period,change_pct,constituents,weight_covered,as_of')
+    .select('country_iso2,sector_id,period,change_pct,constituents,weight_covered,fund_symbol,as_of')
     .eq('country_iso2', iso2)
     .eq('period', period)
     .order('weight_covered', { ascending: false, nullsFirst: false });
@@ -100,5 +103,6 @@ export function useCountrySectorPerformance(
     // Distinguishes "nothing for this country" from "still loading": a country with no sector
     // coverage must render no panel rather than an empty one.
     empty: !query.isPending && items.length === 0,
+    fundSymbol: rows.find((r) => r.fund_symbol)?.fund_symbol ?? null,
   };
 }

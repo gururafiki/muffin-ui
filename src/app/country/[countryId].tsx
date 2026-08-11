@@ -37,7 +37,7 @@ export default function CountryScreen() {
     // is a different claim from one over 31 holding 21%, and the reader cannot tell them apart
     // otherwise. Not `sublabel` — MoversPanel PREFIXES that (it is meant for a flag emoji), so it
     // would read "61% Information Technology".
-    label: `${getSector(i.sectorId)?.name ?? i.sectorId} · ${i.weightPct.toFixed(0)}% of fund`,
+    label: `${getSector(i.sectorId)?.name ?? i.sectorId} · ${i.weightPct.toFixed(0)}%`,
     changePct: i.changePct,
   }));
 
@@ -82,7 +82,13 @@ export default function CountryScreen() {
             A country with no coverage falls back to the US panel, LABELLED as US — better than an
             empty card, as long as it never pretends to be local. */}
         <MoversPanel
-          title={own.empty ? 'US sector performance' : `${country.name} sector performance`}
+          title={
+            own.empty
+              ? 'US sector performance'
+              // Names the fund, because "61%" is unattributable otherwise: a reader cannot tell
+              // whether it is a share of the country's ETF or of something else entirely.
+              : `${country.name} sectors${own.fundSymbol ? ` · ${own.fundSymbol}` : ''}`
+          }
           items={own.empty ? sectors.items : ownMovers}
           onSelect={goSector}
           sample={own.empty ? sectors.sample : false}

@@ -53,6 +53,7 @@ export const zSectorConstituentRow = z.looseObject({
   // today, but a version that quoted it would make every row fail to parse and silently empty
   // the page.
   weight: z.coerce.number().nullish(),
+  fund_symbol: z.string().nullish(),
   as_of: z.string().nullish(),
 });
 export type SectorConstituentRow = z.infer<typeof zSectorConstituentRow>;
@@ -67,7 +68,7 @@ async function fetchConstituents(
   let q = supabase
     .schema('market')
     .from('sector_constituents')
-    .select('security_id,name,symbol,industry,country_iso2,weight,as_of')
+    .select('security_id,name,symbol,industry,country_iso2,weight,fund_symbol,as_of')
     .eq('sector_id', sectorId);
   // Drilling in from a country page means "this sector IN this country". Filtered on ISO-2 rather
   // than the country's display name: the server stores the code, and a name would have to match a
@@ -93,6 +94,8 @@ export interface SectorConstituent {
   country: string | null;
   /** The security's weight in the sector fund, as a percent. */
   weight: number | null;
+  /** WHICH fund that weight is a share of. A weight without it is unattributable. */
+  fundSymbol: string | null;
   changePct: number | null;
 }
 
@@ -107,6 +110,8 @@ export interface SectorConstituents {
   /** True when the server may hold more rows than `limit` returned. */
   hasMore: boolean;
   loadingMore: boolean;
+  /** The fund the weights are shares of, when the page's rows agree on one. */
+  fundSymbol: string | null;
 }
 
 /** Rows per page. Small enough that "load more" is meaningful on a phone. */
@@ -178,6 +183,7 @@ export function useSectorConstituents(
         name: s.name,
         country: countryIso2 ?? null,
         weight: null,
+        fundSymbol: null,
         changePct: s.changePct,
       })),
       subSectors: [],
@@ -187,6 +193,7 @@ export function useSectorConstituents(
       refreshing: refresh.isPending,
       hasMore: false,
       loadingMore: false,
+      fundSymbol: null,
     };
   }
 
@@ -198,6 +205,7 @@ export function useSectorConstituents(
     name: r.name,
     country: r.country_iso2 ?? null,
     weight: r.weight ?? null,
+    fundSymbol: r.fund_symbol ?? null,
     // null (not an authored number) when the server has no row — the list must never mix live and
     // authored values unlabelled.
     changePct: r.symbol ? (byId.get(r.symbol) ?? null) : null,
@@ -218,5 +226,11 @@ export function useSectorConstituents(
     // A full page probably means there is another; the next fetch settles it.
     hasMore: rows.length >= limit,
     loadingMore: constituents.isFetching && !constituents.isPending,
+    // Only when the rows agree. A page mixing funds has no single answer, and naming one of them
+    // would be worse than naming none.
+    fundSymbol:
+      [...new Set(rows.map((r) => r.fund_symbol).filter(Boolean))].length === 1
+        ? (rows.find((r) => r.fund_symbol)?.fund_symbol ?? null)
+        : null,
   };
 }

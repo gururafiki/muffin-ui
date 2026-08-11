@@ -140,7 +140,9 @@ export default function SectorScreen() {
       </View>
 
       <View className="mt-5 flex-row items-center justify-between">
-        <Text variant="label">Stocks</Text>
+        <Text variant="label">
+          Stocks{constituents.fundSymbol ? ` · weights from ${constituents.fundSymbol}` : ''}
+        </Text>
         <View className="flex-row items-center gap-2">
           <Freshness
             sample={constituents.sample}
@@ -164,7 +166,7 @@ export default function SectorScreen() {
             // Weight in the sector fund is the honest size signal here — it comes from the fund's
             // own filing, where market cap would need a paid provider.
             // Sub-sector first: it is the most specific thing known about the company.
-            subtitle: [s.industry, s.country, s.weight != null ? `${s.weight.toFixed(2)}% of fund` : null]
+            subtitle: [s.industry, s.country, s.weight != null ? `${s.weight.toFixed(2)}%` : null]
               .filter(Boolean)
               .join(' · '),
             changePct: s.changePct ?? undefined,
