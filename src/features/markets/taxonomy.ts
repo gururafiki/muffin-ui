@@ -272,8 +272,6 @@ export type AssetType =
   | 'mutual-fund'
   | 'derivative';
 
-export type Style = 'growth' | 'value' | 'blend';
-
 export interface AssetTypeMeta {
   id: AssetType;
   name: string;
@@ -301,15 +299,14 @@ export interface AssetRef {
   subSector?: string;
   country?: string;
   market?: Market;
-  style?: Style;
   currency?: string;
 }
 
 /** Non-equity seed universe. Equities are derived from REPRESENTATIVE_TICKERS. */
 const OTHER_ASSETS: AssetRef[] = [
-  { symbol: 'SPY', name: 'S&P 500 ETF', assetType: 'etf', changePct: 11.8, country: 'United States', market: 'developed', style: 'blend' },
-  { symbol: 'QQQ', name: 'Nasdaq 100 ETF', assetType: 'etf', changePct: 17.2, country: 'United States', market: 'developed', style: 'growth' },
-  { symbol: 'EEM', name: 'Emerging Markets ETF', assetType: 'etf', changePct: 4.9, market: 'emerging', style: 'blend' },
+  { symbol: 'SPY', name: 'S&P 500 ETF', assetType: 'etf', changePct: 11.8, country: 'United States', market: 'developed' },
+  { symbol: 'QQQ', name: 'Nasdaq 100 ETF', assetType: 'etf', changePct: 17.2, country: 'United States', market: 'developed' },
+  { symbol: 'EEM', name: 'Emerging Markets ETF', assetType: 'etf', changePct: 4.9, market: 'emerging' },
   { symbol: 'GLD', name: 'Gold', assetType: 'commodity', changePct: 21.4, currency: 'USD' },
   { symbol: 'WTI', name: 'Crude Oil (WTI)', assetType: 'commodity', changePct: -8.3, currency: 'USD' },
   { symbol: 'BTC', name: 'Bitcoin', assetType: 'crypto', changePct: 34.6, currency: 'USD' },
@@ -318,7 +315,7 @@ const OTHER_ASSETS: AssetRef[] = [
   { symbol: 'TLT', name: '20+ Year Treasury ETF', assetType: 'bond', changePct: -2.7, country: 'United States' },
   { symbol: 'VNQ', name: 'US REIT ETF', assetType: 'real-estate', changePct: 0.6, sectorId: 'real-estate', country: 'United States' },
   { symbol: 'USD', name: 'US Dollar (cash)', assetType: 'cash', changePct: 0.0, currency: 'USD' },
-  { symbol: 'VTSAX', name: 'Total Stock Market Fund', assetType: 'mutual-fund', changePct: 11.1, country: 'United States', style: 'blend' },
+  { symbol: 'VTSAX', name: 'Total Stock Market Fund', assetType: 'mutual-fund', changePct: 11.1, country: 'United States' },
 ];
 
 /** Flatten the equity representative tickers into AssetRefs with metadata. */
@@ -335,7 +332,6 @@ function equityAssets(): AssetRef[] {
         sectorId,
         country: s.country,
         market: country?.market,
-        style: s.changePct > 15 ? 'growth' : s.changePct < 3 ? 'value' : 'blend',
       });
     }
   }
