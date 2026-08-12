@@ -40,8 +40,40 @@ async function fetchInstrument(symbol: string) {
   for (const r of [profile, performance]) {
     if (r.error) throw new Error(`market read failed: ${r.error.message}`);
   }
+  let instrument = parseArray(zInstrument, profile.data ?? [], 'market.instruments')[0] ?? null;
+
+  // FALL BACK TO THE FUND-DERIVED UNIVERSE. `market.instruments` is the CURATED 35 rows, so every
+  // other security opened a page with a bare ticker over blank space: no name, no sector, no
+  // country, no market cap — while `market.security_current` had all four for ~10,000 of them.
+  // That was tolerable while those rows were untappable; making them reachable is what turns it
+  // into 3,400 half-empty pages, so the two changes ship together.
+  //
+  // Second query only on a miss, so the curated path costs nothing extra.
+  if (!instrument) {
+    const { data, error } = await market
+      .from('security_current')
+      .select('symbol,name,sector_id,industry,country_name,market_cap,currency_code')
+      .eq('symbol', symbol)
+      .limit(1);
+    if (error) throw new Error(`market.security_current read failed: ${error.message}`);
+    const row = (data ?? [])[0];
+    if (row) {
+      instrument = parseArray(zInstrument, [{
+        ...row,
+        country: row.country_name,
+        currency: row.currency_code,
+        // The fund-derived model has no `asset_type` and no `priced` flag. Both are hand-authored
+        // columns on the curated table; absent is the honest answer, and `priced === false` is
+        // load-bearing elsewhere (cash and bond yields render no number), so it must not default
+        // to a value this row cannot support.
+        asset_type: null,
+        priced: null,
+      }], 'market.security_current')[0] ?? null;
+    }
+  }
+
   return {
-    instrument: parseArray(zInstrument, profile.data ?? [], 'market.instruments')[0] ?? null,
+    instrument,
     performance: parseArray(zPerformanceRow, performance.data ?? [], 'market.performance'),
   };
 }
