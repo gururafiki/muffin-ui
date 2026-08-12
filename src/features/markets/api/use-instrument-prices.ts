@@ -39,12 +39,16 @@ async function fetchPrices(symbol: string) {
   if (!supabase) throw new MarketUnavailableError();
   const { data, error } = await supabase
     .schema('market')
-    .from('prices')
+    // `price_series`, not `prices`: the latter is foreign-keyed to the curated 47 instruments, so
+    // reading it directly meant a chart was possible for 47 securities out of 10,060. The view
+    // unions the curated series with the fund-derived one (`security_price`, keyed on security_id
+    // so a symbol change cannot orphan it) and picks one row per (symbol, date).
+    .from('price_series')
     .select('date,close')
     .eq('symbol', symbol)
     .order('date');
-  if (error) throw new Error(`market.prices read failed: ${error.message}`);
-  return parseArray(zPrice, data ?? [], 'market.prices');
+  if (error) throw new Error(`market.price_series read failed: ${error.message}`);
+  return parseArray(zPrice, data ?? [], 'market.price_series');
 }
 
 export interface InstrumentPrices {

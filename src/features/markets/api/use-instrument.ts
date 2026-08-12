@@ -25,7 +25,9 @@ async function fetchInstrument(symbol: string) {
 
   const [profile, performance] = await Promise.all([
     market
-      .from('instruments')
+      // The curated overlay, enriched from its linked security. `market.instruments` on its own
+      // went stale the moment a provider refreshed the security instead.
+      .from('instrument_current')
       .select(
         'symbol,name,sector_id,provider_sector,industry,country,market_cap,currency,asset_type,priced',
       )
@@ -40,7 +42,7 @@ async function fetchInstrument(symbol: string) {
   for (const r of [profile, performance]) {
     if (r.error) throw new Error(`market read failed: ${r.error.message}`);
   }
-  let instrument = parseArray(zInstrument, profile.data ?? [], 'market.instruments')[0] ?? null;
+  let instrument = parseArray(zInstrument, profile.data ?? [], 'market.instrument_current')[0] ?? null;
 
   // FALL BACK TO THE FUND-DERIVED UNIVERSE. `market.instruments` is the CURATED 35 rows, so every
   // other security opened a page with a bare ticker over blank space: no name, no sector, no
