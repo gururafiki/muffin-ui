@@ -37,11 +37,15 @@ async function fetchUniverse() {
   if (!supabase) throw new MarketUnavailableError();
   const { data, error } = await supabase
     .schema('market')
-    .from('instruments')
+    // `instrument_current`, not `instruments`: the curated row enriched from the security it is
+    // linked to. Editorial fields (asset_type, priced, sort_order, the chosen symbol) still come
+    // from the curated table — a linked instrument simply stops going stale on market cap,
+    // currency, sector and industry.
+    .from('instrument_current')
     .select('symbol,name,sector_id,industry,country,asset_type,priced,sort_order')
     .order('sort_order');
-  if (error) throw new Error(`market.instruments read failed: ${error.message}`);
-  return parseArray(zInstrument, data ?? [], 'market.instruments');
+  if (error) throw new Error(`market.instrument_current read failed: ${error.message}`);
+  return parseArray(zInstrument, data ?? [], 'market.instrument_current');
 }
 
 export interface UniverseAsset {
