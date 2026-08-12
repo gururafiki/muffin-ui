@@ -17,8 +17,8 @@ import { MarketUnavailableError } from './market-client';
 const zRow = z.looseObject({
   period_ending: z.string(),
   currency: z.string().nullish(),
-  // The embedded security, for its currency. A many-to-one embed comes back as an object.
-  security: z.looseObject({ currency_code: z.string().nullish() }).nullish(),
+  // The security's own currency, carried by the view.
+  currency_code: z.string().nullish(),
   data: z.record(z.string(), z.unknown()),
 });
 
@@ -45,19 +45,21 @@ export function useStatements(symbol: string | undefined) {
     queryFn: async () => {
       const supabase = getSupabase();
       if (!supabase) throw new MarketUnavailableError();
+      // Read the SYMBOL-KEYED view, not an embed filtered on `kind_code = 'ticker'`. That filter
+      // was the reason ~3,400 securities opened to a blank page: their only address is a local
+      // provider symbol (`005930.KS`), which is not a `ticker` identifier at all. The view resolves
+      // `coalesce(ticker, provider_symbol)` — the same precedence the ingest backlogs use — so the
+      // serving side and the fetching side agree on what a security is called.
       const { data, error } = await supabase
         .schema('market')
-        .from('security_statement')
-        .select(
-          'period_ending,currency,data,security!inner(currency_code,security_identifier!inner(value,kind_code))',
-        )
+        .from('security_statement_current')
+        .select('period_ending,currency,currency_code,data')
         .eq('statement', 'income')
-        .eq('security.security_identifier.kind_code', 'ticker')
-        .eq('security.security_identifier.value', symbol as string)
+        .eq('symbol', symbol as string)
         .order('period_ending', { ascending: false })
         .limit(4);
-      if (error) throw new Error(`market.security_statement read failed: ${error.message}`);
-      return parseArray(zRow, data ?? [], 'security_statement');
+      if (error) throw new Error(`market.security_statement_current read failed: ${error.message}`);
+      return parseArray(zRow, data ?? [], 'security_statement_current');
     },
     enabled: !!symbol,
     staleTime: 24 * 60 * 60_000,
@@ -72,7 +74,7 @@ export function useStatements(symbol: string | undefined) {
     // (N-PORT `curCd`) or the metrics response reported for this security, which is what the
     // statement is denominated in for all but a handful of cross-listed names. It is READ SECOND
     // so that a provider which starts sending a real per-statement currency immediately wins.
-    currency: r.currency ?? r.security?.currency_code ?? null,
+    currency: r.currency ?? r.currency_code ?? null,
     // Providers name the same line item differently between filers, so each is tried in order
     // rather than assumed — an absent key is a missing number, not a crash.
     revenue: pick(r.data, 'total_revenue', 'operating_revenue', 'revenue'),

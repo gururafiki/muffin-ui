@@ -58,14 +58,16 @@ export function useFundamentals(symbol: string | undefined) {
       if (!supabase) throw new MarketUnavailableError();
       const { data, error } = await supabase
         .schema('market')
-        .from('security_fundamentals')
-        // Embedded through the security, so one request resolves symbol -> fundamentals.
-        .select('pe_ratio,forward_pe,price_to_book,profit_margin,operating_margin,return_on_equity,revenue_growth,debt_to_equity,dividend_yield,beta,as_of,security!inner(security_identifier!inner(value,kind_code))')
-        .eq('security.security_identifier.kind_code', 'ticker')
-        .eq('security.security_identifier.value', symbol as string)
+        // The SYMBOL-KEYED view, not an embed filtered on `kind_code = 'ticker'`. That filter is
+        // why ~3,400 securities opened to a blank page: their only address is a local provider
+        // symbol (`005930.KS`), which is not a `ticker` identifier. The view resolves
+        // `coalesce(ticker, provider_symbol)`, matching the ingest backlogs.
+        .from('security_fundamentals_current')
+        .select('pe_ratio,forward_pe,price_to_book,profit_margin,operating_margin,return_on_equity,revenue_growth,debt_to_equity,dividend_yield,beta,as_of')
+        .eq('symbol', symbol as string)
         .limit(1);
-      if (error) throw new Error(`market.security_fundamentals read failed: ${error.message}`);
-      return parseArray(zRow, data ?? [], 'security_fundamentals');
+      if (error) throw new Error(`market.security_fundamentals_current read failed: ${error.message}`);
+      return parseArray(zRow, data ?? [], 'security_fundamentals_current');
     },
     enabled: !!symbol,
     staleTime: 6 * 60 * 60_000,
