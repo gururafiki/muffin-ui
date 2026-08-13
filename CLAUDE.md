@@ -47,10 +47,12 @@ puppeteer-core's default export really does have `.launch`). Use `lint:all` when
 `npx tsc --noEmit` + `npx expo export -p web` + a headless-browser smoke test of the changed flow
 with a screenshot, asserting zero Reanimated/worklet errors. See `ROADMAP.md` for milestone history.
 
-Six scripts back that up (full table in `README.md` → Develop → Verification):
+Seven scripts back that up (full table in `README.md` → Develop → Verification):
 `run-timeline-check.ts` (offline) · `history-check.ts` · `smoke-timeline.mjs` · `smoke-reopen.mjs` ·
 **`verify-readme.mjs`** (walks every README feature bullet, prints a pass/differ/fail table) ·
-`hydration-check.mjs` (the React #418 diagnostic). Credentials come from the environment
+`hydration-check.mjs` (the React #418 diagnostic) · **`money-check.ts`** (offline: that a figure
+carries the currency it is in, and that the formatter's locale stays pinned — it appends the scale
+suffix itself, so a locale that puts the symbol last turns `$215.94` + `B` into `215,94 $B`). Credentials come from the environment
 (`CF_ACCESS_CLIENT_ID`/`_SECRET`, `SUPABASE_ANON_KEY`, `MUFFIN_EMAIL`/`MUFFIN_PASSWORD`) and are
 never committed.
 

@@ -944,6 +944,53 @@ which signs in for real and expires the stored token in place rather than waitin
   actually happened instead.
 
 
+## ✅ Milestone 33 — The market screens tell the truth about what they show (2026-08-12)
+
+The market data was real; the LABELS were not. Three defects, each of which rendered a plausible
+number that was wrong, and none of which any existing check could see.
+
+- **Money carries its currency.** The stock page scaled every figure and prefixed a hardcoded `$`.
+  Alibaba's FY2026 revenue is CNY 1,023,670,000,000 and rendered as **"$1.02T"** — the largest
+  company on earth by revenue, against a true ~$141B. `features/markets/money.ts` takes a currency
+  and gets the symbol from **CLDR via `Intl`**, not a table written from memory: CLDR knows KRW is ₩
+  and — the part a hand-written map always gets wrong — that MXN prints as `MX$` for an en-US
+  reader. Three things had to be measured rather than assumed:
+  - **The locale is PINNED.** The function appends the scale suffix itself, and `de-DE` renders
+    `215,94 $`, which the append turns into `215,94 $B`; `fr-FR` gives `215,94 $USB`. Only
+    en-US/ja-JP happen to compose. My machine's default is en-US — the sample that agrees with the
+    bug.
+  - **An unknown code does NOT throw** (measured: `Intl` renders `ZZZ 7.80`); only a *malformed* one
+    does, and the regex already rejects those. The catch stays for Hermes, which ships its own
+    ECMA-402.
+  - **No currency means NO symbol.** Defaulting to dollars is how this started.
+  Guarded offline by `scripts/money-check.ts` (`npm run verify:money`), verified to fail when the
+  locale is un-pinned. Verified live: `/stock/BABAF` renders `CNY · yfinance` and `CN¥1.02T`, with
+  NVDA unchanged at `$215.94B` as the control.
+
+- **Half the universe became reachable.** `sector/[sectorId].tsx` sets `disabled: !s.symbol`, and
+  the serving view took `symbol` from `kind_code = 'ticker'` only — so a security addressable only
+  by a local provider symbol (`005930.KS`) had no symbol and could not be opened. **3,821 of 7,940
+  constituent rows carried a symbol; now 7,934.** The UI half was not optional: `use-fundamentals`
+  and `use-statements` filtered on `kind_code = 'ticker'` themselves, so shipping only the server
+  change would have turned 3,400 dead rows into 3,400 blank pages. `useInstrument` also falls back
+  to `security_current`, which is what stops those pages rendering a bare ticker over blank space.
+
+- **The chart covers the universe.** `use-instrument-prices` read `market.prices`, which is
+  foreign-keyed to the curated 47 instruments — so a chart was possible for 47 securities of 10,060.
+  It now reads `price_series`, which unions the curated series with the fund-derived one (keyed on
+  `security_id`, so a symbol change cannot orphan it).
+
+- **A fabricated classification deleted.** `taxonomy.ts` derived investment style from the price move
+  (`changePct > 15 ? 'growth'`), which is not what growth and value mean, and nothing rendered it.
+  Removed rather than sourced: inventing one from a return is worse than having none, which is the
+  whole point of the SAMPLE badge.
+
+**Backend counterpart:** muffin-deployment #73–#88 rebuilt the reference model underneath this — one
+venue catalog, a real `listing` table, the primary listing naming the security (41% of non-US
+securities were labelled with a thin OTC line), `market.instruments` kept as a curated overlay, and
+incremental universe-wide price storage.
+
+
 ## ✅ Milestone 10 — Threaded runs, calls history & agent UX (unplanned)
 Landed via PRs #5–#8 while M4 was pending, and became the architecture M4 ships on.
 Every run is now thread-scoped on one streaming chat screen (`src/features/agent-chat/`,
