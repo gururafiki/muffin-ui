@@ -141,9 +141,21 @@ export function useSectorConstituents(
     retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,
   });
 
+  // ONLY THE SYMBOLS ON THIS PAGE. Fetching every instrument return silently truncated at
+  // `PGRST_DB_MAX_ROWS` (1000) against 9,267 matching rows, so ~89% never arrived and any
+  // constituent outside that arbitrary page rendered with no gained/lost figure while its return
+  // sat in the database. It is what a South Korean sector page showed.
+  //
+  // Depends on `constituents`, so it is a second round trip — worth it: this asks for a few hundred
+  // ids instead of every instrument in the universe, and it is CORRECT rather than nearly correct.
+  const pageSymbols = (constituents.data ?? [])
+    .map((r) => r.symbol)
+    .filter((x): x is string => !!x);
+
   const performance = useQuery({
-    queryKey: [...INSTRUMENT_KEY, period],
-    queryFn: () => fetchPerformance('instrument', period),
+    queryKey: [...INSTRUMENT_KEY, period, pageSymbols.join(',')],
+    queryFn: () => fetchPerformance('instrument', period, pageSymbols),
+    enabled: pageSymbols.length > 0,
     staleTime: 10 * 60_000,
     gcTime: 24 * 60 * 60_000,
     retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,

@@ -79,21 +79,36 @@ export default function CountryScreen() {
             show finviz's `equity/compare/groups`, which is US-listed only, so Korea displayed US
             sector returns and none of them matched EWY's +121.9%. They do now: Korean technology
             is the reason, at +309% carrying 61% of the fund.
-            A country with no coverage falls back to the US panel, LABELLED as US — better than an
-            empty card, as long as it never pretends to be local. */}
+
+            A COUNTRY WITH NO COVERAGE NOW SAYS SO. It used to fall back to the US panel, labelled
+            "US sector performance" — the reasoning being that a labelled substitute beats an empty
+            card. Alex opened Vietnam, saw US sectors, and read it as a bug. It is: 45 countries are
+            drillable and only 26 have their own sector rows, so 19 of them showed American numbers
+            on a page about somewhere else, and a label is a weaker signal than the eleven familiar
+            sector names sitting there looking local. An honest gap beats a labelled substitute. */}
+        {own.empty ? (
+          <Card tone="muted">
+            <Text variant="label">Sectors</Text>
+            <Text className="mt-1 text-ink-muted">
+              No sector data for {country.name}.
+            </Text>
+            <Text className="mt-2 text-xs text-ink-soft">
+              Sector returns are weighted from the securities a country fund actually holds. No
+              tracked fund reports holdings for {country.name} yet, so there is nothing to weight.
+            </Text>
+          </Card>
+        ) : (
         <MoversPanel
           title={
-            own.empty
-              ? 'US sector performance'
-              // Names the fund, because "61%" is unattributable otherwise: a reader cannot tell
-              // whether it is a share of the country's ETF or of something else entirely.
-              : `${country.name} sectors${own.fundSymbol ? ` · ${own.fundSymbol}` : ''}`
+            // Names the fund, because "61%" is unattributable otherwise: a reader cannot tell
+            // whether it is a share of the country's ETF or of something else entirely.
+            `${country.name} sectors${own.fundSymbol ? ` · ${own.fundSymbol}` : ''}`
           }
-          items={own.empty ? sectors.items : ownMovers}
+          items={ownMovers}
           onSelect={goSector}
-          sample={own.empty ? sectors.sample : false}
-          asOf={own.empty ? sectors.asOf : own.asOf}
-          source={own.empty ? sectors.source : 'weighted constituents'}
+          sample={false}
+          asOf={own.asOf}
+          source={'weighted constituents'}
           refreshing={sectors.refreshing}
           right={
             <View className="flex-row items-center gap-2">
@@ -105,6 +120,7 @@ export default function CountryScreen() {
             </View>
           }
         />
+        )}
       </View>
 
       <View className="mt-4">
@@ -131,7 +147,9 @@ export default function CountryScreen() {
             // exactly what the sample badge exists to prevent.
             // A sector the country has no coverage for shows NO number rather than borrowing the
             // US one — the same rule the constituent lists follow.
-            changePct: own.empty && sectors.sample ? s.changePct : changeById.get(s.id),
+            // NEVER the US figure, and never the authored one: a country with no coverage shows
+            // no number at all, matching the panel above.
+            changePct: own.empty ? undefined : changeById.get(s.id),
           }))}
           onSelect={goSector}
         />
