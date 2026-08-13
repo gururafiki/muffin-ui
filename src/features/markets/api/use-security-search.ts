@@ -21,6 +21,21 @@ import { MarketUnavailableError } from './market-client';
 const MIN_QUERY = 2;
 const LIMIT = 25;
 
+/**
+ * What a person can actually open. The universe is built from fund holdings, so it contains
+ * everything the tracked funds hold — and once the bond ETFs were added (AGG alone brought 13,266)
+ * the securities table became **majority bonds**: 15,159 against 12,348 equities.
+ *
+ * Searching "bank" returned eight consecutive `AFRICAN DEVELOPMENT BANK` rows, symbol-less and
+ * indistinguishable from each other, above every real bank — the order is alphabetical because
+ * PostgREST cannot rank, so a common word in a bond's issuer name crowds out the whole first page.
+ * None of them has a page to open: no symbol, no price series, no sector.
+ *
+ * Filtered here rather than in `security_current`, which is the security record and is correct as
+ * it stands — `use-instrument` looks a row up by id and should still resolve whatever it is handed.
+ */
+const SEARCHABLE_TYPES = ['equity', 'etf'] as const;
+
 const zRow = z.looseObject({
   security_id: z.string(),
   name: z.string(),
@@ -50,6 +65,7 @@ async function searchSecurities(query: string): Promise<SecurityHit[]> {
     .schema('market')
     .from('security_current')
     .select('security_id,name,symbol,sector_id,country_iso2')
+    .in('security_type_code', SEARCHABLE_TYPES)
     // Symbol first in the OR so an exact ticker still matches, but ordering is by name below —
     // PostgREST cannot rank, so a stable alphabetical order beats an arbitrary one.
     .or(`symbol.ilike.${q}%,name.ilike.%${q}%`)
