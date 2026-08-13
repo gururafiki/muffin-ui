@@ -60,17 +60,39 @@ export class MarketUnavailableError extends Error {
  * fraction by the edge function — matching `taxonomy.ts`'s `changePct` so the two
  * sources are interchangeable in the UI.
  */
-export async function fetchPerformance(scope: Scope, period: Period): Promise<PerformanceRow[]> {
+/**
+ * @param scopeIds Restrict to these ids. **Pass them for `instrument`.**
+ *
+ * WITHOUT THEM THE ANSWER IS SILENTLY TRUNCATED. `PGRST_DB_MAX_ROWS` is 1000 and this query set no
+ * limit, so it did not error — it just returned a shorter answer. Measured 2026-08-13:
+ * `scope=instrument, period=1y` matches **9,267 rows** and returned **1,000**, so ~89% of stored
+ * returns never reached the UI. Any constituent outside that arbitrary first page rendered with no
+ * gained/lost figure while its return sat in the database — which is exactly what a sector page
+ * showed for South Korea.
+ *
+ * Sector and country scopes are ~11 and ~46 rows, so they are unaffected and may omit this.
+ */
+export async function fetchPerformance(
+  scope: Scope,
+  period: Period,
+  scopeIds?: readonly string[],
+): Promise<PerformanceRow[]> {
   const supabase = getSupabase();
   if (!supabase) throw new MarketUnavailableError();
+  if (scopeIds && scopeIds.length === 0) return [];
 
-  const { data, error } = await supabase
+  let q = supabase
     .schema('market')
     .from('performance')
     .select('scope,scope_id,period,change_pct,as_of,stale_after,source')
     .eq('scope', scope)
     .eq('period', period);
+  // An `in.()` filter is a URL, so its size is a LENGTH budget rather than a row budget — 500 ids
+  // is a ~6.5 KB URL and earns a bare 502. A constituent page is at most a few hundred symbols,
+  // which is comfortably inside that.
+  if (scopeIds) q = q.in('scope_id', [...scopeIds]);
 
+  const { data, error } = await q;
   if (error) throw new Error(`market.performance read failed: ${error.message}`);
   return parseArray(zPerformanceRow, data ?? [], 'market.performance');
 }
