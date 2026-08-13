@@ -3,7 +3,13 @@
  *
  * The page-level `RefreshButton` triggers whole-resource refreshes, which are budgeted as backlogs
  * and would refuse on their TTL — and refreshing 10,060 securities to see one is the wrong trade.
- * `security-refresh` does returns, market cap and fundamentals for a single symbol.
+ * `security-refresh` does returns, market cap, fundamentals AND statements for a single symbol.
+ *
+ * Statements are here for a reason worth knowing: the backlog that fills them fetches one security
+ * at a time (the provider does not accept several symbols on those endpoints — measured), so at 60
+ * a run it is about five weeks deep. Without this, the securities someone actually opens would be
+ * among the LAST to get statements. Three requests on a button a person pressed fixes that for the
+ * one security they are looking at.
  *
  * Admin-only and hidden otherwise, like every other refresh control: the server rejects a non-admin
  * token, so a button everyone can see is a button that fails for almost everyone.
