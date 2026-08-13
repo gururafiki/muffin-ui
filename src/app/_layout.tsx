@@ -70,6 +70,7 @@ export default function RootLayout() {
             <Stack.Screen name="group/[groupId]" options={{ headerShown: true, title: 'Group' }} />
             <Stack.Screen name="region/[regionId]" options={{ headerShown: true, title: 'Region' }} />
             <Stack.Screen name="country/[countryId]" options={{ headerShown: true, title: 'Country' }} />
+            <Stack.Screen name="fund/[fundSymbol]" options={{ headerShown: true, title: 'Fund' }} />
             <Stack.Screen name="sector/[sectorId]" options={{ headerShown: true, title: 'Sector' }} />
             <Stack.Screen name="stock/[ticker]" options={{ headerShown: true, title: 'Stock' }} />
             <Stack.Screen name="account/[accountId]" options={{ headerShown: true, title: 'Account' }} />

@@ -54,7 +54,7 @@ async function fetchInstrument(symbol: string) {
   if (!instrument) {
     const { data, error } = await market
       .from('security_current')
-      .select('symbol,name,sector_id,industry,country_name,market_cap,currency_code')
+      .select('security_id,symbol,name,sector_id,industry,country_name,country_iso2,market_cap,currency_code')
       .eq('symbol', symbol)
       .limit(1);
     if (error) throw new Error(`market.security_current read failed: ${error.message}`);
@@ -63,6 +63,13 @@ async function fetchInstrument(symbol: string) {
       instrument = parseArray(zInstrument, [{
         ...row,
         country: row.country_name,
+        // The ISO is what ROUTES. The display name alone left the country badge unclickable, since
+        // `/country/[countryId]` is keyed on the registry id which is looked up from the ISO.
+        countryIso: row.country_iso2,
+        // `security_funds` is keyed on this, and it is the only stable key: migration 39 changed
+        // the display symbol for 41% of non-US securities, so anything joined on symbol needed
+        // re-keying by hand while anything joined on security_id needed nothing.
+        securityId: row.security_id,
         currency: row.currency_code,
         // The fund-derived model has no `asset_type` and no `priced` flag. Both are hand-authored
         // columns on the curated table; absent is the honest answer, and `priced === false` is

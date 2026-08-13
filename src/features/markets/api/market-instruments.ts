@@ -19,6 +19,13 @@ export const zInstrument = z.looseObject({
   provider_sector: z.string().nullish(),
   industry: z.string().nullish(),
   country: z.string().nullish(),
+  // The ISO, which is what ROUTES — `/country/[countryId]` is keyed on the registry id, looked up
+  // from this. The display name alone left the stock page's country badge a dead end.
+  countryIso: z.string().nullish(),
+  // The only STABLE key. Migration 39 changed the display symbol for 41% of non-US securities, so
+  // anything joined on symbol needed re-keying by hand while anything joined on this needed
+  // nothing. `security_funds` is keyed on it.
+  securityId: z.string().nullish(),
   asset_type: z.string().nullish(),
   priced: z.boolean().nullish(),
   price_symbol: z.string().nullish(),
