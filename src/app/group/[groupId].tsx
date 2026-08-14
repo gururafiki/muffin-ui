@@ -8,6 +8,7 @@ import { useScheme } from '@/features/markets/api/use-classification';
 import { useGroupPerformance } from '@/features/markets/api/use-group-performance';
 import { groupById, type LensId, type SchemeId } from '@/features/markets/classification';
 import { DrillList } from '@/features/markets/drill-list';
+import { ListSearch, useListSearch } from '@/features/markets/list-search';
 import { Freshness } from '@/features/markets/freshness';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
 import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
@@ -35,6 +36,13 @@ export default function GroupScreen() {
   const goCountry = (id: string) =>
     router.push({ pathname: '/country/[countryId]', params: { countryId: id } });
 
+  // DERIVED AND SEARCHED BEFORE THE EARLY RETURN. Hooks must run in the same order on every
+  // render, so `useListSearch` cannot sit below `if (!group)` — an unknown group would render one
+  // fewer hook and React would mismatch the next one.
+  const inGroup = (iso: string) => (group ? scheme.groupOf(lens, iso) === group.id : false);
+  const modelled = countries.items.filter((c) => inGroup(c.iso));
+  const groupSearch = useListSearch(modelled, (c) => [c.name, c.iso]);
+
   if (!group) {
     return (
       <Screen>
@@ -44,9 +52,6 @@ export default function GroupScreen() {
       </Screen>
     );
   }
-
-  const inGroup = (iso: string) => scheme.groupOf(lens, iso) === group.id;
-  const modelled = countries.items.filter((c) => inGroup(c.iso));
   const otherNames = WORLD_GEO.filter(
     (c) => inGroup(c.iso) && !getCountryByIso(c.iso),
   ).map((c) => c.name);
@@ -119,9 +124,16 @@ export default function GroupScreen() {
           <View className="mt-2">
             <PeriodPicker periods={COUNTRY_PERIODS} />
           </View>
+          {/* In-memory: the group's countries are already loaded. */}
+          <ListSearch
+            value={groupSearch.query}
+            onChange={groupSearch.setQuery}
+            placeholder="Search countries"
+            label="Search countries in this group"
+          />
           <View className="mt-2">
             <DrillList
-              items={modelled.map((c) => ({
+              items={groupSearch.shown.map((c) => ({
                 key: c.id,
                 title: c.name,
                 subtitle: marketLabel(c.market),
