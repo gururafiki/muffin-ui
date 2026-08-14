@@ -15,6 +15,7 @@ import {
   SECTOR_PAGE_SIZE,
   useSectorConstituents,
 } from '@/features/markets/api/use-sector-constituents';
+import { ListSearch, useListSearch } from '@/features/markets/list-search';
 import { Freshness } from '@/features/markets/freshness';
 import { useCountry } from '@/features/markets/api/use-countries';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
@@ -65,6 +66,13 @@ export default function SectorScreen() {
         country: country?.name ?? '',
       },
     });
+
+  // ABOVE the early return: hooks must run in the same order on every render, and `if (!sector)`
+  // below would otherwise make this one conditional.
+  const stockSearch = useListSearch(
+    constituents.items,
+    (x) => [x.name, x.symbol, x.industry, x.country],
+  );
 
   if (!sector) {
     return (
@@ -156,9 +164,24 @@ export default function SectorScreen() {
           />
         </View>
       </View>
+      <ListSearch
+        value={stockSearch.query}
+        onChange={stockSearch.setQuery}
+        placeholder="Search loaded stocks"
+        label="Search stocks in this sector"
+      />
+      {/* Says what it covers. The list is server-paginated, so this filters what has been loaded so
+          far; a match further down arrives as the reader scrolls. A search box that silently covers
+          part of a list is worse than none. */}
+      {stockSearch.filtering ? (
+        <Text variant="muted" className="mt-1 text-xs">
+          {stockSearch.shown.length} of {stocks.length} loaded
+          {constituents.hasMore ? ' · scroll for more' : ''}
+        </Text>
+      ) : null}
       <View className="mt-2">
         <DrillList
-          items={stocks.map((s) => ({
+          items={stockSearch.shown.map((s) => ({
             // `security_id`, not the symbol: a holding with no US listing has no ticker at all,
             // and several such rows would collide on an empty key.
             key: s.id,

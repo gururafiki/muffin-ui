@@ -7,6 +7,7 @@ import { palette } from '@/theme/colors';
 import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb } from '@/features/markets/breadcrumb';
 import { DrillList } from '@/features/markets/drill-list';
+import { ListSearch, useListSearch } from '@/features/markets/list-search';
 import { MoversPanel } from '@/features/markets/movers-panel';
 import { analyseRegion, countriesAsMovers, countriesInRegion, getRegion, marketLabel } from '@/features/markets/taxonomy';
 
@@ -18,6 +19,12 @@ export default function RegionScreen() {
   const goCountry = (id: string) =>
     router.push({ pathname: '/country/[countryId]', params: { countryId: id } });
 
+  // DERIVED AND SEARCHED BEFORE THE EARLY RETURN. Hooks must run in the same order on every
+  // render, so `useListSearch` cannot sit below `if (!region)` — an unknown region would render
+  // one fewer hook and React would mismatch the next one.
+  const countries = region ? countriesInRegion(region.id) : [];
+  const countrySearch = useListSearch(countries, (c) => [c.name, c.iso]);
+
   if (!region) {
     return (
       <Screen>
@@ -27,8 +34,6 @@ export default function RegionScreen() {
       </Screen>
     );
   }
-
-  const countries = countriesInRegion(region.id);
 
   return (
     <Screen>
@@ -56,9 +61,17 @@ export default function RegionScreen() {
       <Text variant="label" className="mt-5">
         Countries
       </Text>
+      {/* Filtered in memory: the region's countries are already loaded, so this needs no round trip
+          and therefore no debounce, no loading state and no partial page. */}
+      <ListSearch
+        value={countrySearch.query}
+        onChange={countrySearch.setQuery}
+        placeholder="Search countries"
+        label="Search countries in this region"
+      />
       <View className="mt-2">
         <DrillList
-          items={countries.map((c) => ({
+          items={countrySearch.shown.map((c) => ({
             key: c.id,
             title: c.name,
             subtitle: marketLabel(c.market),

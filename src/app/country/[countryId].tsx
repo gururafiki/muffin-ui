@@ -154,6 +154,25 @@ export default function CountryScreen() {
           onSelect={goSector}
         />
       </View>
+
+      {/* THE SECURITIES THIS COUNTRY'S SECTOR LIST CANNOT SHOW. 1,290 equities have no sector yet,
+          so they appear under no sector page — present in the universe and unreachable by browsing.
+          A list that silently omits them is worse than one that offers a way in. */}
+      <View className="mt-2">
+        <DrillList
+          items={[{
+            key: 'other',
+            title: 'Other',
+            subtitle: `Securities in ${country.name} with no sector yet`,
+          }]}
+          onSelect={() =>
+            router.push({
+              pathname: '/other',
+              params: { kind: 'no-sector', countryIso: country.iso },
+            })
+          }
+        />
+      </View>
     </Screen>
   );
 }
