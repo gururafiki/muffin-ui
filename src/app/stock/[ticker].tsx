@@ -10,6 +10,8 @@ import { CallCard, openThreadRoute } from '@/features/agent-calls/call-card';
 import { useTickerRuns } from '@/features/agent-calls/use-ticker-runs';
 import { AGENTS } from '@/lib/agent/registry';
 import { useInstrument } from '@/features/markets/api/use-instrument';
+import { useSecurityFunds } from '@/features/markets/api/use-security-funds';
+import { getCountryByIso } from '@/features/markets/taxonomy';
 import {
   CHART_RANGES,
   useInstrumentPrices,
@@ -51,6 +53,9 @@ export default function StockScreen() {
   const assetType = (inst?.asset_type ?? params.assetType) as AssetType | undefined;
   const asset = assetType ? assetTypeMeta(assetType) : undefined;
   const country = inst?.country ?? params.country;
+  // The registry is keyed on ISO; the display name alone cannot route.
+  const countryRoute = inst?.countryIso ? getCountryByIso(inst.countryIso)?.id : undefined;
+  const funds = useSecurityFunds(inst?.securityId ?? undefined);
 
   const stockAgents = AGENTS.filter((a) => STOCK_AGENT_IDS.includes(a.id));
 
@@ -153,11 +158,62 @@ export default function StockScreen() {
           {sector ? <Badge label={sector.name} tone="info" /> : null}
           {/* The provider's industry — the real sub-sector. */}
           {inst?.industry ? <Badge label={inst.industry} tone="info" /> : null}
-          {country ? <Badge label={country} tone="info" /> : null}
+          {/* CLICKABLE, because a country badge that is not is a dead end on the one screen where
+              the next question is always "what else is from there?". Falls back to a plain badge
+              when the ISO resolves to no registry entry — 180 securities are filed under offshore
+              incorporation jurisdictions (Cayman, Bermuda, BVI) which have no country page. */}
+          {country ? (
+            countryRoute ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${country}`}
+                onPress={() => router.push({ pathname: '/country/[countryId]', params: { countryId: countryRoute } })}
+              >
+                <Badge label={country} tone="info" />
+              </Pressable>
+            ) : (
+              <Badge label={country} tone="info" />
+            )
+          ) : null}
           {params.market ? (
             <Badge label={params.market === 'developed' ? 'Developed' : 'Emerging'} tone="info" />
           ) : null}
         </View>
+      ) : null}
+
+      {/* WHO OWNS IT. The universe is built from fund holdings, so "which funds hold this" is not a
+          nice-to-have — it is the provenance of every other number on the page. Each fund opens its
+          own holdings, which is how a person gets from one company to its peers.
+
+          Weights are the fund's OWN filed figures and are NOT renormalised: a fund's weights do not
+          sum to 100 (EWT files 110.38), so presenting them as shares of a whole would be inventing
+          a denominator the filing does not have. */}
+      {funds.items.length > 0 ? (
+        <Card className="mt-4 gap-3">
+          <View className="flex-row items-center justify-between">
+            <Text variant="heading">Held by</Text>
+            {funds.asOf ? (
+              <Text variant="muted" className="text-xs">
+                as filed {funds.asOf.toISOString().slice(0, 10)}
+              </Text>
+            ) : null}
+          </View>
+          <View className="flex-row flex-wrap gap-2">
+            {funds.items.map((f) => (
+              <Pressable
+                key={f.symbol}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${f.symbol} holdings`}
+                onPress={() => router.push({ pathname: '/fund/[fundSymbol]', params: { fundSymbol: f.symbol } })}
+              >
+                <Badge
+                  label={f.weightPct != null ? `${f.symbol} · ${f.weightPct.toFixed(2)}%` : f.symbol}
+                  tone="info"
+                />
+              </Pressable>
+            ))}
+          </View>
+        </Card>
       ) : null}
 
       {detail.returns.length > 0 ? (
