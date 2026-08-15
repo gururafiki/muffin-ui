@@ -18,14 +18,17 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Card, Field, Text } from '@/components/ui';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useSecuritySearch } from './api/use-security-search';
 import { DrillList } from './drill-list';
 import { getCountryByIso, getSector } from './taxonomy';
+import { TrackListingButton } from './track-listing-button';
 
 export function SecuritySearch({ onSelect }: { onSelect: (ticker: string) => void }) {
   const [query, setQuery] = useState('');
   const { items, trackedCount, untrackedCount, searching, ready } = useSecuritySearch(query);
+  const queryClient = useQueryClient();
   const tracked = items.filter((s) => !s.untracked);
   const untracked = items.filter((s) => s.untracked);
 
@@ -71,19 +74,42 @@ export function SecuritySearch({ onSelect }: { onSelect: (ticker: string) => voi
           <Text variant="muted" className="text-xs">
             {untrackedCount === 1 ? 'One listing is' : `${untrackedCount} listings are`} in the
             exchange directory with no prices or fundamentals yet
-            {trackedCount > 0 ? ', below the results above' : ''}.
+            {trackedCount > 0 ? ', below the results above' : ''}. Tracking one creates the security;
+            its sector, prices and fundamentals arrive on the next refresh.
           </Text>
-          <DrillList
-            items={untracked.map((s) => ({
-              key: s.id,
-              title: s.symbol ? `${s.symbol} · ${s.name}` : s.name,
-              subtitle: [getCountryByIso(s.country ?? '')?.name ?? s.country, s.exchange]
-                .filter(Boolean)
-                .join(' · '),
-              disabled: true,
-            }))}
-            onSelect={() => {}}
-          />
+          {/* Rendered as rows rather than a DrillList: each carries its own action, and a list
+              whose items are inert except for a button inside them is not a drill list. */}
+          <View className="gap-1">
+            {untracked.map((s) => (
+              <View
+                key={s.id}
+                className="flex-row items-center justify-between gap-3 rounded-crumb bg-frosting-50 px-3 py-2 dark:bg-night-surface-muted">
+                <View className="flex-1">
+                  <Text className="text-sm" numberOfLines={1}>
+                    {s.symbol ? `${s.symbol} · ${s.name}` : s.name}
+                  </Text>
+                  <Text variant="muted" className="text-xs">
+                    {[getCountryByIso(s.country ?? '')?.name ?? s.country, s.exchange]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </View>
+                {/* `s.id` is `listing:<figi>` — see `searchDirectory`. The FIGI is the exact one the
+                    sweep enumerated, which is a better key than the ticker `promote-listing` would
+                    otherwise have to resolve. */}
+                <TrackListingButton
+                  figi={s.id.replace(/^listing:/, '')}
+                  label={s.name}
+                  onTracked={() => {
+                    // The security exists now, so the tracked half of the next search should find
+                    // it and the directory half should stop offering it.
+                    queryClient.invalidateQueries({ queryKey: ['market', 'security-search'] });
+                    queryClient.invalidateQueries({ queryKey: ['market', 'directory-search'] });
+                  }}
+                />
+              </View>
+            ))}
+          </View>
         </View>
       ) : null}
 

@@ -101,18 +101,25 @@ export async function fetchPerformance(
  * Ask the edge function to refresh a resource. Fire-and-forget by design: the read
  * path must never block on OpenBB, so callers refetch on success and simply keep
  * showing the stale rows if it fails.
+ *
+ * Returns the response BODY, because a 200 from this function does not mean the work happened.
+ * `begin_refresh` answers `{ skipped: true, reason: 'fresh or in flight' }` when the TTL has not
+ * elapsed or another invocation holds the lock — a perfectly correct 200 that did nothing. A caller
+ * that only checks for `error` reports success for it. That is fine for a background warm-up and
+ * WRONG for an action a person took and is waiting on.
  */
 export async function triggerRefresh(
   resource: string,
   /** Extra scope the resource understands — `{ symbol }` for one security, `{ fund }` for one ETF. */
   scope?: Record<string, string | number>,
-): Promise<void> {
+): Promise<Record<string, unknown> | null> {
   const supabase = getSupabase();
-  if (!supabase) return;
-  const { error } = await supabase.functions.invoke('market-refresh', {
+  if (!supabase) return null;
+  const { data, error } = await supabase.functions.invoke('market-refresh', {
     body: { resource, ...(scope ?? {}) },
   });
   if (error) throw new Error(`market-refresh(${resource}) failed: ${error.message}`);
+  return (data ?? null) as Record<string, unknown> | null;
 }
 
 /** True when every row has passed its `stale_after`, or there are no rows at all. */
