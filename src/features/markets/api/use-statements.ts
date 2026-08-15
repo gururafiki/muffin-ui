@@ -17,8 +17,10 @@ import { MarketUnavailableError } from './market-client';
 const zRow = z.looseObject({
   period_ending: z.string(),
   currency: z.string().nullish(),
-  // The security's own currency, carried by the view.
+  // The security's own QUOTE currency, carried by the view.
   currency_code: z.string().nullish(),
+  // Needed to know whether `currency_code` can be trusted as the REPORTING currency.
+  country_iso2: z.string().nullish(),
   data: z.record(z.string(), z.unknown()),
 });
 
@@ -39,6 +41,18 @@ const pick = (d: Record<string, unknown>, ...keys: string[]): number | null => {
   return null;
 };
 
+/**
+ * The quote currency, but only where it is also the reporting currency.
+ *
+ * A local listing reports in the currency it trades in. A US listing of a foreign company does not,
+ * and nothing available here says what it does report in — so that case gets no label at all.
+ */
+function trustedQuoteCurrency(code: string | null | undefined, country: string | null | undefined) {
+  if (!code) return null;
+  if (code.toUpperCase() === 'USD' && country && country.toUpperCase() !== 'US') return null;
+  return code;
+}
+
 export function useStatements(symbol: string | undefined) {
   const query = useQuery({
     queryKey: ['market', 'statements', symbol ?? null],
@@ -53,7 +67,7 @@ export function useStatements(symbol: string | undefined) {
       const { data, error } = await supabase
         .schema('market')
         .from('security_statement_current')
-        .select('period_ending,currency,currency_code,data')
+        .select('period_ending,currency,currency_code,country_iso2,data')
         .eq('statement', 'income')
         .eq('symbol', symbol as string)
         .order('period_ending', { ascending: false })
@@ -70,11 +84,28 @@ export function useStatements(symbol: string | undefined) {
     period: r.period_ending,
     // `security_statement.currency` is null for EVERY row: the income/balance/cash endpoints carry
     // no currency field at all, so `reported_currency` was a wrong guess when migration 29 was
-    // written. The security's own currency is the honest stand-in — it is the currency the filing
-    // (N-PORT `curCd`) or the metrics response reported for this security, which is what the
-    // statement is denominated in for all but a handful of cross-listed names. It is READ SECOND
-    // so that a provider which starts sending a real per-statement currency immediately wins.
-    currency: r.currency ?? r.currency_code ?? null,
+    // written. The security's own currency is the honest stand-in for a LOCAL listing — 7203.T is
+    // JPY, 005930.KS is KRW, SAP.DE is EUR, and the accounts are in that currency too. It is READ
+    // SECOND so a provider that starts sending a real per-statement currency immediately wins.
+    //
+    // BUT `currency_code` IS THE QUOTE CURRENCY, AND AN ADR DOES NOT REPORT IN IT. Measured
+    // 2026-08-14: BABA's revenue of 1,023,670,000,000 is CNY and was being labelled USD, which
+    // renders **$1.02 trillion** — larger than Walmart, against a true ~$141bn. Xiaomi (XIACF) and
+    // Itaú (ITUB) are the same shape. 565 securities here are a non-US company quoted in USD and
+    // 376 of them have statements.
+    //
+    // No source available here can say what they DO report in: the statement endpoints carry no
+    // currency, `equity/fundamental/metrics` and Yahoo's chart meta both return the quote currency,
+    // `quoteSummary.financialCurrency` needs a crumb, and deriving it from `enterprise_to_revenue`
+    // was tested and fails (Yahoo computes that ratio inside the reporting currency, so BABA reads
+    // 1.00, and it false-positives on VALE and Samsung). A country->currency guess is wrong too —
+    // VALE and NU are Brazilian and genuinely report in USD.
+    //
+    // So the figure goes out UNLABELLED, which is this file's own rule applied to the case that
+    // still defaulted: "with no currency the figure is left unlabelled — defaulting to dollars is
+    // how the bug started". A number with no unit is worse than one with the right unit and far
+    // better than one with the wrong unit.
+    currency: r.currency ?? trustedQuoteCurrency(r.currency_code, r.country_iso2),
     // Providers name the same line item differently between filers, so each is tried in order
     // rather than assumed — an absent key is a missing number, not a crash.
     revenue: pick(r.data, 'total_revenue', 'operating_revenue', 'revenue'),
