@@ -79,7 +79,7 @@ console.log('\n## EVERY dimension reaches the server (a dimension that does not 
     incomeGroups: ['high'],
     wbRegions: ['north-america'],
     sectors: ['financials'],
-    industries: ['banks'],
+    industries: ['financials--banks-regional'],
     capBands: ['large'],
     styles: ['value'],
     securityTypes: ['equity'],
@@ -124,7 +124,7 @@ console.log('\n## EVERY dimension reaches the server (a dimension that does not 
   applyFilterToQuery(fake, all);
   const columns = [
     'country_iso2', 'app_region_id', 'msci_tier', 'msci_region', 'ftse_tier',
-    'income_group', 'wb_region', 'sector_id', 'industry', 'cap_band',
+    'income_group', 'wb_region', 'sector_id', 'industry_code', 'cap_band',
     'style', 'security_type_code',
   ];
   for (const c of columns) {
@@ -190,6 +190,18 @@ console.log('\n## the vocabularies match the server');
   // These strings are compared against `security_facets.cap_band` and `security_style.style` by
   // equality on the server. A rename on either side silently matches nothing.
   check('cap bands are exactly the SQL case labels', CAP_BANDS.join(',') === 'large,mid,small', CAP_BANDS.join(','));
+  // The industry filter must target the STABLE code column. Keyed on `industry` it would be
+  // filtering on a yfinance display string, which matches nothing the day that string is renamed.
+  {
+    const calls: string[] = [];
+    const fake = {
+      in(column: string) { calls.push(column); return fake; },
+      gte() { return fake; }, lte() { return fake; },
+    };
+    applyFilterToQuery(fake, { industries: ['information-technology--semiconductors'] });
+    check('industry filters on industry_code, not the display name',
+      calls.includes('industry_code') && !calls.includes('industry'), calls.join(' '));
+  }
   check('styles are exactly the SQL labels', STYLES.join(',') === 'growth,blend,value', STYLES.join(','));
   check('EMPTY_FILTER really is empty', isFilterEmpty(EMPTY_FILTER));
 }

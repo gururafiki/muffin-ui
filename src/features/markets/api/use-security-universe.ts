@@ -40,6 +40,7 @@ const zFacet = z.looseObject({
   security_type_code: z.string().nullable(),
   sector_id: z.string().nullable(),
   industry: z.string().nullable(),
+  industry_code: z.string().nullable(),
   country_iso2: z.string().nullable(),
   country_name: z.string().nullable(),
   cap_band: z.string().nullable(),
@@ -61,6 +62,8 @@ export interface UniverseRow {
   securityType: string | null;
   sectorId: string | null;
   industry: string | null;
+  /** The stable key a filter stores; `industry` is what a person reads. */
+  industryCode: string | null;
   countryIso2: string | null;
   countryName: string | null;
   capBand: string | null;
@@ -94,7 +97,7 @@ async function fetchUniversePage(filter: MarketFilter, period: Period, page: num
     .from('security_facets')
     .select(
       'security_id,symbol,name,security_type_code,sector_id,industry,country_iso2,country_name,' +
-        'cap_band,market_cap_usd,currency_code,style,style_source,style_confidence,value_score,refreshed_at',
+        'industry_code,cap_band,market_cap_usd,currency_code,style,style_source,style_confidence,value_score,refreshed_at',
       // `count: 'exact'` is what makes `total` a measurement instead of a guess.
       { count: 'exact' },
     );
@@ -122,6 +125,7 @@ async function fetchUniversePage(filter: MarketFilter, period: Period, page: num
     securityType: r.security_type_code,
     sectorId: r.sector_id,
     industry: r.industry,
+    industryCode: r.industry_code,
     countryIso2: r.country_iso2,
     countryName: r.country_name,
     capBand: r.cap_band,

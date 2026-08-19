@@ -174,7 +174,11 @@ const FACET_COLUMN: Record<MarketFilterListKey, string> = {
   incomeGroups: 'income_group',
   wbRegions: 'wb_region',
   sectors: 'sector_id',
-  industries: 'industry',
+  // THE STABLE CODE, not the display name. `security_facets.industry` is a yfinance display string
+  // ("Specialty Chemicals"); `industry_code` is ours (`information-technology--semiconductors`) and
+  // does not move when a provider renames one. A filter keyed on the name matches NOTHING after a
+  // rename — silently, so a shared URL just returns an empty list.
+  industries: 'industry_code',
   capBands: 'cap_band',
   styles: 'style',
   securityTypes: 'security_type_code',
