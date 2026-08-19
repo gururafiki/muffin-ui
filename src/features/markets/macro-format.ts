@@ -5,6 +5,7 @@
  * Both defects this holds were shape bugs that typechecked cleanly and were only visible against
  * real production data.
  */
+import { formatMoney } from './money';
 import type { MacroSeries } from './api/use-macro';
 
 /** Order the categories read in, rather than alphabetically by code. */
@@ -47,6 +48,11 @@ export function compact(n: number): string {
  */
 export function formatValue(s: MacroSeries): string {
   if (s.unit === 'percent') return `${s.value.toFixed(2)}%`;
+  // A THREE-LETTER UNIT IS A CURRENCY. `macro_indicator.unit` holds a currency code where the value
+  // is money, because OECD returns GDP in each country's NATIONAL currency — a boolean "is money"
+  // could not carry that, and defaulting to dollars is how the currency bug started. `formatMoney`
+  // is the same CLDR-backed formatter the stock page uses, so `$` cannot drift from `CN¥`.
+  if (s.unit && /^[a-z]{3}$/i.test(s.unit)) return formatMoney(s.value, s.unit);
   return compact(s.value);
 }
 

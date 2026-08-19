@@ -86,6 +86,22 @@ console.log('\n## a percent is a LEVEL, not a change');
     formatValue(s({ unit: 'index', value: 1234.5 })));
 }
 
+console.log('\n## money is rendered as money, in ITS OWN currency');
+{
+  // us-gdp-real was catalogued as `index` and printed 25575729500000 on the deployed page. Measured
+  // against openbb: OECD gdp/real returns a USD LEVEL, so the unit is a currency code now.
+  check('US GDP reads as money', formatValue(s({ unit: 'usd', value: 25_575_729_500_000 })) === '$25.58T',
+    formatValue(s({ unit: 'usd', value: 25_575_729_500_000 })));
+  check('gold is money too', formatValue(s({ unit: 'usd', value: 3421 })) === '$3,421',
+    formatValue(s({ unit: 'usd', value: 3421 })));
+  // OECD returns GDP in the country's NATIONAL currency, so a euro series must not read as dollars.
+  const eur = formatValue(s({ unit: 'eur', value: 4_500_000_000_000 }));
+  check('a EUR series is not dollars', !eur.startsWith('$'), eur);
+  // An index level genuinely is not money.
+  check('an index stays unlabelled', formatValue(s({ unit: 'index', value: 6543.21 })) === '6,543.21',
+    formatValue(s({ unit: 'index', value: 6543.21 })));
+}
+
 console.log('\n## maturity labels');
 {
   check('year_10 -> 10Y', maturityLabel('year_10') === '10Y', maturityLabel('year_10'));
