@@ -9,33 +9,18 @@
 import { View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
-import { useCountryMacro, type MacroSeries } from './api/use-macro';
-
-/** Order the categories read in, rather than alphabetically by code. */
-const CATEGORY_ORDER = ['inflation', 'labour', 'rates', 'growth'] as const;
-
-function rank(s: MacroSeries): number {
-  const i = (CATEGORY_ORDER as readonly string[]).indexOf(s.category);
-  return i === -1 ? CATEGORY_ORDER.length : i;
-}
+import { useCountryMacro } from './api/use-macro';
+import { collapseRows, curvePoints, formatValue, maturityLabel } from './macro-format';
 
 /**
- * A percent is rendered with its sign only where the sign carries meaning. Inflation of 2.3% and a
- * yield of 4.47% are levels, not changes — prefixing "+" would read as a move.
+ * Macro is published monthly to quarterly, so a figure here is legitimately weeks old. Saying so is
+ * the difference between "stale" and "that is when the statistics agency published".
  */
-function formatValue(s: MacroSeries): string {
-  if (s.unit === 'percent') return `${s.value.toFixed(2)}%`;
-  // An index level or a price: no unit claim we can make safely, so no unit is printed. Guessing
-  // dollars is how the currency bug started.
-  return s.value.toLocaleString('en-US', { maximumFractionDigits: 2 });
-}
-
 function ageLabel(asOf: Date): string {
   const days = Math.floor((Date.now() - asOf.getTime()) / 86_400_000);
   if (days <= 1) return 'today';
   if (days < 45) return `${days}d ago`;
-  const months = Math.round(days / 30);
-  return `${months}mo ago`;
+  return `${Math.round(days / 30)}mo ago`;
 }
 
 export function MacroPanel({ iso2 }: { iso2: string | undefined }) {
@@ -44,7 +29,7 @@ export function MacroPanel({ iso2 }: { iso2: string | undefined }) {
   // No panel at all — neither while loading (it would flash) nor when the country has no series.
   if (macro.loading || macro.empty || macro.items.length === 0) return null;
 
-  const rows = [...macro.items].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const rows = collapseRows(macro.items);
 
   return (
     <>
@@ -56,15 +41,31 @@ export function MacroPanel({ iso2 }: { iso2: string | undefined }) {
         {macro.asOf ? <Text variant="muted">{ageLabel(macro.asOf)}</Text> : null}
       </View>
       <Card tone="muted" className="mt-2 gap-2">
-        {rows.map((s) => (
-          <View key={`${s.code}|${s.dimension}`} className="flex-row items-baseline justify-between">
-            <Text variant="muted" className="flex-1 pr-3">
-              {s.name}
-              {s.dimension ? ` · ${s.dimension.replace(/_/g, ' ')}` : ''}
-            </Text>
-            <Text variant="body">{formatValue(s)}</Text>
-          </View>
-        ))}
+        {rows.map(({ head, group }) => {
+          // A single-point series renders as itself; a term structure renders its benchmark points
+          // on one line.
+          if (group.length === 1 && !head.dimension) {
+            return (
+              <View key={head.code} className="flex-row items-baseline justify-between">
+                <Text variant="muted" className="flex-1 pr-3">
+                  {head.name}
+                </Text>
+                <Text variant="body">{formatValue(head)}</Text>
+              </View>
+            );
+          }
+          const shown = curvePoints(group);
+          return (
+            <View key={head.code} className="flex-row items-baseline justify-between">
+              <Text variant="muted" className="flex-1 pr-3">
+                {head.name}
+              </Text>
+              <Text variant="body">
+                {shown.map((g) => `${maturityLabel(g.dimension)} ${formatValue(g)}`).join('  ·  ')}
+              </Text>
+            </View>
+          );
+        })}
       </Card>
     </>
   );
