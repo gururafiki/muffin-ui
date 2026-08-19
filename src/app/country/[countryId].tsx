@@ -5,6 +5,7 @@ import { Badge, Card, Screen, Text } from '@/components/ui';
 import { useSectorPerformance } from '@/features/markets/api/use-sector-performance';
 import { AnalyseButton } from '@/features/markets/analyse-button';
 import { Breadcrumb } from '@/features/markets/breadcrumb';
+import { MacroPanel } from '@/features/markets/macro-panel';
 import { DrillList } from '@/features/markets/drill-list';
 import { MoversPanel } from '@/features/markets/movers-panel';
 import { useCountry } from '@/features/markets/api/use-countries';
@@ -122,6 +123,8 @@ export default function CountryScreen() {
         />
         )}
       </View>
+
+      <MacroPanel iso2={country.iso} />
 
       <View className="mt-4">
         <AnalyseButton title={`Analyse ${country.name} economy`} query={analyseCountry(country.name)} />
