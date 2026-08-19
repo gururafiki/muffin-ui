@@ -211,8 +211,11 @@ export const REPRESENTATIVE_TICKERS: Record<string, StockRef[]> = {
 export const getRegion = (id: string) => REGIONS.find((r) => r.id === id);
 export const getCountry = (id: string) => registry.find((c) => c.id === id);
 export const getSector = (id: string) => SECTORS.find((s) => s.id === id);
+// THE REGISTRY, not the bundled array. Every other lookup here reads `registry` (45 countries from
+// `market.countries`); this one read `COUNTRIES` (the bundled 19), so the region page listed less
+// than half the world while the group page beside it listed all of it.
 export const countriesInRegion = (regionId: string) =>
-  COUNTRIES.filter((c) => c.regionId === regionId);
+  registry.filter((c) => c.regionId === regionId);
 export const stocksInSector = (sectorId: string) => REPRESENTATIVE_TICKERS[sectorId] ?? [];
 
 // ── Movers ───────────────────────────────────────────────────────────────────
