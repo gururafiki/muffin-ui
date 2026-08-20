@@ -13,7 +13,6 @@ import { useInstrument } from '@/features/markets/api/use-instrument';
 import { useSecurityFunds } from '@/features/markets/api/use-security-funds';
 import { getCountryByIso } from '@/features/markets/taxonomy';
 import {
-  CHART_RANGES,
   useInstrumentPrices,
   type ChartRange,
 } from '@/features/markets/api/use-instrument-prices';
@@ -228,7 +227,10 @@ export default function StockScreen() {
           {prices.series ? (
             <View className="gap-2">
               <Segmented
-                options={CHART_RANGES.map((r) => ({ id: r.id, label: r.label }))}
+                // FROM THE HOOK, not the full list: the long ranges appear only once this
+                // security has weekly history, so the picker never offers a range that would
+                // draw nothing.
+                options={prices.ranges}
                 value={range}
                 onChange={setRange}
               />
