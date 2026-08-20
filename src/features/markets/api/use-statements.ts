@@ -16,11 +16,8 @@ import { MarketUnavailableError } from './market-client';
 
 const zRow = z.looseObject({
   period_ending: z.string(),
-  currency: z.string().nullish(),
-  // The security's own QUOTE currency, carried by the view.
-  currency_code: z.string().nullish(),
-  // Needed to know whether `currency_code` can be trusted as the REPORTING currency.
-  country_iso2: z.string().nullish(),
+  // THE VIEW RESOLVES THIS, and this file no longer decides it. See the note at the mapping below.
+  reporting_currency: z.string().nullish(),
   data: z.record(z.string(), z.unknown()),
 });
 
@@ -41,18 +38,6 @@ const pick = (d: Record<string, unknown>, ...keys: string[]): number | null => {
   return null;
 };
 
-/**
- * The quote currency, but only where it is also the reporting currency.
- *
- * A local listing reports in the currency it trades in. A US listing of a foreign company does not,
- * and nothing available here says what it does report in — so that case gets no label at all.
- */
-function trustedQuoteCurrency(code: string | null | undefined, country: string | null | undefined) {
-  if (!code) return null;
-  if (code.toUpperCase() === 'USD' && country && country.toUpperCase() !== 'US') return null;
-  return code;
-}
-
 export function useStatements(symbol: string | undefined) {
   const query = useQuery({
     queryKey: ['market', 'statements', symbol ?? null],
@@ -67,7 +52,7 @@ export function useStatements(symbol: string | undefined) {
       const { data, error } = await supabase
         .schema('market')
         .from('security_statement_current')
-        .select('period_ending,currency,currency_code,country_iso2,data')
+        .select('period_ending,reporting_currency,data')
         .eq('statement', 'income')
         .eq('symbol', symbol as string)
         .order('period_ending', { ascending: false })
@@ -82,30 +67,27 @@ export function useStatements(symbol: string | undefined) {
 
   const periods: StatementPeriod[] = (query.data ?? []).map((r) => ({
     period: r.period_ending,
-    // `security_statement.currency` is null for EVERY row: the income/balance/cash endpoints carry
-    // no currency field at all, so `reported_currency` was a wrong guess when migration 29 was
-    // written. The security's own currency is the honest stand-in for a LOCAL listing — 7203.T is
-    // JPY, 005930.KS is KRW, SAP.DE is EUR, and the accounts are in that currency too. It is READ
-    // SECOND so a provider that starts sending a real per-statement currency immediately wins.
+    // THE SERVER DECIDES WHAT THIS FIGURE IS DENOMINATED IN, and this file no longer has a copy
+    // of that rule. It used to: `trustedQuoteCurrency` applied "the quote currency, unless the
+    // company is quoted in USD and is not American". Two things were wrong with keeping it here.
     //
-    // BUT `currency_code` IS THE QUOTE CURRENCY, AND AN ADR DOES NOT REPORT IN IT. Measured
-    // 2026-08-14: BABA's revenue of 1,023,670,000,000 is CNY and was being labelled USD, which
-    // renders **$1.02 trillion** — larger than Walmart, against a true ~$141bn. Xiaomi (XIACF) and
-    // Itaú (ITUB) are the same shape. 565 securities here are a non-US company quoted in USD and
-    // 376 of them have statements.
+    // It was the SAME FACT IN TWO PLACES. `security_statement_current.reporting_currency` now
+    // expresses the whole precedence once — the filing's own currency where a provider supplied
+    // it, the quote currency only where it can stand in, NULL otherwise — using the EFFECTIVE
+    // country (operating, falling back to filed) that `security_current` answers with. A second
+    // copy here could only ever drift from it.
     //
-    // No source available here can say what they DO report in: the statement endpoints carry no
-    // currency, `equity/fundamental/metrics` and Yahoo's chart meta both return the quote currency,
-    // `quoteSummary.financialCurrency` needs a crumb, and deriving it from `enterprise_to_revenue`
-    // was tested and fails (Yahoo computes that ratio inside the reporting currency, so BABA reads
-    // 1.00, and it false-positives on VALE and Samsung). A country->currency guess is wrong too —
-    // VALE and NU are Brazilian and genuinely report in USD.
+    // And the copy was still WRONG for one case. `country && country.toUpperCase() !== 'US'`
+    // short-circuits to false when there is no country at all, so a countryless security quoted in
+    // USD was labelled USD — the same falsy-NULL shape that let BABA's CNY 1,023,670,000,000 render
+    // as **$1.02 trillion**, larger than Walmart against a true ~$141bn.
     //
-    // So the figure goes out UNLABELLED, which is this file's own rule applied to the case that
-    // still defaulted: "with no currency the figure is left unlabelled — defaulting to dollars is
-    // how the bug started". A number with no unit is worse than one with the right unit and far
-    // better than one with the wrong unit.
-    currency: r.currency ?? trustedQuoteCurrency(r.currency_code, r.country_iso2),
+    // Since migration 88 the better answer is usually available anyway: SEC returns
+    // `reported_currency`, and it is genuinely multi-currency — of the first 522 rows, EUR 111,
+    // DKK 30, PEN 24, TWD 24 beside USD 333. Where nothing knows, the figure goes out UNLABELLED,
+    // which is this file's own rule: a number with no unit is worse than one with the right unit
+    // and far better than one with the wrong unit.
+    currency: r.reporting_currency ?? null,
     // Providers name the same line item differently between filers, so each is tried in order
     // rather than assumed — an absent key is a missing number, not a crash.
     revenue: pick(r.data, 'total_revenue', 'operating_revenue', 'revenue'),
