@@ -53,7 +53,7 @@ function Row({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-export function MarketStats({ securityId }: { securityId: string | undefined }) {
+export function MarketStats({ securityId }: { securityId: string | null | undefined }) {
   const { stats, estimate, loading } = useMarketStats(securityId);
 
   // No card at all rather than an empty one, while loading or when the backlogs have not reached

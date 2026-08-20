@@ -81,7 +81,7 @@ async function latest<T>(
   return rows[0] ?? null;
 }
 
-export function useMarketStats(securityId: string | undefined) {
+export function useMarketStats(securityId: string | null | undefined) {
   const stats = useQuery({
     queryKey: ['market', 'share-stats', securityId ?? null],
     queryFn: () =>
