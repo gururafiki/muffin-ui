@@ -26,6 +26,8 @@ import { SecurityRefreshButton } from '@/features/markets/security-refresh-butto
 import { MarketStats } from '@/features/markets/market-stats';
 import { MetricHistory } from '@/features/markets/metric-history';
 import { ValuationHistory } from '@/features/markets/valuation-history';
+import { CorporateActions } from '@/features/markets/corporate-actions';
+import { NewsPanel } from '@/features/markets/news-panel';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
@@ -189,6 +191,8 @@ export default function StockScreen() {
       <ValuationHistory symbol={symbol} />
       <MetricHistory symbol={symbol} />
       <MarketStats securityId={inst?.securityId} />
+      <CorporateActions securityId={inst?.securityId} currency={inst?.currency} />
+      <NewsPanel symbol={symbol} />
 
       {/* WHO OWNS IT. The universe is built from fund holdings, so "which funds hold this" is not a
           nice-to-have — it is the provenance of every other number on the page. Each fund opens its
