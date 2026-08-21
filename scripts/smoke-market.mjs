@@ -502,6 +502,23 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
+    // Insider activity. The fixture makes PEOPLE and SHARES DISAGREE — four buyers against one
+    // much larger seller — because a panel that reported only the net share balance would say
+    // "insiders sold" about a company four of them were buying, and a fixture where both agree
+    // could not tell the two presentations apart.
+    if (u.includes('/supabase/rest/v1/security_insider_summary')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [{ buys: 5, sells: 1, buyers: 4, sellers: 1, net_shares: -46000, trades: 6,
+             latest: '2026-08-18' }];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // The next earnings date. `upcoming` is served by the VIEW, not inferred here — the fixture
     // pins the tense, because rendering "Reports" above a date that has passed presents history as
     // a forecast and the consensus beside it reads as something still to be beaten.
@@ -939,6 +956,20 @@ try {
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
 
     // --- the valuation section (ratios computed per price bar) ----------------
+    // --- insider activity --------------------------------------------------------
+    check('the insider summary was read', seen.some((u) => u.includes('security_insider_summary')));
+    check('the section renders', has(body, 'Insider activity'));
+    // PEOPLE, not transaction counts: four distinct buyers across five trades.
+    check('it reports PEOPLE on each side', has(body, '4 people') && has(body, '1 person'));
+    // The share balance is signed the other way. Both must be present, or the panel is telling
+    // half the story — and it must be labelled by direction, not by a minus sign the reader decodes.
+    check('the share balance says its direction', has(body, 'Net sold'));
+    check('the share count is humanised', has(body, '46k shares'), (body.match(/[\d.]+k shares/) || [])[0] ?? '');
+    // No verdict: selling is often scheduled or for tax, and a bullish/bearish badge would be an
+    // interpretation this data does not support.
+    check('no buy/sell verdict is offered', !/bullish|bearish/i.test(body));
+    check('the caveat is stated', has(body, 'not a signal on its own'));
+
     // --- the next earnings date ------------------------------------------------
     check('the earnings date was read', seen.some((u) => u.includes('security_next_earnings')));
     check('the section names the tense', has(body, 'Next earnings'));

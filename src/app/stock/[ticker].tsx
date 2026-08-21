@@ -30,6 +30,7 @@ import { CorporateActions } from '@/features/markets/corporate-actions';
 import { NewsPanel } from '@/features/markets/news-panel';
 import { CompanyProfile } from '@/features/markets/company-profile';
 import { NextEarnings } from '@/features/markets/next-earnings';
+import { InsiderActivity } from '@/features/markets/insider-activity';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
@@ -192,6 +193,7 @@ export default function StockScreen() {
           while no section reads as a page that does not claim to have it. */}
       <NextEarnings securityId={inst?.securityId} />
       <CompanyProfile securityId={inst?.securityId} />
+      <InsiderActivity securityId={inst?.securityId} />
       <ValuationHistory symbol={symbol} />
       <MetricHistory symbol={symbol} />
       <MarketStats securityId={inst?.securityId} />
