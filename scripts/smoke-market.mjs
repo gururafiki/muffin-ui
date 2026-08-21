@@ -502,6 +502,29 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
+    // The next earnings date. `upcoming` is served by the VIEW, not inferred here — the fixture
+    // pins the tense, because rendering "Reports" above a date that has passed presents history as
+    // a forecast and the consensus beside it reads as something still to be beaten.
+    if (u.includes('/supabase/rest/v1/security_next_earnings')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [{
+            report_date: '2026-08-26',
+            eps_consensus: 2.01,
+            eps_previous: 0.99,
+            num_estimates: 11,
+            reporting_time: 'after-hours',
+            period_ending: '2026-07',
+            upcoming: true,
+          }];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // The company profile. The fixture uses AMAZON'S REAL SHAPE — 1,595,000 employees, a city and
     // NO state or country, which is what yfinance returns for most US securities. A fixture with all
     // three location parts would never catch the naive join that renders "Seattle, , ".
@@ -916,6 +939,16 @@ try {
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
 
     // --- the valuation section (ratios computed per price bar) ----------------
+    // --- the next earnings date ------------------------------------------------
+    check('the earnings date was read', seen.some((u) => u.includes('security_next_earnings')));
+    check('the section names the tense', has(body, 'Next earnings'));
+    check('a past date would not say "Next"', !has(body, 'Last earnings'));
+    // Formatted from the STRING's parts. `new Date('2026-08-26')` is UTC midnight, so a reader west
+    // of Greenwich sees the 25th — and an earnings date off by one is a different trading day.
+    check('the date is not shifted by a timezone', has(body, '26 Aug 2026'), (body.match(/\d+ \w{3} 2026/) || [])[0] ?? '');
+    check('the reporting time is de-hyphenated', has(body, 'after hours'));
+    check('the consensus is shown with its analyst count', has(body, '2.01') && has(body, '11 analysts'));
+
     // --- the company profile ---------------------------------------------------
     check('the profile was read', seen.some((u) => u.includes('security_profile')));
     check('the About section renders', has(body, 'About'));
