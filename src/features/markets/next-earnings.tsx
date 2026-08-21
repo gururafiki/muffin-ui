@@ -25,8 +25,16 @@ function formatDate(iso: string): string {
   return `${d} ${MONTHS[m - 1] ?? ''} ${y}`;
 }
 
-/** "after-hours" -> "after hours"; the provider's hyphenation is not English. */
-function formatTime(t: string): string {
+/**
+ * "after-hours" -> "after hours"; the provider's hyphenation is not English.
+ *
+ * AND `not-supplied` IS AN ABSENCE WEARING A VALUE. nasdaq sends it for companies that have not
+ * said whether they report before or after the bell — measured on live rows — and rendering
+ * "26 Aug 2026 · not supplied" tells the reader nothing while looking like it means something.
+ * Returns null so the caller drops it, exactly as it drops a missing field.
+ */
+function formatTime(t: string): string | null {
+  if (/^not[-\s]?supplied$/i.test(t.trim())) return null;
   return t.replace(/-/g, ' ');
 }
 
