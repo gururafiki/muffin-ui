@@ -502,6 +502,33 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
+    // Filings. The fixture puts the 10-K OLDEST and surrounds it with newer 8-Ks, because that is
+    // the real shape — a company files dozens of 8-Ks a year and one annual report — and a panel
+    // sorted by date alone would bury the 10-K below them. Sorted correctly, the annual report
+    // appears BEFORE the events despite being the oldest row.
+    if (u.includes('/supabase/rest/v1/security_recent_filings')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [
+            { accession_number: 'a-8k-3', filing_date: '2026-08-18', report_type: '8-K',
+              report_url: 'https://sec.gov/x3', filing_detail_url: null, kind: 'event' },
+            { accession_number: 'a-8k-2', filing_date: '2026-08-10', report_type: '8-K',
+              report_url: 'https://sec.gov/x2', filing_detail_url: null, kind: 'event' },
+            { accession_number: 'a-10q', filing_date: '2026-08-01', report_type: '10-Q',
+              report_url: 'https://sec.gov/q', filing_detail_url: null, kind: 'interim' },
+            // NO `report_url`: the panel must fall back to the index page rather than render a row
+            // that looks like a link and does nothing.
+            { accession_number: 'a-10k', filing_date: '2025-10-31', report_type: '10-K',
+              report_url: null, filing_detail_url: 'https://sec.gov/k-index', kind: 'annual' },
+          ];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // Insider activity. The fixture makes PEOPLE and SHARES DISAGREE — four buyers against one
     // much larger seller — because a panel that reported only the net share balance would say
     // "insiders sold" about a company four of them were buying, and a fixture where both agree
@@ -956,6 +983,20 @@ try {
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
 
     // --- the valuation section (ratios computed per price bar) ----------------
+    // --- filings ------------------------------------------------------------------
+    check('the filings were read', seen.some((u) => u.includes('security_recent_filings')));
+    check('the section renders', has(body, 'Filings'));
+    check('the periodic reports are listed', has(body, '10-K') && has(body, '10-Q'));
+    // THE SPLIT IS THE FEATURE: the 10-K is the OLDEST row in the fixture and must still appear
+    // above the 8-Ks. A panel sorted by date alone buries the annual report under press releases.
+    check('the annual report is above the events',
+      body.indexOf('10-K') < body.indexOf('8-K'),
+      `10-K@${body.indexOf('10-K')} 8-K@${body.indexOf('8-K')}`);
+    check('the events are grouped separately', has(body, 'Other filings'));
+    // Formatted from the string's parts: `new Date('2025-10-31')` is UTC midnight, so a reader west
+    // of Greenwich sees the 30th — and at a year boundary that is the wrong quarter.
+    check('the date is not shifted by a timezone', has(body, '31 Oct 2025'));
+
     // --- insider activity --------------------------------------------------------
     check('the insider summary was read', seen.some((u) => u.includes('security_insider_summary')));
     check('the section renders', has(body, 'Insider activity'));
