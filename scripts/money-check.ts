@@ -14,7 +14,7 @@
 //     with no dialog and no JS error (the same rule as `new URL()` in CLAUDE.md).
 //   * NO CURRENCY MUST NOT MEAN DOLLARS. ~a quarter of securities carry a currency, so the
 //     unlabelled path is common; defaulting it to `$` is how this started.
-import { formatMoney } from '../src/features/markets/money';
+import { formatMoney, formatPerShare } from '../src/features/markets/money';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = ''): void {
@@ -65,6 +65,18 @@ check('a negative keeps its sign', got(-3_400_000_000, 'USD') === '-$3.40B', got
 // A negative net income must scale on its MAGNITUDE — comparing the signed value against the
 // thresholds would drop every negative straight through to the unscaled branch.
 check('a negative is scaled, not left raw', /B$/.test(got(-3_400_000_000, 'USD')), got(-3_400_000_000, 'USD'));
+
+console.log('\n## a per-share amount is not a market cap');
+// `formatMoney` drops decimals below a million because they are noise on a $4.57T figure. On a
+// DIVIDEND that rounding is the entire value, so `formatPerShare` is a separate function rather
+// than a flag — these two assertions are what stop it being "simplified" back into one.
+check('a market-cap formatter would destroy a dividend', formatMoney(1.2087, 'USD') === '$1', formatMoney(1.2087, 'USD'));
+check('a per-share amount keeps its cents', formatPerShare(1.2087, 'USD') === '$1.21', formatPerShare(1.2087, 'USD'));
+// An issuer paying fractions of a cent must not render as "$0.00", which reads as no dividend.
+check('a sub-cent amount does not round to zero', formatPerShare(0.0031, 'USD') === '$0.0031', formatPerShare(0.0031, 'USD'));
+check('a per-share amount carries a non-USD currency', nb(formatPerShare(2.5, 'DKK')).includes('2.50'), formatPerShare(2.5, 'DKK'));
+check('no currency means no symbol on a dividend', formatPerShare(1.21, null) === '1.21', formatPerShare(1.21, null));
+check('zero is still zero', formatPerShare(0, 'USD') === '$0.00', formatPerShare(0, 'USD'));
 
 console.log(failures === 0 ? '\nALL MONEY CHECKS PASSED' : `\n${failures} MONEY CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

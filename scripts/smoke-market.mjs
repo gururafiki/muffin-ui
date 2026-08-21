@@ -87,6 +87,10 @@ const SECTOR_CONSTITUENTS = [
 
 const INSTRUMENTS = [
   {
+    // `instrument_current` DOES expose `security_id` (verified against production) and the app was
+    // not selecting it, so every section keyed on the id was silently dead for the curated 35 —
+    // the most-visited pages in the app. The fixture carries it so this stays caught.
+    security_id: 'cccc3333-3333-4333-8333-333333333333',
     symbol: 'AAPL',
     name: 'Apple Inc.',
     sector_id: 'information-technology',
@@ -94,6 +98,11 @@ const INSTRUMENTS = [
     industry: 'Consumer Electronics',
     country: 'United States',
     market_cap: 4572794322944,
+    // WITHOUT THIS THE MONEY PATH IS NEVER EXERCISED. `formatMoney` and `formatPerShare` both leave
+    // a figure UNLABELLED when the currency is absent, which is the correct behaviour and also
+    // means a fixture with no currency asserts nothing about labelling — the market-cap check had
+    // been failing for exactly that reason.
+    currency: 'USD',
     sort_order: 1,
   },
   {
@@ -329,7 +338,10 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         ),
       });
     }
-    if (u.includes('/supabase/rest/v1/prices')) {
+    // `prices` (the instrument overlay) AND `price_series` (the per-security history migration 94
+    // introduced). The app moved to the latter and this stub did not, so the chart silently had no
+    // bars — the assertion below said "market.prices was read" and had been failing ever since.
+    if (u.includes('/supabase/rest/v1/prices') || u.includes('/supabase/rest/v1/price_series')) {
       seen.push(u);
       // ~280 synthetic daily bars, the shape 08-instrument-prices.sql stores.
       const rows = [];
@@ -353,6 +365,31 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
       // DECODED first: PostgREST percent-encodes the parens of an `or=(...)` filter, so matching
       // the raw string finds nothing and the stub silently returns an empty list.
       const decoded = decodeURIComponent(u);
+      // TWO CALLERS SHARE THIS TABLE and only one was stubbed. The search box sends `or=(...)`;
+      // the stock page sends a plain `symbol=eq.X` to resolve the security's ID, market cap and
+      // currency. Answering only the first left `securityId` undefined, which silently disabled
+      // every section keyed on it — the dividends panel simply never asked for its data.
+      const bySymbol = /symbol=eq\.([A-Z.]+)/.exec(decoded)?.[1];
+      if (mockRows && bySymbol) {
+        return r.respond({
+          status: 200,
+          contentType: 'application/json',
+          headers: { 'access-control-allow-origin': '*' },
+          body: JSON.stringify([
+            {
+              security_id: 'cccc3333-3333-4333-8333-333333333333',
+              symbol: bySymbol,
+              name: 'Apple Inc.',
+              sector_id: 'information-technology',
+              industry: 'Consumer Electronics',
+              country_name: 'United States',
+              country_iso2: 'US',
+              market_cap: 3_410_000_000_000,
+              currency_code: 'USD',
+            },
+          ]),
+        });
+      }
       const q = /or=\(([^)]*)\)/.exec(decoded)?.[1] ?? '';
       const rows = !mockRows || !q ? [] : [
         { security_id: 'aaaa1111-1111-4111-8111-111111111111', name: 'Samsung Electronics Co., Ltd.', symbol: '005930.KS', sector_id: 'information-technology', country_iso2: 'KR' },
@@ -395,7 +432,8 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(body),
       });
     }
-    if (u.includes('/supabase/rest/v1/instruments')) {
+    // `instrument_current` is what the app reads; `instruments` is the pre-migration-40 name.
+    if (u.includes('/supabase/rest/v1/instrument_current') || u.includes('/supabase/rest/v1/instruments')) {
       seen.push(u);
       // The sector page filters by sector_id; the Markets tab and the stock page
       // read the whole universe.
@@ -417,6 +455,82 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         contentType: 'application/json',
         headers: { 'access-control-allow-origin': '*' },
         body: JSON.stringify(body),
+      });
+    }
+    // Dividends and splits.
+    //
+    // THE DIVIDEND IS DELIBERATELY SUB-DOLLAR WITH FOUR DECIMALS. `formatMoney` drops decimals
+    // below a million, so it renders 1.2087 as "$1" — a fixture using a round number could not
+    // tell the market-cap formatter from the per-share one, and that is exactly the swap a future
+    // "simplification" would make.
+    if (u.includes('/supabase/rest/v1/security_corporate_action')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [
+            { ex_date: '2022-06-06', kind: 'split', value: 20, source_code: 'tiingo' },
+            { ex_date: '2025-05-12', kind: 'dividend', value: 1.2087, source_code: 'tiingo' },
+            { ex_date: '2025-02-10', kind: 'dividend', value: 0.24, source_code: 'tiingo' },
+          ];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
+    // News. The fixture carries a story that is NOT about the company, because that is the real
+    // failure mode — yfinance returned a Waymo article under AAPL — and the panel's job is to
+    // attribute the association to the provider rather than to muffin.
+    if (u.includes('/supabase/rest/v1/security_news')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [
+            {
+              url: 'https://example.com/a',
+              title: 'Waymo expands robotaxi service',
+              published_at: new Date(Date.now() - 86400000).toISOString(),
+              source: 'Simply Wall St.',
+              summary: 'A story the provider attached to this symbol.',
+            },
+          ];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
+    // The valuation section: ratios computed per price bar.
+    //
+    // THE FIXTURE MAKES THE TWO CANDIDATE BEHAVIOURS DISAGREE. A withheld ratio (reporting currency
+    // != quote currency) is served with `pe_ratio: null` but a POPULATED `net_margin_pct`, because
+    // margins are filing-over-filing and need no currency agreement. So a build that ignored the
+    // currency gate would chart a P/E here, and one that dropped the whole section on a null P/E
+    // would lose the margin too — the mock can tell those apart, which a fixture of all-comparable
+    // rows could not.
+    if (u.includes('/supabase/rest/v1/security_ratio_series')) {
+      seen.push(u);
+      const sym = /symbol=eq\.([A-Z.]+)/.exec(u)?.[1] ?? '';
+      const metric = /value:([a-z_]+)/.exec(u)?.[1] ?? 'pe_ratio';
+      const withheld = sym === 'NVO';
+      const priceBased = !['net_margin_pct', 'roe_pct', 'roa_pct'].includes(metric);
+      const rows = !mockRows
+        ? []
+        : Array.from({ length: 24 }, (_, i) => ({
+            date: `2025-${String((i % 12) + 1).padStart(2, '0')}-01`,
+            close: 300 + i,
+            value: withheld && priceBased ? null : 30 + i * 0.5,
+            currency_comparable: !withheld,
+            report_currency: withheld ? 'DKK' : 'USD',
+            quote_currency: 'USD',
+          }));
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
       });
     }
     // Classification tables (schemes / groups / members).
@@ -722,12 +836,40 @@ try {
     check('another ticker\'s run is filtered out', !has(body, 'MSFT'));
 
     // --- the price chart ------------------------------------------------------
-    check('market.prices was read', seen.some((u) => u.includes('/prices')));
+    check('the price series was read', seen.some((u) => u.includes('/prices') || u.includes('/price_series')));
     const svgPaths = await page.evaluate(
       () => document.querySelectorAll('svg polyline, svg path').length,
     );
     check('the chart drew a line', svgPaths > 0, `${svgPaths} svg shapes`);
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
+
+    // --- the valuation section (ratios computed per price bar) ----------------
+    check('the ratio series was read', seen.some((u) => u.includes('security_ratio_series')));
+    check('the valuation section renders', has(body, 'Valuation'));
+    check('the ratio picker is offered', has(body, 'P/E') && has(body, 'ROE'));
+    // A ratio reads as a multiple and a yield as a percent — one shared formatter would print
+    // "37.5%" for a P/E, which is the units bug this codebase has already shipped twice.
+    check('a multiple is formatted as one', /\d+\.\d+x/.test(body), (body.match(/\d+\.\d+x/) || [])[0] ?? '');
+    // The current-vs-average line is the reason the section exists: a P/E of 37 says nothing, a
+    // P/E of 37 against a 5Y average of 28 is a statement.
+    check('current is compared to the average', /avg\s+\d+\.\d+x/i.test(body));
+
+    // --- dividends, splits and news -------------------------------------------
+    check('corporate actions were read', seen.some((u) => u.includes('security_corporate_action')));
+    check('the dividends section renders', has(body, 'Dividends'));
+    // A per-share amount keeps its cents. `formatMoney` would print "$1" here — the market-cap
+    // formatter rounds decimals away below a million, which on a dividend is the whole value.
+    check('a dividend keeps its cents', has(body, '$1.21'), (body.match(/\$1[.\d]*/) || [])[0] ?? '');
+    check('a dividend is not rendered as a market cap', !/\$1\b(?!\.)/.test(body));
+    // A split is a RATIO. Through a currency formatter it would read "$20", a plausible share price.
+    check('a split renders as a ratio', has(body, '20-for-1'));
+    check('a split is not rendered as money', !has(body, '$20'));
+
+    check('news was read', seen.some((u) => u.includes('security_news')));
+    check('the news section renders', has(body, 'In the news'));
+    check('the headline renders', has(body, 'Waymo'));
+    // The association is the provider's, not ours — the panel must not imply we chose it.
+    check('the association is attributed to the provider', has(body, 'not selected by muffin'));
     // Switching range must actually reslice: 1M shows ~30 days, 1Y ~365.
     const before = await page.evaluate(() => document.body.innerText);
     const clicked = await page.evaluate(() => {

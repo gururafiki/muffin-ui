@@ -104,3 +104,32 @@ export function formatMoney(value: number, currency: string | null | undefined):
   if (!fmt) return `${code} ${plain}${suffix}`;
   return `${fmt.format(n)}${suffix}`;
 }
+
+/**
+ * A PER-SHARE amount — a dividend, not a market cap.
+ *
+ * `formatMoney` exists for headline figures and drops decimals below a million, where they would
+ * be noise on a $4.57T number. On a dividend that rounding is the whole value: $1.2087 a share
+ * renders as "$1", and a $0.24 quarterly dividend renders as "$0". So this is a SEPARATE formatter
+ * rather than a flag on the other one — the same reason a metric's units are read per field here
+ * instead of through one shared `pct()`, which once put NVIDIA on the deployed page at a 46%
+ * dividend yield.
+ *
+ * Two decimals normally, four when the amount is small enough that two would round it away — some
+ * issuers pay fractions of a cent, and a dividend shown as 0.00 reads as "no dividend".
+ *
+ * With NO currency the number is left unlabelled, exactly as `formatMoney` does: defaulting to
+ * dollars is how the Alibaba bug started, and dividends here are genuinely multi-currency.
+ */
+export function formatPerShare(value: number, currency: string | null | undefined): string {
+  const digits = Math.abs(value) < 0.01 && value !== 0 ? 4 : 2;
+  const plain = value.toFixed(digits);
+
+  const code =
+    typeof currency === 'string' && /^[A-Za-z]{3}$/.test(currency) ? currency.toUpperCase() : null;
+  if (!code) return plain;
+
+  const fmt = currencyFormatter(code, digits);
+  if (!fmt) return `${code} ${plain}`;
+  return fmt.format(value);
+}

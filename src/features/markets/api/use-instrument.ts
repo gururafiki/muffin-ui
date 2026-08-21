@@ -29,7 +29,13 @@ async function fetchInstrument(symbol: string) {
       // went stale the moment a provider refreshed the security instead.
       .from('instrument_current')
       .select(
-        'symbol,name,sector_id,provider_sector,industry,country,market_cap,currency,asset_type,priced',
+        // `security_id` IS ON THIS VIEW and was not being asked for, which quietly disabled every
+        // section keyed on it for exactly the 35 CURATED instruments — AAPL and MSFT among them,
+        // i.e. the most-visited pages in the app. The fallback path below reads it from
+        // `security_current`, so only the curated hit was affected and only the sections that came
+        // later (market stats, dividends) noticed. Nothing errored: an undefined id disables a
+        // query rather than failing it.
+        'security_id,symbol,name,sector_id,provider_sector,industry,country,market_cap,currency,asset_type,priced',
       )
       .eq('symbol', symbol)
       .limit(1),
@@ -42,7 +48,18 @@ async function fetchInstrument(symbol: string) {
   for (const r of [profile, performance]) {
     if (r.error) throw new Error(`market read failed: ${r.error.message}`);
   }
-  let instrument = parseArray(zInstrument, profile.data ?? [], 'market.instrument_current')[0] ?? null;
+  // The view names it `security_id`; the domain type names it `securityId`. Mapped here rather
+  // than renamed in the schema, because the fallback path builds the same shape from a different
+  // table and the two must agree.
+  let instrument =
+    parseArray(
+      zInstrument,
+      (profile.data ?? []).map((row) => ({
+        ...(row as Record<string, unknown>),
+        securityId: (row as Record<string, unknown>).security_id,
+      })),
+      'market.instrument_current',
+    )[0] ?? null;
 
   // FALL BACK TO THE FUND-DERIVED UNIVERSE. `market.instruments` is the CURATED 35 rows, so every
   // other security opened a page with a bare ticker over blank space: no name, no sector, no
