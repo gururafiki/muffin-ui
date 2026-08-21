@@ -502,6 +502,45 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
+    // A country's sector returns, WEIGHTED FROM THE FUND THAT ACTUALLY HOLDS THE COUNTRY.
+    //
+    // The page used to fall back to US sectors for any country without its own rows, labelled "US
+    // sector performance" — and a reader opening Vietnam saw eleven familiar sector names with
+    // American numbers and read it as a bug. It is one. So the fixture covers BOTH states: rows
+    // for the US, nothing for a country with no tracked fund, and the assertions below require an
+    // honest gap rather than a labelled substitute.
+    if (u.includes('/supabase/rest/v1/country_sector_performance')) {
+      seen.push(u);
+      const iso = /country_iso2=eq\.([A-Z]{2})/.exec(u)?.[1] ?? '';
+      const period = /period=eq\.([a-z0-9]+)/.exec(u)?.[1] ?? '1y';
+      // Only the US has a country fund in this fixture; VN deliberately has none.
+      const rows = !mockRows || iso !== 'US'
+        ? []
+        : [
+            {
+              country_iso2: 'US', sector_id: 'information-technology', period,
+              // The period is in the VALUE, so a failure to requery on switching is visible as a
+              // number that did not move rather than only as a missing request.
+              change_pct: period === '1m' ? 4.2 : 34.1,
+              // `weight_covered` is a PERCENT, not a fraction: the hook drops anything under 1, so a
+              // fixture using 0.61 is silently filtered out and the panel reads as empty.
+              constituents: 61, weight_covered: 61, fund_symbol: 'SPY',
+              as_of: '2026-08-20',
+            },
+            {
+              country_iso2: 'US', sector_id: 'financials', period,
+              change_pct: period === '1m' ? 1.1 : 12.4,
+              constituents: 48, weight_covered: 52, fund_symbol: 'SPY',
+              as_of: '2026-08-20',
+            },
+          ];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // The valuation section: ratios computed per price bar.
     //
     // THE FIXTURE MAKES THE TWO CANDIDATE BEHAVIOURS DISAGREE. A withheld ratio (reporting currency
@@ -581,9 +620,14 @@ try {
     const { server, port } = await serve({ supabase: false });
     console.log('\nfallback (no Supabase configured)');
     const { page, body, errors } = await openPage(browser, port, '/country/united-states', { mockRows: false });
-    check('the sector panel still renders', has(body, 'Sector performance'));
-    check('a sector name is shown', has(body, 'Information Technology'));
-    check('the numbers are badged "sample"', has(body, 'sample'));
+    // AN HONEST GAP BEATS A LABELLED SUBSTITUTE. With no server rows this page used to show US
+    // sectors under a label; 19 of 45 drillable countries have no sector rows, so a reader on
+    // Vietnam saw American numbers wearing local sector names. It now says it has nothing.
+    check('the empty state names the section', has(body, 'Sectors'));
+    check('it says plainly that there is no data', has(body, 'No sector data'));
+    check('it explains WHY, not just that', has(body, 'tracked fund'));
+    // The substitute must not come back: no foreign numbers presented as this country's.
+    check('no authored sector return is shown', !/[+-]\d+\.\d%/.test(body));
     check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
     await page.close();
     server.close();
@@ -592,24 +636,24 @@ try {
   // --- 2. Supabase serving rows: live numbers, no sample badge ------------------
   {
     const { server, port } = await serve({ supabase: true });
-    console.log('\nlive rows from market.performance');
+    console.log('\nlive rows from market.country_sector_performance');
     const { page, body, errors, seen } = await openPage(browser, port, '/country/united-states', { mockRows: true });
 
-    const perfRequests = seen.filter((u) => u.includes('/performance'));
-    check('market.performance was queried', perfRequests.length > 0, `${perfRequests.length} request(s)`);
+    const perfRequests = seen.filter((u) => u.includes('country_sector_performance'));
+    check('the country\'s own sector rows were queried', perfRequests.length > 0, `${perfRequests.length} request(s)`);
     check(
-      'the query is scoped to sector + a period',
-      perfRequests.some((u) => u.includes('scope=eq.sector') && /period=eq\./.test(u)),
-      // Report the matching request, not seen[0] — `seen` also holds the
-      // classification reads, so seen[0] printed a misleading URL here.
+      'the query is scoped to this country + a period',
+      perfRequests.some((u) => u.includes('country_iso2=eq.US') && /period=eq\./.test(u)),
+      // Report the MATCHING request, not seen[0] — `seen` also holds the classification reads, so
+      // seen[0] printed a misleading URL here.
       perfRequests[0]?.split('?')[1] ?? '(none)',
     );
-    // Fed as the string "34.1100": without z.coerce this row would vanish and the
-    // panel would silently show 18.9 (the authored Information Technology value).
-    check('a quoted numeric still rendered', has(body, '34.1'), 'expected +34.1%');
-    check('the authored value is NOT shown', !has(body, '18.9%'));
+    check('the live return renders', has(body, '34.1'), 'expected +34.1%');
     check('the "sample" badge is gone', !has(body, 'sample'));
-    check('provenance is shown instead', has(body, 'finviz'));
+    // "61%" is unattributable on its own: a reader cannot tell whether it is a share of this
+    // country's fund or of something else, so the panel names the fund it weighted from.
+    check('the panel names the fund it weighted from', has(body, 'SPY'));
+    check('the weighting is stated, not implied', has(body, 'weighted constituents'));
 
     // --- 3. The timeframe switch requeries ------------------------------------
     const before = seen.length;
@@ -627,10 +671,13 @@ try {
     const after = await page.evaluate(() => document.body.innerText);
     check('switching period issued a new query', seen.length > before, `${before} -> ${seen.length}`);
     check('the 1M query was made', seen.some((u) => u.includes('period=eq.1m')));
-    // 11.11 -> "+11.1%", 12.22 -> "+12.2%": the 1y figures must be gone entirely.
+    // The fixture returns a DIFFERENT value per period (1y 34.1/12.4, 1m 4.2/1.1), so a page that
+    // requeried and then rendered the old rows anyway is visible here — a request count alone
+    // cannot see that. The 1y figures must be gone ENTIRELY, not merely joined by the new ones.
     check(
       'the displayed numbers changed',
-      has(after, '11.1') && has(after, '12.2') && !has(after, '34.1'),
+      has(after, '4.2') && has(after, '1.1') && !has(after, '34.1'),
+      after.match(/[+-]\d+\.\d%/g)?.join(' ') ?? '(no returns rendered)',
     );
     check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 
@@ -798,7 +845,8 @@ try {
     check('the donut names its index', has(body, 'S&P 500'));
     // 32.81 renormalised over the classified slices (total 65.07) -> 50.4%.
     check('the real allocation is drawn', has(body, '50') || has(body, '32.8'));
-    check('the universe was read', seen.some((u) => u.includes('/instruments')));
+    // `instrument_current` since migration 40 made instruments a curated OVERLAY.
+    check('the universe was read', seen.some((u) => u.includes('/instrument_current') || u.includes('/instruments')));
     check('a non-equity asset is listed', has(body, 'Bitcoin'));
     check('its live return renders', has(body, '55.4'), 'BTC 55.40 -> +55.4%');
     // This list previously showed ~50 authored values with NO caveat at all.
