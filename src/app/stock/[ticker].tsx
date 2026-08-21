@@ -25,6 +25,7 @@ import { useStatements } from '@/features/markets/api/use-statements';
 import { SecurityRefreshButton } from '@/features/markets/security-refresh-button';
 import { MarketStats } from '@/features/markets/market-stats';
 import { MetricHistory } from '@/features/markets/metric-history';
+import { ValuationHistory } from '@/features/markets/valuation-history';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
@@ -185,6 +186,7 @@ export default function StockScreen() {
       {/* THE FINANCIALS, AND THE MARKET DATA THAT FRAMES THEM. Both render nothing at all until
           the backlogs reach this security — an empty "Financials" heading reads as a broken page,
           while no section reads as a page that does not claim to have it. */}
+      <ValuationHistory symbol={symbol} />
       <MetricHistory symbol={symbol} />
       <MarketStats securityId={inst?.securityId} />
 

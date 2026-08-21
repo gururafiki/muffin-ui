@@ -419,6 +419,37 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(body),
       });
     }
+    // The valuation section: ratios computed per price bar.
+    //
+    // THE FIXTURE MAKES THE TWO CANDIDATE BEHAVIOURS DISAGREE. A withheld ratio (reporting currency
+    // != quote currency) is served with `pe_ratio: null` but a POPULATED `net_margin_pct`, because
+    // margins are filing-over-filing and need no currency agreement. So a build that ignored the
+    // currency gate would chart a P/E here, and one that dropped the whole section on a null P/E
+    // would lose the margin too — the mock can tell those apart, which a fixture of all-comparable
+    // rows could not.
+    if (u.includes('/supabase/rest/v1/security_ratio_series')) {
+      seen.push(u);
+      const sym = /symbol=eq\.([A-Z.]+)/.exec(u)?.[1] ?? '';
+      const metric = /value:([a-z_]+)/.exec(u)?.[1] ?? 'pe_ratio';
+      const withheld = sym === 'NVO';
+      const priceBased = !['net_margin_pct', 'roe_pct', 'roa_pct'].includes(metric);
+      const rows = !mockRows
+        ? []
+        : Array.from({ length: 24 }, (_, i) => ({
+            date: `2025-${String((i % 12) + 1).padStart(2, '0')}-01`,
+            close: 300 + i,
+            value: withheld && priceBased ? null : 30 + i * 0.5,
+            currency_comparable: !withheld,
+            report_currency: withheld ? 'DKK' : 'USD',
+            quote_currency: 'USD',
+          }));
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // Classification tables (schemes / groups / members).
     const table = /\/supabase\/rest\/v1\/(classification_[a-z]+)/.exec(u)?.[1];
     if (table) {
@@ -728,6 +759,17 @@ try {
     );
     check('the chart drew a line', svgPaths > 0, `${svgPaths} svg shapes`);
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
+
+    // --- the valuation section (ratios computed per price bar) ----------------
+    check('the ratio series was read', seen.some((u) => u.includes('security_ratio_series')));
+    check('the valuation section renders', has(body, 'Valuation'));
+    check('the ratio picker is offered', has(body, 'P/E') && has(body, 'ROE'));
+    // A ratio reads as a multiple and a yield as a percent — one shared formatter would print
+    // "37.5%" for a P/E, which is the units bug this codebase has already shipped twice.
+    check('a multiple is formatted as one', /\d+\.\d+x/.test(body), (body.match(/\d+\.\d+x/) || [])[0] ?? '');
+    // The current-vs-average line is the reason the section exists: a P/E of 37 says nothing, a
+    // P/E of 37 against a 5Y average of 28 is a statement.
+    check('current is compared to the average', /avg\s+\d+\.\d+x/i.test(body));
     // Switching range must actually reslice: 1M shows ~30 days, 1Y ~365.
     const before = await page.evaluate(() => document.body.innerText);
     const clicked = await page.evaluate(() => {
