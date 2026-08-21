@@ -978,6 +978,10 @@ try {
     // of Greenwich sees the 25th — and an earnings date off by one is a different trading day.
     check('the date is not shifted by a timezone', has(body, '26 Aug 2026'), (body.match(/\d+ \w{3} 2026/) || [])[0] ?? '');
     check('the reporting time is de-hyphenated', has(body, 'after hours'));
+    // nasdaq sends `not-supplied` for companies that have not said which side of the bell they
+    // report on — measured on live rows. It is an absence wearing a value, and rendering
+    // "26 Aug 2026 · not supplied" says nothing while looking like it means something.
+    check('an unsupplied reporting time is dropped', !/not\s*supplied/i.test(body));
     check('the consensus is shown with its analyst count', has(body, '2.01') && has(body, '11 analysts'));
 
     // --- the company profile ---------------------------------------------------
