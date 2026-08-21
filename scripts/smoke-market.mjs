@@ -502,6 +502,30 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
+    // The company profile. The fixture uses AMAZON'S REAL SHAPE — 1,595,000 employees, a city and
+    // NO state or country, which is what yfinance returns for most US securities. A fixture with all
+    // three location parts would never catch the naive join that renders "Seattle, , ".
+    if (u.includes('/supabase/rest/v1/security_profile')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [{
+            description: 'Amazon.com, Inc. engages in the retail sale of consumer products.',
+            employees: 1595000,
+            website: 'https://www.amazon.com',
+            hq_city: 'Seattle',
+            hq_state: null,
+            hq_country: null,
+            beta: 1.454,
+            as_of: '2026-08-21T00:00:00Z',
+          }];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // A country's sector returns, WEIGHTED FROM THE FUND THAT ACTUALLY HOLDS THE COUNTRY.
     //
     // The page used to fall back to US sectors for any country without its own rows, labelled "US
@@ -892,6 +916,17 @@ try {
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
 
     // --- the valuation section (ratios computed per price bar) ----------------
+    // --- the company profile ---------------------------------------------------
+    check('the profile was read', seen.some((u) => u.includes('security_profile')));
+    check('the About section renders', has(body, 'About'));
+    // 1,595,000 reads as noise; "1.6M employees" is the fact about the company.
+    check('the headcount is humanised', has(body, '1.6M employees'), (body.match(/[\d.]+M employees/) || [])[0] ?? '');
+    check('the raw headcount is NOT shown', !has(body, '1595000') && !has(body, '1,595,000'));
+    // Most US securities return a city and no state or country. A naive join renders "Seattle, , ".
+    check('an absent state and country are dropped', has(body, 'Seattle') && !/Seattle,\s*,/.test(body));
+    // "1.45" means nothing to most readers; the sentence is the fact it encodes.
+    check('beta is explained, not just printed', has(body, 'more volatile than the market'));
+
     check('the ratio series was read', seen.some((u) => u.includes('security_ratio_series')));
     check('the valuation section renders', has(body, 'Valuation'));
     check('the ratio picker is offered', has(body, 'P/E') && has(body, 'ROE'));
