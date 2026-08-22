@@ -30,6 +30,7 @@ import { ValuationHistory } from '@/features/markets/valuation-history';
 import { CorporateActions } from '@/features/markets/corporate-actions';
 import { NewsPanel } from '@/features/markets/news-panel';
 import { CompanyProfile } from '@/features/markets/company-profile';
+import { Leadership } from '@/features/markets/leadership';
 import { NextEarnings } from '@/features/markets/next-earnings';
 import { InsiderActivity } from '@/features/markets/insider-activity';
 import { SecurityFilings } from '@/features/markets/security-filings';
@@ -196,6 +197,7 @@ export default function StockScreen() {
           while no section reads as a page that does not claim to have it. */}
       <NextEarnings securityId={inst?.securityId} />
       <CompanyProfile securityId={inst?.securityId} />
+      <Leadership securityId={inst?.securityId} />
       <InsiderActivity securityId={inst?.securityId} />
       <SecurityFilings securityId={inst?.securityId} />
       <PeerList securityId={inst?.securityId} />
