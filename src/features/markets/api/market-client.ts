@@ -81,20 +81,37 @@ export async function fetchPerformance(
   if (!supabase) throw new MarketUnavailableError();
   if (scopeIds && scopeIds.length === 0) return [];
 
-  let q = supabase
-    .schema('market')
-    .from('performance')
-    .select('scope,scope_id,period,change_pct,as_of,stale_after,source')
-    .eq('scope', scope)
-    .eq('period', period);
-  // An `in.()` filter is a URL, so its size is a LENGTH budget rather than a row budget — 500 ids
-  // is a ~6.5 KB URL and earns a bare 502. A constituent page is at most a few hundred symbols,
-  // which is comfortably inside that.
-  if (scopeIds) q = q.in('scope_id', [...scopeIds]);
+  // AN `in.()` FILTER IS A URL, SO ITS SIZE IS A LENGTH BUDGET, NOT A ROW BUDGET.
+  //
+  // ~500 ids is a ~6.5 KB URL and earns a BARE 502 — a failure with nothing in it pointing at the
+  // cause, which would drop the gained/lost column for the whole list at once. This used to be sent
+  // unchunked on the reasoning that "a constituent page is at most a few hundred symbols"; that
+  // stopped being true when the sector list gained infinite scroll, which grows the page by 20
+  // indefinitely. Measured 2026-08-22 against production: 600 symbols is 5,793 chars and still
+  // answers 200, so this is prevention rather than a live bug — but the ceiling is a scroll away
+  // and the symptom would be unreadable.
+  //
+  // 100 per request matches the chunk size the ingest side already uses for the same reason.
+  const CHUNK = 100;
+  const query = async (ids?: readonly string[]) => {
+    let q = supabase
+      .schema('market')
+      .from('performance')
+      .select('scope,scope_id,period,change_pct,as_of,stale_after,source')
+      .eq('scope', scope)
+      .eq('period', period);
+    if (ids) q = q.in('scope_id', [...ids]);
+    const { data, error } = await q;
+    if (error) throw new Error(`market.performance read failed: ${error.message}`);
+    return parseArray(zPerformanceRow, data ?? [], 'market.performance');
+  };
 
-  const { data, error } = await q;
-  if (error) throw new Error(`market.performance read failed: ${error.message}`);
-  return parseArray(zPerformanceRow, data ?? [], 'market.performance');
+  if (!scopeIds) return query();
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < scopeIds.length; i += CHUNK) chunks.push([...scopeIds.slice(i, i + CHUNK)]);
+  const results = await Promise.all(chunks.map((c) => query(c)));
+  return results.flat();
 }
 
 /**
