@@ -33,6 +33,7 @@ import { CompanyProfile } from '@/features/markets/company-profile';
 import { NextEarnings } from '@/features/markets/next-earnings';
 import { InsiderActivity } from '@/features/markets/insider-activity';
 import { SecurityFilings } from '@/features/markets/security-filings';
+import { PeerList } from '@/features/markets/peer-list';
 import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
@@ -197,6 +198,7 @@ export default function StockScreen() {
       <CompanyProfile securityId={inst?.securityId} />
       <InsiderActivity securityId={inst?.securityId} />
       <SecurityFilings securityId={inst?.securityId} />
+      <PeerList securityId={inst?.securityId} />
       <ValuationHistory symbol={symbol} />
       <StatementTables symbol={symbol} />
       <MetricHistory symbol={symbol} />
