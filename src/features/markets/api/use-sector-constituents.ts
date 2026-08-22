@@ -54,6 +54,10 @@ export const zSectorConstituentRow = z.looseObject({
   // the page.
   weight: z.coerce.number().nullish(),
   fund_symbol: z.string().nullish(),
+  // Selected so the server can ORDER by it — see fetchConstituents. PostgREST v14 sends `numeric`
+  // as a JSON number; coerce guards a driver that quotes it, which would make parseArray drop
+  // every row and empty the list.
+  market_cap: z.coerce.number().nullish(),
   as_of: z.string().nullish(),
 });
 export type SectorConstituentRow = z.infer<typeof zSectorConstituentRow>;
@@ -68,7 +72,7 @@ async function fetchConstituents(
   let q = supabase
     .schema('market')
     .from('sector_constituents')
-    .select('security_id,name,symbol,industry,country_iso2,weight,fund_symbol,as_of')
+    .select('security_id,name,symbol,industry,country_iso2,weight,fund_symbol,market_cap,as_of')
     .eq('sector_id', sectorId);
   // Drilling in from a country page means "this sector IN this country". Filtered on ISO-2 rather
   // than the country's display name: the server stores the code, and a name would have to match a
@@ -77,6 +81,18 @@ async function fetchConstituents(
   const { data, error } = await q
     // Heaviest first: on a paged list the first page should be the names people recognise.
     .order('weight', { ascending: false, nullsFirst: false })
+    // MARKET CAP IS THE FALLBACK, AND ON A COUNTRY PAGE IT IS THE ONLY ORDER THERE IS.
+    //
+    // `weight` is the security's weight in the SECTOR fund, so it exists only for securities a
+    // sector SPDR holds. Drill into a sector from a country and every row comes from that
+    // country's fund instead, so weight is NULL for ALL of them and the list fell back to
+    // alphabetical — Clobot above SK hynix on Korean information technology. Measured 2026-08-22:
+    // 56 of 56 rows had a null weight and a populated market cap.
+    //
+    // Cap is in the company's OWN currency, so this is not a true size ranking across countries
+    // (`security_market_cap_usd` exists for that). Within one country page every row shares a
+    // currency, which is exactly the case this ordering serves.
+    .order('market_cap', { ascending: false, nullsFirst: false })
     .order('name')
     .range(0, limit - 1);
   if (error) throw new Error(`market.sector_constituents read failed: ${error.message}`);
