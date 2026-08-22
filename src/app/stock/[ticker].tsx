@@ -25,6 +25,7 @@ import { useStatements } from '@/features/markets/api/use-statements';
 import { SecurityRefreshButton } from '@/features/markets/security-refresh-button';
 import { MarketStats } from '@/features/markets/market-stats';
 import { MetricHistory } from '@/features/markets/metric-history';
+import { StatementTables } from '@/features/markets/statement-tables';
 import { ValuationHistory } from '@/features/markets/valuation-history';
 import { CorporateActions } from '@/features/markets/corporate-actions';
 import { NewsPanel } from '@/features/markets/news-panel';
@@ -197,6 +198,7 @@ export default function StockScreen() {
       <InsiderActivity securityId={inst?.securityId} />
       <SecurityFilings securityId={inst?.securityId} />
       <ValuationHistory symbol={symbol} />
+      <StatementTables symbol={symbol} />
       <MetricHistory symbol={symbol} />
       <MarketStats securityId={inst?.securityId} />
       <CorporateActions securityId={inst?.securityId} currency={inst?.currency} />

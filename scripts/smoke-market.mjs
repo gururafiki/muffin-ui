@@ -502,6 +502,38 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
+    // The statement tables, read from the METRIC layer rather than statement jsonb.
+    //
+    // The fixture gives one line a GAP — `research_and_development` reports in 2025 and not 2024 —
+    // because an absent figure must render as a dash and never as a zero: "0" is a number the
+    // company reported, and this is the absence of one. It also carries a NON-USD currency, since
+    // `$` on a KRW figure is the Alibaba bug and the panel must label what it is told.
+    if (u.includes('/supabase/rest/v1/security_metric_series')) {
+      seen.push(u);
+      const cat = /category=eq\.([a-z_]+)/.exec(u)?.[1] ?? 'income_statement';
+      if (!mockRows || cat !== 'income_statement') {
+        return r.respond({ status: 200, contentType: 'application/json',
+          headers: { 'access-control-allow-origin': '*' }, body: '[]' });
+      }
+      const rows = [
+        { metric_code: 'revenue', metric_name: 'Revenue', unit: 'currency', as_of: '2025-12-31',
+          value: 300860000000000, currency_code: 'KRW', is_derived: false },
+        { metric_code: 'revenue', metric_name: 'Revenue', unit: 'currency', as_of: '2024-12-31',
+          value: 258900000000000, currency_code: 'KRW', is_derived: false },
+        { metric_code: 'research_and_development', metric_name: 'Research and development',
+          unit: 'currency', as_of: '2025-12-31', value: 28000000000000, currency_code: 'KRW',
+          is_derived: false },
+        // A line the catalogue knows and this filer never reports: must not appear at all.
+        { metric_code: 'shares_diluted', metric_name: 'Diluted shares', unit: 'shares',
+          as_of: '2025-12-31', value: 5900000000, currency_code: null, is_derived: false },
+      ];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // Filings. The fixture puts the 10-K OLDEST and surrounds it with newer 8-Ks, because that is
     // the real shape — a company files dozens of 8-Ks a year and one annual report — and a panel
     // sorted by date alone would bury the 10-K below them. Sorted correctly, the annual report
@@ -983,6 +1015,18 @@ try {
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
 
     // --- the valuation section (ratios computed per price bar) ----------------
+    // --- the statement tables ------------------------------------------------------
+    check('the metric series was read', seen.some((u) => u.includes('security_metric_series')));
+    check('the statements section renders', has(body, 'Financial statements'));
+    check('all three statements are offered',
+      has(body, 'Income') && has(body, 'Balance') && has(body, 'Cash flow'));
+    // MONEY CARRIES ITS CURRENCY. A KRW figure rendered with `$` is the Alibaba bug — 1.02 trillion
+    // yuan once appeared as "$1.02T" against a true ~$141bn.
+    check('a non-USD statement is labelled', has(body, 'KRW'));
+    check('a KRW figure is NOT rendered as dollars', !/\$30[0-9.]*T/.test(body));
+    // An absent figure is a dash, never a zero: "0" is a number the company reported.
+    check('a missing period renders as a dash', has(body, '—'));
+
     // --- filings ------------------------------------------------------------------
     check('the filings were read', seen.some((u) => u.includes('security_recent_filings')));
     check('the section renders', has(body, 'Filings'));
