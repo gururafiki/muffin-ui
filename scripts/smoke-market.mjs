@@ -637,6 +637,44 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
+    // Leadership. THE FIXTURE IS DENOMINATED IN WON ON PURPOSE.
+    //
+    // SK hynix's chief executive is stored as 4,239,000,000, which is about $3m — and a hardcoded
+    // `$` renders that as four billion dollars. This app has already shipped that bug once, as
+    // Alibaba's CNY revenue printing "$1.02T". A USD fixture would pass under either a correct
+    // formatter or a hardcoded one, so it could not tell them apart.
+    //
+    // The last officer has pay: null AND pay_currency: null — the two absences are different. A
+    // missing pay must render blank rather than "0" (most non-US filers disclose no individual
+    // figure, and "0" reads as an unpaid executive), and a missing CURRENCY must leave the
+    // magnitude unlabelled rather than defaulting to dollars.
+    if (u.includes('/supabase/rest/v1/security_leadership')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [
+            { name: 'Ceo Person', title: 'President, CEO & Executive Director', pay: 4239000000,
+              age: 60, fiscal_year: 2025, is_ceo: true, pay_currency: 'KRW' },
+            { name: 'Cfo Person', title: 'Chief Financial Officer', pay: 2052000000,
+              age: 58, fiscal_year: 2025, is_ceo: false, pay_currency: 'KRW' },
+            // Pay absent, currency KNOWN — so a wrongly rendered zero appears as `\u20a90`, which
+            // nothing else on the page can produce. An officer with BOTH absent was tried first
+            // and was useless: a bare `0` is indistinguishable from the "last 90 days" in the
+            // section below, and the assertion failed while the component was correct.
+            { name: 'Undisclosed Person', title: 'Head of Corporate Center', pay: null,
+              age: 55, fiscal_year: 2025, is_ceo: false, pay_currency: 'KRW' },
+            // Pay present, currency UNKNOWN — the magnitude must render unlabelled rather than
+            // defaulting to dollars. This is the branch the withheld `pay_currency` exists for.
+            { name: 'Unlabelled Person', title: 'Head of Strategy', pay: 1234567890,
+              age: 51, fiscal_year: 2025, is_ceo: false, pay_currency: null },
+          ];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // The company profile. The fixture uses AMAZON'S REAL SHAPE — 1,595,000 employees, a city and
     // NO state or country, which is what yfinance returns for most US securities. A fixture with all
     // three location parts would never catch the naive join that renders "Seattle, , ".
@@ -1136,6 +1174,29 @@ try {
     check('an absent state and country are dropped', has(body, 'Seattle') && !/Seattle,\s*,/.test(body));
     // "1.45" means nothing to most readers; the sentence is the fact it encodes.
     check('beta is explained, not just printed', has(body, 'more volatile than the market'));
+
+    // --- leadership ------------------------------------------------------------
+    check('leadership was read', seen.some((u) => u.includes('security_leadership')));
+    check('the Leadership section renders', has(body, 'Leadership'));
+    check('the chief executive is listed', has(body, 'Ceo Person'));
+    // THE CURRENCY IS THE POINT. 4,239,000,000 won is about $3m; rendered with a hardcoded `$`
+    // it reads as four billion dollars — the Alibaba bug, on a person's salary.
+    check('pay carries its currency, not a dollar sign', has(body, '\u20a94.24B'),
+      (body.match(/[^\s]{1,3}4\.24B/) || [])[0] ?? 'no 4.24B figure found');
+    check('pay is NOT rendered as dollars', !has(body, '$4.24B'));
+    check('the raw figure is not printed', !has(body, '4239000000'));
+    // A missing pay is BLANK, not zero: "0" reads as an unpaid executive rather than as a figure
+    // the filer never disclosed. Asserted through the CURRENCY, so the match cannot be satisfied
+    // by an unrelated digit elsewhere on the page.
+    check('an undisclosed pay renders no zero', has(body, 'Undisclosed Person') && !has(body, '\u20a90'));
+    // AND A KNOWN FIGURE WITH AN UNKNOWN CURRENCY IS LEFT UNLABELLED. Defaulting to dollars is
+    // how the Alibaba bug started; the honest render is the magnitude alone.
+    check('an unknown currency leaves the figure unlabelled',
+      has(body, '1.23B') && !has(body, '$1.23B') && !has(body, '\u20a91.23B'),
+      (body.match(/.{0,2}1\.23B/) || [])[0] ?? 'no 1.23B figure found');
+    // The fiscal year is stated once, so the figure is "what they were paid in 2025" rather than
+    // an unqualified "this is their pay".
+    check('the pay year is stated', /FY2025/.test(body));
 
     check('the ratio series was read', seen.some((u) => u.includes('security_ratio_series')));
     check('the valuation section renders', has(body, 'Valuation'));
