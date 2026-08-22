@@ -18,6 +18,14 @@ import { getSupabase } from '@/lib/auth/client';
 
 import { MarketUnavailableError } from './market-client';
 
+const zSurprise = z.looseObject({
+  report_date: z.string(),
+  expected: z.coerce.number().nullish(),
+  actual: z.coerce.number().nullish(),
+  surprise_pct: z.coerce.number().nullish(),
+  beat: z.boolean().nullish(),
+});
+
 const zEarnings = z.looseObject({
   report_date: z.string(),
   // PostgREST v14 sends `numeric` as a JSON number; coerce guards a driver that quotes it.
@@ -38,6 +46,49 @@ export interface NextEarnings {
   reportingTime: string | null;
   periodEnding: string | null;
   upcoming: boolean;
+}
+
+/**
+ * How the LAST report went — actual against the consensus that preceded it.
+ *
+ * Derived server-side from two things this schema already holds rather than fetched:
+ * `equity/fundamental/historical_eps` (alpha_vantage) allows 25 calls a DAY and covers US listings
+ * only, which cannot serve 12,350 equities.
+ */
+export function useLastSurprise(securityId: string | null | undefined) {
+  const query = useQuery({
+    queryKey: ['market', 'earnings-surprise', securityId ?? null],
+    queryFn: async () => {
+      const supabase = getSupabase();
+      if (!supabase) throw new MarketUnavailableError();
+      const { data, error } = await supabase
+        .schema('market')
+        .from('security_earnings_surprise')
+        .select('report_date,expected,actual,surprise_pct,beat')
+        .eq('security_id', securityId as string)
+        .order('report_date', { ascending: false })
+        .limit(1);
+      if (error) throw new Error(`market.security_earnings_surprise read failed: ${error.message}`);
+      return parseArray(zSurprise, data ?? [], 'security_earnings_surprise');
+    },
+    enabled: !!securityId,
+    staleTime: 6 * 60 * 60_000,
+    gcTime: 24 * 60 * 60_000,
+    retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,
+  });
+  const row = (query.data ?? [])[0];
+  return {
+    surprise: row
+      ? {
+          reportDate: row.report_date,
+          expected: row.expected ?? null,
+          actual: row.actual ?? null,
+          surprisePct: row.surprise_pct ?? null,
+          beat: row.beat ?? null,
+        }
+      : null,
+    loading: query.isPending && !!securityId,
+  };
 }
 
 export function useNextEarnings(securityId: string | null | undefined) {

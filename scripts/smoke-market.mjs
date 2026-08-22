@@ -502,6 +502,42 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
+    // The last quarter's surprise. NEGATIVE on both sides on purpose: a company expected to lose
+    // 0.10 that lost 0.05 has BEATEN the estimate, and the panel must say "beat by 50%" rather
+    // than deriving a direction from the sign of either number.
+    if (u.includes('/supabase/rest/v1/security_earnings_surprise')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [{ report_date: '2026-08-01', expected: -0.10, actual: -0.05, surprise_pct: 50.0,
+             beat: true }];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
+    // Peers. One row has NO SYMBOL on purpose: `/stock/[ticker]` is keyed on one, so that row must
+    // render and must not be tappable — a link that navigates nowhere is worse than plain text.
+    // The caps are deliberately non-round so a "$" prefix cannot be confused with the raw number.
+    if (u.includes('/supabase/rest/v1/security_peers')) {
+      seen.push(u);
+      const rows = !mockRows
+        ? []
+        : [
+            { peer_id: 'p1', peer_name: 'Nearest Co', peer_symbol: 'NEAR',
+              peer_market_cap_usd: 12340000000, size_distance: 0.02 },
+            { peer_id: 'p2', peer_name: 'Unlisted Holdings', peer_symbol: null,
+              peer_market_cap_usd: 9870000000, size_distance: 0.06 },
+          ];
+      return r.respond({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(rows),
+      });
+    }
     // The statement tables, read from the METRIC layer rather than statement jsonb.
     //
     // The fixture gives one line a GAP — `research_and_development` reports in 2025 and not 2024 —
@@ -1015,6 +1051,27 @@ try {
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
 
     // --- the valuation section (ratios computed per price bar) ----------------
+    // --- the last quarter's surprise -------------------------------------------------
+    check('the surprise was read', seen.some((u) => u.includes('security_earnings_surprise')));
+    // Both figures are NEGATIVE and it is still a BEAT: losing 0.05 when 0.10 was expected.
+    // A panel deriving direction from the sign would say "missed".
+    check('a smaller loss than expected reads as a beat', has(body, 'Last quarter beat by'));
+    check('it does not read as a miss', !has(body, 'Last quarter missed by'));
+    check('the magnitude is shown', has(body, '50.0%'));
+
+    // --- peers ----------------------------------------------------------------------
+    check('the peer list was read', seen.some((u) => u.includes('security_peers')));
+    // THE HEADING MUST NOT CLAIM CURATION. This is sector + market-cap proximity, and calling it
+    // "Peers" would imply an editorial judgement nobody made.
+    check('the section says what the list is', has(body, 'Similar size in this sector'));
+    check('it does not claim to be curated', has(body, 'not curated'));
+    check('a peer is listed', has(body, 'Nearest Co'));
+    // USD is STATED. The view converts before ranking because a market cap is in the company's own
+    // currency; hiding that invites comparison with a native-currency figure elsewhere on the page.
+    check('the currency is stated', has(body, 'Figures in USD') && has(body, '$12.34B'));
+    // A peer with no symbol still renders — it just cannot be a link.
+    check('a peer with no symbol still renders', has(body, 'Unlisted Holdings'));
+
     // --- the statement tables ------------------------------------------------------
     check('the metric series was read', seen.some((u) => u.includes('security_metric_series')));
     check('the statements section renders', has(body, 'Financial statements'));

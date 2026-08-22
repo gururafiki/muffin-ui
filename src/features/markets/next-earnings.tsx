@@ -14,7 +14,7 @@ import { View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
 
-import { useNextEarnings } from './api/use-next-earnings';
+import { useLastSurprise, useNextEarnings } from './api/use-next-earnings';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -40,6 +40,7 @@ function formatTime(t: string): string | null {
 
 export function NextEarnings({ securityId }: { securityId: string | null | undefined }) {
   const { earnings, loading, empty } = useNextEarnings(securityId);
+  const { surprise } = useLastSurprise(securityId);
 
   // The calendar is US-listed, so most securities have no row at all. No section rather than an
   // empty one — the rule every panel here follows.
@@ -71,6 +72,23 @@ export function NextEarnings({ securityId }: { securityId: string | null | undef
               {earnings.estimates ? ` · ${earnings.estimates} analysts` : ''}
             </Text>
             <Text variant="body">{earnings.consensus.toFixed(2)}</Text>
+          </View>
+        ) : null}
+
+        {/* HOW THE LAST ONE WENT. Derived from the actual EPS and the consensus that preceded it,
+            both already stored — a company that has just beaten or missed is the context a reader
+            brings to the next date. Shown even on an UPCOMING report, because that is precisely
+            when the previous quarter's result is the useful thing to know. */}
+        {surprise && surprise.actual !== null && surprise.expected !== null ? (
+          <View className="flex-row items-baseline justify-between">
+            <Text variant="muted">
+              {surprise.beat ? 'Last quarter beat by' : 'Last quarter missed by'}
+            </Text>
+            <Text variant="body">
+              {surprise.surprisePct === null
+                ? `${Math.abs(surprise.actual - surprise.expected).toFixed(2)}`
+                : `${Math.abs(surprise.surprisePct).toFixed(1)}%`}
+            </Text>
           </View>
         ) : null}
 
