@@ -41,6 +41,13 @@ export interface DonutProps {
   centerSecondary?: string;
   /** Restarts the spin when the subject changes. */
   animationKey?: string | number;
+  /**
+   * An optional label drawn INSIDE a wedge. Return null to omit it — the sector donut labels only
+   * slices at 6% or more, because a wedge narrower than its own text renders as overlapping noise.
+   */
+  sliceLabel?: (slice: DonutSlice, sharePct: number) => string | null;
+  /** Ring gap colour; the sector donut separates wedges against the page rather than the surface. */
+  gap?: string;
 }
 
 export function Donut({
@@ -52,6 +59,8 @@ export function Donut({
   centerPrimary,
   centerSecondary,
   animationKey = 0,
+  sliceLabel,
+  gap,
 }: DonutProps) {
   const progress = useEntrance(`${animationKey}:${slices.length}`);
 
@@ -88,15 +97,36 @@ export function Donut({
           {wedges.map((w, i) => {
             const selected = w.data.key === selectedKey;
             const dimmed = selectedKey !== null && !selected;
-            const d = shape.outerRadius(selected ? r : r * 0.94)(w);
+            const outer = selected ? r : r * 0.94;
+            const d = shape.outerRadius(outer)(w);
+            const share = (w.data.value / total) * 100;
+            const text = sliceLabel?.(w.data, share) ?? null;
+            const mid = (w.startAngle + w.endAngle) / 2 - Math.PI / 2;
+            const lr = (outer + inner) / 2;
             return (
-              <Path
+              <G
                 key={w.data.key}
-                d={d ?? undefined}
-                fill={w.data.color ?? chartColors.sector[i % chartColors.sector.length]}
-                opacity={dimmed ? 0.35 : 1}
-                onPress={onSelect ? () => onSelect(selected ? null : w.data.key) : undefined}
-              />
+                onPress={onSelect ? () => onSelect(selected ? null : w.data.key) : undefined}>
+                <Path
+                  d={d ?? undefined}
+                  fill={w.data.color ?? chartColors.sector[i % chartColors.sector.length]}
+                  opacity={dimmed ? 0.35 : 1}
+                  stroke={gap}
+                  strokeWidth={gap ? 2.5 : undefined}
+                />
+                {text ? (
+                  <SvgText
+                    x={Math.cos(mid) * lr}
+                    y={Math.sin(mid) * lr + 4}
+                    fontSize={12}
+                    fontWeight="bold"
+                    textAnchor="middle"
+                    fill={palette.white}
+                    opacity={dimmed ? 0.35 : 1}>
+                    {text}
+                  </SvgText>
+                ) : null}
+              </G>
             );
           })}
         </G>

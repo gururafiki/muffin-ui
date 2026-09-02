@@ -219,6 +219,12 @@ export function useSegments(securityId: string | null | undefined) {
     loading: query.isPending && !!securityId,
     // PENDING IS NOT MISSING. 66 securities have business lines against ~12,000 in the universe,
     // so "nothing yet" is by far the common state and must not flash on every stock page.
-    empty: !query.isPending && byKind.size === 0,
+    // A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` for a query that is
+    // switched off, so `!isPending && <empty>` is FALSE while `securityId` is null — and the
+    // section then renders a card with a heading and nothing under it, which is the one thing this
+    // page's convention forbids. Observed in a browser with the instrument unresolved: every
+    // section on the stock page drew an empty card. `loading` already guards on `securityId`;
+    // `empty` must too.
+    empty: !(query.isPending && !!securityId) && byKind.size === 0,
   };
 }

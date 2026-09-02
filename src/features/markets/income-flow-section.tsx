@@ -11,7 +11,7 @@
  * as two different companies.
  */
 import { useState } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
 
@@ -29,7 +29,13 @@ export function IncomeFlowSection({
   streams?: SegmentLine[];
 }) {
   const { nodes, links, currency, periodEnding, loading, empty } = useIncomeFlow(securityId);
-  const [width, setWidth] = useState(0);
+  // MEASURED, BUT NEVER BLOCKING ON THE MEASUREMENT. Gating the chart on `onLayout` alone means a
+  // callback that does not fire leaves a card with a heading and nothing in it, forever — which is
+  // what a browser showed. The window gives a usable width on the first render and `onLayout`
+  // refines it to the card's real one.
+  const { width: windowWidth } = useWindowDimensions();
+  const [measured, setMeasured] = useState(0);
+  const width = measured > 0 ? measured : Math.max(280, Math.min(windowWidth, 900) - 64);
 
   // No statements means no waterfall and therefore no section — the page's convention, since an
   // empty card reads as broken rather than as absent.
@@ -50,7 +56,10 @@ export function IncomeFlowSection({
   const allLinks = [...joined.links, ...links];
   const height = Math.max(260, Math.min(420, allNodes.length * 26));
 
-  const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0 && Math.abs(w - measured) > 1) setMeasured(w);
+  };
 
   return (
     <>
@@ -59,16 +68,14 @@ export function IncomeFlowSection({
         {periodEnding ? <Text variant="muted">FY {periodEnding.slice(0, 4)}</Text> : null}
       </View>
       <Card tone="muted" className="mt-2" onLayout={onLayout}>
-        {width > 0 ? (
-          <IncomeSankey
-            nodes={allNodes}
-            links={allLinks}
-            currency={currency}
-            width={width}
-            height={height}
-            animationKey={`${securityId ?? ''}:${flat.length}`}
-          />
-        ) : null}
+        <IncomeSankey
+          nodes={allNodes}
+          links={allLinks}
+          currency={currency}
+          width={width}
+          height={height}
+          animationKey={`${securityId ?? ''}:${flat.length}`}
+        />
       </Card>
     </>
   );

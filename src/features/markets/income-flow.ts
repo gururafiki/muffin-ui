@@ -119,31 +119,57 @@ export function buildFlow(now: MetricsAt, prior: MetricsAt = new Map()): Flow {
     links.push({ from: 'gross_profit', to: 'operating_costs', value: opCosts as number });
   }
 
-  // Stage 3 — what is left of operating income after tax and everything non-operating.
+  // Stage 3 — operating income becomes PRETAX income, and the difference is a node of its own.
   //
-  // THE INPUT IS `pretax_income` WHERE IT EXISTS, not operating income. They differ by interest and
-  // other non-operating items — for Amazon FY2025 by 17.3bn — and using the wrong one puts that
-  // difference into the residual, which would then read as a suspiciously large "Other" rather
-  // than as the small minority-interest figure it should be.
+  // THIS STAGE EXISTS BECAUSE THE TWO FIGURES DIFFER AND THE GAP HAS TO COME FROM SOMEWHERE. For
+  // Amazon FY2025 operating income is 80.0bn and pretax is 97.3bn — 17.3bn of interest and other
+  // non-operating income. Collapsing the stage and splitting pretax straight out of the
+  // operating-income node makes 17.3bn appear from nowhere, and d3-sankey then quietly relabels
+  // that node with the larger of its two sides: the deployed chart read "Operating income
+  // $97.31B", which is a real number belonging to a different line. A Sankey is a claim that what
+  // flows in equals what flows out, so an unbalanced node is not a cosmetic problem.
   if (!nodes.some((n) => n.key === 'operating_income')) return { nodes, links };
   const net = g('net_income');
   const tax = g('income_tax');
-  const base = g('pretax_income') ?? operating;
+  const pretax = g('pretax_income') ?? operating;
 
-  if (add('net_income', 'Net income', net, 'profit', 4, change(net, p('net_income')))) {
-    links.push({ from: 'operating_income', to: 'net_income', value: net as number });
+  if (!add('pretax_income', 'Pretax income', pretax, 'profit', 4, change(pretax, p('pretax_income') ?? p('operating_income')))) {
+    return { nodes, links };
   }
-  if (add('income_tax', 'Income tax', tax, 'cost', 4, change(tax, p('income_tax')))) {
-    links.push({ from: 'operating_income', to: 'income_tax', value: tax as number });
+  const carried = Math.min(operating as number, pretax as number);
+  links.push({ from: 'operating_income', to: 'pretax_income', value: carried });
+
+  const nonOperating = (pretax as number) - (operating as number);
+  if (nonOperating > 0) {
+    // Income earned outside operations — interest, investments, equity-method results. A SOURCE
+    // node: it enters the statement here rather than flowing from anything to its left.
+    if (add('non_operating', 'Other income', nonOperating, 'profit', 3, null, true)) {
+      links.push({ from: 'non_operating', to: 'pretax_income', value: nonOperating });
+    }
+  } else if (nonOperating < 0) {
+    // Interest and other costs, consumed out of operating income before tax.
+    if (add('non_operating', 'Interest & other', -nonOperating, 'cost', 4, null, true)) {
+      links.push({ from: 'operating_income', to: 'non_operating', value: -nonOperating });
+    }
   }
 
-  // The remainder, so the stage's outputs sum to its input. Signed: a company whose non-operating
-  // income EXCEEDS its costs has a negative residual, which is a gain and coloured as one.
-  const residual = base === null || net === null || tax === null ? null : base - net - tax;
+  // Stage 4 — pretax splits into what is kept, what is taxed, and the remainder.
+  if (add('net_income', 'Net income', net, 'profit', 5, change(net, p('net_income')))) {
+    links.push({ from: 'pretax_income', to: 'net_income', value: net as number });
+  }
+  if (add('income_tax', 'Income tax', tax, 'cost', 5, change(tax, p('income_tax')))) {
+    links.push({ from: 'pretax_income', to: 'income_tax', value: tax as number });
+  }
+
+  // The remainder, so the stage's outputs sum to its input. Signed: a company whose minority
+  // interests are a net GAIN has a negative residual, which is coloured as one. Amazon FY2025 is
+  // 0.55bn of non-controlling interests and equity-method results — small, real, and a diagram
+  // that dropped it would not add up.
+  const residual = net === null || tax === null ? null : (pretax as number) - net - tax;
   if (residual !== null && Math.abs(residual) > 0 &&
-      add('other', residual < 0 ? 'Other income' : 'Other', Math.abs(residual),
-          residual < 0 ? 'profit' : 'cost', 4, null, true)) {
-    links.push({ from: 'operating_income', to: 'other', value: Math.abs(residual) });
+      add('other', residual < 0 ? 'Other income, net' : 'Other', Math.abs(residual),
+          residual < 0 ? 'profit' : 'cost', 5, null, true)) {
+    links.push({ from: 'pretax_income', to: 'other', value: Math.abs(residual) });
   }
 
   return { nodes, links };

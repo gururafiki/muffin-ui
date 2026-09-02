@@ -113,10 +113,16 @@ export function layoutFlow(
 
   const linkPath = sankeyLinkHorizontal();
   const xs = [...new Set((graph.nodes as any[]).map((n) => Math.round(n.x0)))].sort((a, b) => a - b);
+  // d3 OVERWRITES `node.value` with max(inflow, outflow), so a node whose links do not balance is
+  // silently relabelled with the larger side. That put "Operating income $97.31B" on Amazon's
+  // chart — its PRETAX figure — because stage 3 pushed pretax out of an operating-income node.
+  // The graph is balanced now, and the reported value is the filed one either way: a caller must
+  // never learn a number from the layout engine.
+  const filed = new Map(flowNodes.map((n) => [n.key, n.value]));
   return {
     columns: used.length,
     nodes: (graph.nodes as any[]).map((n) => ({
-      key: n.key, label: n.label, value: n.value, tone: n.tone, derived: n.derived,
+      key: n.key, label: n.label, value: filed.get(n.key) ?? n.value, tone: n.tone, derived: n.derived,
       depth: n.depth, yoy: n.yoy, column: xs.indexOf(Math.round(n.x0)),
       x0: n.x0, x1: n.x1, y0: n.y0, y1: n.y1,
     })),

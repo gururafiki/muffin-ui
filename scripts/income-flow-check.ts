@@ -53,10 +53,15 @@ console.log('\nthe waterfall balances at every stage');
   check('gross profit splits with nothing lost', Math.abs(out('gross_profit') - gross) < 1,
     `${(out('gross_profit') / 1e9).toFixed(1)}bn out of ${(gross / 1e9).toFixed(1)}bn`);
 
-  // Stage 3's input is PRETAX, not operating income — they differ by 17.3bn for this filer.
+  // THE TAX SPLIT COMES OUT OF PRETAX, AND PRETAX IS ITS OWN NODE. This assertion used to read
+  // `out('operating_income') === pretax` — the unbalanced graph, written down as a requirement. It
+  // passed while the deployed chart showed Amazon's operating income as $97.31B.
   const pretax = AMZN_2025.get('pretax_income')!;
-  check('the tax stage splits its pretax input', Math.abs(out('operating_income') - pretax) < 1,
-    `${(out('operating_income') / 1e9).toFixed(1)}bn out of ${(pretax / 1e9).toFixed(1)}bn pretax`);
+  check('the tax stage splits its pretax input', Math.abs(out('pretax_income') - pretax) < 1,
+    `${(out('pretax_income') / 1e9).toFixed(1)}bn out of ${(pretax / 1e9).toFixed(1)}bn pretax`);
+  check('...and operating income emits only what it received',
+    Math.abs(out('operating_income') - node('operating_income')!.value) < 1,
+    `${(out('operating_income') / 1e9).toFixed(1)}bn out of 80.0bn`);
 }
 
 console.log('\nthe derived nodes are computed, and marked');
@@ -125,6 +130,51 @@ console.log('\nyear-on-year');
   check('with no prior period, Y/Y is null rather than zero',
     buildFlow(AMZN_2025).nodes.every((n) => n.yoy === null),
     'zero would read as "flat", which is a different claim from "unknown"');
+}
+
+console.log('\nevery node balances — what flows in equals what flows out');
+{
+  // THE ASSERTION THAT WAS MISSING, AND THE BUG IT WOULD HAVE CAUGHT. The tax stage used to be
+  // anchored on pretax income while its links left the OPERATING-INCOME node, so 17.3bn of
+  // Amazon's non-operating income entered the diagram from nowhere. d3-sankey resolves an
+  // unbalanced node by relabelling it with the larger side, and the deployed chart read
+  // "Operating income $97.31B" — Amazon's PRETAX figure, on the operating-income block.
+  //
+  // The old check asserted the stage summed to `pretax`, which is the number the bug used. It
+  // passed. Assert against the NODE instead: for every node with both an inflow and an outflow,
+  // the two sides must agree, and no node may emit more than it received.
+  const inflow = (k: string) => flow.links.filter((l) => l.to === k).reduce((a, l) => a + l.value, 0);
+  const outflow = (k: string) => flow.links.filter((l) => l.from === k).reduce((a, l) => a + l.value, 0);
+  const cent = 1e7; // a hundredth of a billion — filings round, this chart must not drift further
+
+  for (const n of flow.nodes) {
+    const i = inflow(n.key), o = outflow(n.key);
+    if (i > 0 && o > 0) {
+      check(`${n.label} passes through what it receives`, Math.abs(i - o) < cent,
+        `in ${(i / 1e9).toFixed(2)}bn, out ${(o / 1e9).toFixed(2)}bn`);
+    }
+    if (i > 0) {
+      check(`${n.label} is the figure the filing reports`, Math.abs(i - n.value) < cent,
+        `node ${(n.value / 1e9).toFixed(2)}bn vs ${(i / 1e9).toFixed(2)}bn flowing in`);
+    }
+  }
+
+  // The specific regression, named so it is recognisable.
+  const op = node('operating_income');
+  check('operating income is operating income, not pretax',
+    op !== undefined && Math.abs(op.value - 80_000_000_000) < cent,
+    `${((op?.value ?? 0) / 1e9).toFixed(2)}bn (97.31bn was the bug)`);
+  check('the gap to pretax is a node of its own, not a ribbon from nowhere',
+    Math.abs((node('non_operating')?.value ?? 0) - 17_300_000_000) < cent,
+    `${((node('non_operating')?.value ?? 0) / 1e9).toFixed(2)}bn of non-operating income`);
+  check('an interest COST flows out of operating income instead',
+    (() => {
+      const f = buildFlow(new Map([...AMZN_2025, ['pretax_income', 70_000_000_000],
+        ['net_income', 55_000_000_000], ['income_tax', 15_000_000_000]]));
+      const n = f.nodes.find((x) => x.key === 'non_operating');
+      return n?.tone === 'cost' && Math.abs(n.value - 10_000_000_000) < cent &&
+        f.links.some((l) => l.from === 'operating_income' && l.to === 'non_operating');
+    })());
 }
 
 console.log('\nthe revenue streams join the trunk');
@@ -209,6 +259,13 @@ console.log('\nthe geometry is drawable');
   check('a dead-end cost sits with its siblings, not pushed to the last column',
     col.get('cost_of_sales') === col.get('gross_profit'),
     `cost_of_sales col ${col.get('cost_of_sales')}, gross_profit col ${col.get('gross_profit')}`);
+  // d3 OVERWRITES `node.value` with max(inflow, outflow). The graph balances, so the two agree
+  // today — this asserts the layout reports the FILED figure rather than whatever the engine
+  // computed, because that substitution is invisible until a stage stops balancing.
+  const flowValue = new Map(waterfallOnly.nodes.map((n) => [n.key, n.value]));
+  check('the layout reports the filed figure, never the engine\'s',
+    laid.nodes.every((n) => Math.abs(n.value - (flowValue.get(n.key) ?? -1)) < 1),
+    laid.nodes.map((n) => `${n.key}=${(n.value / 1e9).toFixed(1)}`).slice(0, 3).join(' '));
   check('every ribbon has a path and a positive width',
     laid.links.length > 0 && laid.links.every((l) => l.path.startsWith('M') && l.width > 0));
 
