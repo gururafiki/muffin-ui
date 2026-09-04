@@ -27,6 +27,7 @@ import { MarketStats } from '@/features/markets/market-stats';
 import { MetricHistory } from '@/features/markets/metric-history';
 import { BusinessLines } from '@/features/markets/business-lines';
 import { SecurityIndustries } from '@/features/markets/security-industries';
+import { SecurityCompleteness } from '@/features/markets/security-completeness';
 import { StatementTables } from '@/features/markets/statement-tables';
 import { ValuationHistory } from '@/features/markets/valuation-history';
 import { CorporateActions } from '@/features/markets/corporate-actions';
@@ -207,6 +208,7 @@ export default function StockScreen() {
       <StatementTables symbol={symbol} />
       <BusinessLines securityId={inst?.securityId} />
       <SecurityIndustries securityId={inst?.securityId} />
+      <SecurityCompleteness securityId={inst?.securityId} />
       <MetricHistory symbol={symbol} />
       <MarketStats securityId={inst?.securityId} />
       <CorporateActions securityId={inst?.securityId} currency={inst?.currency} />
