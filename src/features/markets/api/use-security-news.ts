@@ -65,6 +65,11 @@ export function useSecurityNews(symbol: string | undefined, limit = 12) {
   return {
     articles,
     loading: query.isPending && !!symbol,
-    empty: !query.isPending && rows.length === 0,
+    // A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` for a query that is
+    // switched off, so `!isPending && <empty>` is FALSE while the id is null — and the section then
+    // renders a card with a heading and nothing under it, which is the one thing this page's
+    // convention forbids. Seen in a browser with the instrument unresolved: every section on the
+    // stock page drew an empty card at once. `loading` already guards on the id; `empty` must too.
+    empty: !(query.isPending && !!symbol) && rows.length === 0,
   };
 }
