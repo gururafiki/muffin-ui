@@ -21,7 +21,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Card, Collapsible, Segmented, Text } from '@/components/ui';
-import { chartColors } from '@/theme/colors';
+import { chartColors, palette } from '@/theme/colors';
 
 import { Donut } from './charts/donut';
 import { formatMoney } from './money';
@@ -42,6 +42,7 @@ export function SegmentBreakdown({
   lines,
   currency,
   periodEnding,
+  revenue,
 }: {
   kinds: SegmentKind[];
   kind: SegmentKind;
@@ -49,6 +50,8 @@ export function SegmentBreakdown({
   lines: SegmentLine[];
   currency: string | null;
   periodEnding: string | null;
+  /** The company's own revenue, to check the split against. Null where it is not held. */
+  revenue: number | null;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -61,8 +64,22 @@ export function SegmentBreakdown({
   const withProfit = lines.filter((l) => l.operatingIncome !== null && l.operatingIncome > 0);
   const lossMaking = lines.filter((l) => l.operatingIncome !== null && l.operatingIncome < 0);
 
-  const revTotal = withRevenue.reduce((a, l) => a + (l.revenue as number), 0);
+  const disclosed = withRevenue.reduce((a, l) => a + (l.revenue as number), 0);
   const profitTotal = withProfit.reduce((a, l) => a + (l.operatingIncome as number), 0);
+
+  // THE SAME RULE THE SANKEY USES, BECAUSE THE TWO DESCRIBE THE SAME SPLIT. Measured live on the
+  // deployed data: Alphabet's four segments sum to 512.62bn against a revenue of 402.84bn, so the
+  // chart correctly drew no streams — while this list happily reported "66.9%" of a total the
+  // company never earned. A share is only a share OF something, and when the parts exceed the
+  // whole the denominator is fiction.
+  //
+  // Over the revenue: show the figures, withhold every percentage, say why. Under it: the filer
+  // disclosed only part of itself (Novo Nordisk covers 37% by geography), which is legitimate, so
+  // shares are taken against REVENUE and the gap is named.
+  const overCovered = revenue !== null && revenue > 0 && disclosed > revenue * 1.01;
+  const revTotal = revenue !== null && revenue > 0 && !overCovered ? revenue : disclosed;
+  const undisclosed = revTotal - disclosed;
+  const showUndisclosed = !overCovered && undisclosed > revTotal * 0.01;
 
   const colorOf = (key: string) => {
     const i = withRevenue.findIndex((l) => l.memberCode === key);
@@ -90,15 +107,22 @@ export function SegmentBreakdown({
           />
         ) : null}
 
+        {overCovered ? null : (
         <View className="flex-row flex-wrap items-center justify-center gap-4">
           <View className="items-center gap-1">
             <Donut
-              slices={withRevenue.map((l) => ({
-                key: l.memberCode,
-                label: l.label,
-                value: l.revenue as number,
-                color: colorOf(l.memberCode),
-              }))}
+              slices={[
+                ...withRevenue.map((l) => ({
+                  key: l.memberCode,
+                  label: l.label,
+                  value: l.revenue as number,
+                  color: colorOf(l.memberCode),
+                })),
+                ...(showUndisclosed
+                  ? [{ key: '__undisclosed', label: 'Not disclosed', value: undisclosed,
+                       color: palette.frosting[200] }]
+                  : []),
+              ]}
               size={168}
               selectedKey={selected}
               onSelect={setSelected}
@@ -133,6 +157,15 @@ export function SegmentBreakdown({
             </View>
           ) : null}
         </View>
+        )}
+
+        {overCovered ? (
+          <Text variant="muted" className="text-[11px]">
+            These lines add up to more than the company&rsquo;s reported revenue, so they are shown
+            as filed figures without a share of the total. Usually the filer disclosed the same
+            business more than one way.
+          </Text>
+        ) : null}
 
         {lossMaking.length > 0 ? (
           <Text variant="muted" className="text-[11px]">
@@ -158,7 +191,9 @@ export function SegmentBreakdown({
                 </View>
                 <Text variant="muted" className="shrink-0">
                   {l.revenue !== null ? formatMoney(l.revenue, l.currency ?? currency) : '—'}
-                  {l.revenue !== null && revTotal > 0 ? ` · ${pct(l.revenue, revTotal)}` : ''}
+                  {l.revenue !== null && revTotal > 0 && !overCovered
+                    ? ` · ${pct(l.revenue, revTotal)}`
+                    : ''}
                   {l.marginPct !== null ? ` · ${l.marginPct.toFixed(1)}% margin` : ''}
                 </Text>
               </View>
@@ -176,7 +211,21 @@ export function SegmentBreakdown({
             }
 
             return (
-              <Collapsible key={l.memberCode} title={l.label} headerRight={row} depth={0}>
+              // `Collapsible` renders `title` itself, so `headerRight` carries ONLY the figures —
+              // passing the row here too printed every nested line's name twice.
+              <Collapsible
+                key={l.memberCode}
+                title={l.label}
+                headerRight={
+                  <Text variant="muted" className="shrink-0">
+                    {l.revenue !== null ? formatMoney(l.revenue, l.currency ?? currency) : '—'}
+                    {l.revenue !== null && revTotal > 0 && !overCovered
+                      ? ` · ${pct(l.revenue, revTotal)}`
+                      : ''}
+                    {l.marginPct !== null ? ` · ${l.marginPct.toFixed(1)}% margin` : ''}
+                  </Text>
+                }
+                depth={0}>
                 <View className="gap-1 pl-4">
                   {l.children.map((c) => (
                     <View key={c.memberCode} className="flex-row items-center justify-between gap-2">
@@ -196,6 +245,13 @@ export function SegmentBreakdown({
             );
           })}
         </View>
+
+        {showUndisclosed ? (
+          <Text variant="muted" className="text-[11px]">
+            {formatMoney(undisclosed, currency)} of revenue is not broken out —
+            filers disclose only the lines they consider material.
+          </Text>
+        ) : null}
 
         {kind === 'geography' ? (
           <Text variant="muted" className="text-[11px]">

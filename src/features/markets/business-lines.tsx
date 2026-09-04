@@ -12,12 +12,18 @@
  */
 import { useState } from 'react';
 
+import { useIncomeFlow } from './api/use-income-flow';
 import { useSegments, type SegmentKind } from './api/use-segments';
 import { IncomeFlowSection } from './income-flow-section';
 import { SegmentBreakdown } from './segment-breakdown';
 
 export function BusinessLines({ securityId }: { securityId: string | null | undefined }) {
   const { kinds, byKind, currency, periodEnding, loading, empty } = useSegments(securityId);
+  // THE COMPANY'S OWN REVENUE, so the breakdown can check the split the way the chart does. This is
+  // the SAME query `IncomeFlowSection` runs — identical queryKey, so React Query serves it from
+  // cache and no second request is made.
+  const { nodes } = useIncomeFlow(securityId);
+  const revenue = nodes.find((n) => n.key === 'revenue')?.value ?? null;
   const [chosen, setChosen] = useState<SegmentKind | null>(null);
 
   // Falls back to the first disclosed dimension rather than storing it, so a security whose
@@ -36,6 +42,7 @@ export function BusinessLines({ securityId }: { securityId: string | null | unde
           lines={lines}
           currency={currency}
           periodEnding={periodEnding}
+          revenue={revenue}
         />
       ) : null}
     </>

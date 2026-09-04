@@ -104,8 +104,15 @@ export function IncomeSankey({
     const x = first ? n.x0 - LABEL_GAP : last ? n.x1 + LABEL_GAP : n.x1 + LABEL_GAP;
     const anchor: 'end' | 'start' = first ? 'end' : 'start';
     const y = (n.y0 + n.y1) / 2;
-    const tall = n.y1 - n.y0 >= 22;
-    return { x, y, anchor, tall };
+    // TWO LABEL TIERS, BECAUSE A SANKEY'S HEIGHTS ARE PROPORTIONAL TO REVENUE AND MOST P&L LINES
+    // ARE NOT. Income tax is ~5% of revenue, so its block is ~12px on a 260px chart — under a
+    // single 22px gate it drew a labelled diagram with the tax block silently blank, which is a
+    // major line the reader is looking for. Verified live: unlabelled for both Apple and Amazon.
+    // Stacked name + value where there is room, one compact line where there is not, nothing at all
+    // below ~9px where any text would collide with its neighbour.
+    const h = n.y1 - n.y0;
+    const tier: 'stacked' | 'inline' | 'none' = h >= 22 ? 'stacked' : h >= 9 ? 'inline' : 'none';
+    return { x, y, anchor, tier };
   };
 
   return (
@@ -140,11 +147,11 @@ export function IncomeSankey({
                     fill={TONE[n.tone]}
                     opacity={on ? 1 : 0.28}
                   />
-                  {pos.tall ? (
+                  {pos.tier === 'stacked' ? (
                     <>
                       <SvgText
                         x={pos.x}
-                        y={pos.y - (pos.tall ? 1 : 0)}
+                        y={pos.y - 1}
                         fontSize={10.5}
                         fontWeight={n.key === 'revenue' ? 'bold' : 'normal'}
                         textAnchor={pos.anchor}
@@ -163,6 +170,17 @@ export function IncomeSankey({
                         {shortMoney(n.value, currency)}
                       </SvgText>
                     </>
+                  ) : pos.tier === 'inline' ? (
+                    <SvgText
+                      x={pos.x}
+                      y={pos.y + 3.5}
+                      fontSize={9.5}
+                      textAnchor={pos.anchor}
+                      fill={on ? textFill : mutedFill}
+                      opacity={on ? 1 : 0.5}>
+                      {n.label}
+                      {n.derived ? ' ·' : ''} {shortMoney(n.value, currency)}
+                    </SvgText>
                   ) : null}
                 </G>
               );
