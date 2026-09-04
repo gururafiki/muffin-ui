@@ -25,6 +25,8 @@ import { useStatements } from '@/features/markets/api/use-statements';
 import { SecurityRefreshButton } from '@/features/markets/security-refresh-button';
 import { MarketStats } from '@/features/markets/market-stats';
 import { MetricHistory } from '@/features/markets/metric-history';
+import { BusinessLines } from '@/features/markets/business-lines';
+import { SecurityIndustries } from '@/features/markets/security-industries';
 import { StatementTables } from '@/features/markets/statement-tables';
 import { ValuationHistory } from '@/features/markets/valuation-history';
 import { CorporateActions } from '@/features/markets/corporate-actions';
@@ -203,6 +205,8 @@ export default function StockScreen() {
       <PeerList securityId={inst?.securityId} />
       <ValuationHistory symbol={symbol} />
       <StatementTables symbol={symbol} />
+      <BusinessLines securityId={inst?.securityId} />
+      <SecurityIndustries securityId={inst?.securityId} />
       <MetricHistory symbol={symbol} />
       <MarketStats securityId={inst?.securityId} />
       <CorporateActions securityId={inst?.securityId} currency={inst?.currency} />
