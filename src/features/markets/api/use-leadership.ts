@@ -89,6 +89,11 @@ export function useLeadership(securityId: string | null | undefined) {
     // PENDING IS NOT MISSING. 94 securities have officers against ~12,000 in the universe, so
     // "nothing yet" is the common state and must not flash on every stock page before the query
     // resolves.
-    empty: !query.isPending && officers.length === 0,
+    // A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` for a query that is
+    // switched off, so `!isPending && <empty>` is FALSE while the id is null — and the section then
+    // renders a card with a heading and nothing under it, which is the one thing this page's
+    // convention forbids. Seen in a browser with the instrument unresolved: every section on the
+    // stock page drew an empty card at once. `loading` already guards on the id; `empty` must too.
+    empty: !(query.isPending && !!securityId) && officers.length === 0,
   };
 }

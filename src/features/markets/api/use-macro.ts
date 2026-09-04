@@ -101,6 +101,11 @@ export function useCountryMacro(iso2: string | undefined): CountryMacro {
     loading: query.isPending && !!iso2,
     // PENDING IS NOT MISSING. Reporting `empty` while the query is still in flight would flash
     // "no macro data" on every country page before the first paint.
-    empty: !query.isPending && items.length === 0,
+    // A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` for a query that is
+    // switched off, so `!isPending && <empty>` is FALSE while the id is null — and the section then
+    // renders a card with a heading and nothing under it, which is the one thing this page's
+    // convention forbids. Seen in a browser with the instrument unresolved: every section on the
+    // stock page drew an empty card at once. `loading` already guards on the id; `empty` must too.
+    empty: !(query.isPending && !!iso2) && items.length === 0,
   };
 }

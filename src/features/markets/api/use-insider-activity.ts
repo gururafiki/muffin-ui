@@ -74,6 +74,11 @@ export function useInsiderActivity(securityId: string | null | undefined) {
     loading: query.isPending && !!securityId,
     // Form 4 is SEC-only, and plenty of filers go a quarter without an insider transaction. No row
     // is the ordinary case, not a fault.
-    empty: !query.isPending && !row,
+    // A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` for a query that is
+    // switched off, so `!isPending && <empty>` is FALSE while the id is null — and the section then
+    // renders a card with a heading and nothing under it, which is the one thing this page's
+    // convention forbids. Seen in a browser with the instrument unresolved: every section on the
+    // stock page drew an empty card at once. `loading` already guards on the id; `empty` must too.
+    empty: !(query.isPending && !!securityId) && !row,
   };
 }

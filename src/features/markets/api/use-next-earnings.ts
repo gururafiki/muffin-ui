@@ -131,6 +131,11 @@ export function useNextEarnings(securityId: string | null | undefined) {
     loading: query.isPending && !!securityId,
     // PENDING IS NOT MISSING. The calendar is US-listed, so most securities genuinely have no row
     // and "no earnings date" must not flash on every page before the query resolves.
-    empty: !query.isPending && !row,
+    // A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` for a query that is
+    // switched off, so `!isPending && <empty>` is FALSE while the id is null — and the section then
+    // renders a card with a heading and nothing under it, which is the one thing this page's
+    // convention forbids. Seen in a browser with the instrument unresolved: every section on the
+    // stock page drew an empty card at once. `loading` already guards on the id; `empty` must too.
+    empty: !(query.isPending && !!securityId) && !row,
   };
 }

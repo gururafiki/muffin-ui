@@ -76,6 +76,11 @@ export function useSecurityFilings(securityId: string | null | undefined, limit 
     events: filings.filter((f) => f.kind === 'event'),
     loading: query.isPending && !!securityId,
     // SEC-only: most of the universe has no CIK and therefore no filings. Ordinary, not a fault.
-    empty: !query.isPending && filings.length === 0,
+    // A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` for a query that is
+    // switched off, so `!isPending && <empty>` is FALSE while the id is null — and the section then
+    // renders a card with a heading and nothing under it, which is the one thing this page's
+    // convention forbids. Seen in a browser with the instrument unresolved: every section on the
+    // stock page drew an empty card at once. `loading` already guards on the id; `empty` must too.
+    empty: !(query.isPending && !!securityId) && filings.length === 0,
   };
 }

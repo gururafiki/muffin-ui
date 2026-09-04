@@ -102,7 +102,12 @@ export function useCountrySectorPerformance(
     asOf: latestAsOf(rows.map((r) => ({ as_of: r.as_of ?? null })) as never),
     // Distinguishes "nothing for this country" from "still loading": a country with no sector
     // coverage must render no panel rather than an empty one.
-    empty: !query.isPending && items.length === 0,
+    //
+    // AND A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` while a query is
+    // switched off, so without the `!!iso2` this is FALSE before a country resolves and the panel
+    // renders a heading with nothing under it — the exact state it says it prevents. This hook has
+    // no `loading` to mirror, so the guard is spelled out.
+    empty: !(query.isPending && !!iso2) && items.length === 0,
     fundSymbol: rows.find((r) => r.fund_symbol)?.fund_symbol ?? null,
   };
 }
