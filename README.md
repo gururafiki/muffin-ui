@@ -431,6 +431,28 @@ which nginx's `try_files $uri $uri.html /index.html` can never select for a requ
 wrong markup. Measured identical in light and dark, so it is **not** colour-scheme related.
 Harmless but noisy; tracked in ROADMAP.
 
+## Dependency advisories
+
+`package.json` carries an `overrides` block, and it is not cosmetic — **`npm audit fix` fixes
+nothing here and `--force` is destructive.** Measured 2026-09-05: the plain form changed 173
+packages and left all 21 advisories standing, and the forced form "resolves" them by proposing
+`expo@46` — a downgrade of ten SDK majors. Every vulnerable package is transitive, so the only safe
+lever is a pinned override of the specific package.
+
+The overrides take `browserslist`, `@xmldom/xmldom` (two lines, one per consumer), `uuid` and
+`decode-uri-component` to their patched versions: **21 advisories → 5**. Each was checked against
+its consumer rather than bumped hopefully — `xcode` calls `uuid.v4()` with no arguments, which is
+why forcing v11 on a package that asks for `^7` is safe, and it was verified by running that exact
+call. Typecheck, lint, the offline verifiers and a real `expo export -p web` all pass.
+
+**The remaining 5 are `image-size` and the three `metro` packages that carry it, and they cannot be
+fixed today.** The advisory covers `<= 2.0.2` and 2.0.2 is the newest published version, so there is
+no patched release to move to — npm reports `fixAvailable: true` because it can bump 1.2.1 → 2.0.2,
+which is still vulnerable. Dependabot's "no fix available" is the accurate one. The vulnerability is
+a denial of service in the ICNS/JXL/HEIF parsers *inside the bundler*, reachable only by building
+this repo against a malicious image asset, so it is a build-time exposure and not a deployed one.
+Re-check when `image-size` publishes a fix, or when the SDK 57 upgrade moves Metro.
+
 ## Architecture
 - **`src/app/`** — file-based routes. `(tabs)/` = Globe/Markets/Portfolio/Agents/Calls/
   Settings; detail routes `agents/[assistantId]`, `stock/[ticker]`, `sector/[…]`,
