@@ -376,6 +376,29 @@ console.log('\nthe geometry is drawable');
   const withStreams = layoutFlow(
     [...streams.nodes, ...waterfallOnly.nodes], [...streams.links, ...waterfallOnly.links],
     { width: 600, height: 320 });
+  // A GROSS-BASIS SPLIT MUST STILL LAY OUT — the balance fix nearly cost the whole chart.
+  // `sankey-layout` pins a node's column from `depth`, so two nodes joined by a link must differ.
+  // The first version left the gross total and the eliminations at depth 0 beside the segments
+  // feeding them; d3 threw, the catch returned an empty layout, and Samsung's diagram vanished
+  // while the caption beside it still rendered. Checking `streamsInto` alone could never see that
+  // — the node set was correct, and only the LAYOUT rejected it.
+  {
+    const rev = flow.nodes.find((n) => n.key === 'revenue')?.value ?? 0;
+    const segs = [{ label: 'A', revenue: rev * 0.6 }, { label: 'B', revenue: rev * 0.49 }];
+    const sum = segs.reduce((a, l) => a + l.revenue, 0);
+    const g = streamsInto(segs, rev, sum);
+    const laid = layoutFlow([...g.nodes, ...flow.nodes], [...g.links, ...flow.links], 800, 300);
+    check('a gross-basis split lays out rather than vanishing',
+      g.basis === 'disclosed' && laid.nodes.length > flow.nodes.length,
+      `${laid.nodes.length} nodes, ${laid.columns} columns`);
+    check('...and every node it adds sits in its own column, never beside what feeds it',
+      g.links.every((l) => {
+        const from = g.nodes.find((n) => n.key === l.from);
+        const to = [...g.nodes, ...flow.nodes].find((n) => n.key === l.to);
+        return !from || !to || from.depth !== to.depth;
+      }));
+  }
+
   check('adding segments adds exactly one column',
     withStreams.columns === laid.columns + 1, `${withStreams.columns} vs ${laid.columns}`);
   check('and the streams sit in it, left of revenue',

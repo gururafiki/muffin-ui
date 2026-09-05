@@ -265,15 +265,27 @@ export function streamsInto(
   // total, and that splits into reported revenue and the eliminations. Every node balances, and
   // the diagram explains the discrepancy by itself rather than relying on the caption.
   const GROSS = 'stream:gross';
-  const sink = basis === 'disclosed' ? GROSS : 'revenue';
+  const gross = basis === 'disclosed';
+
+  // DEPTH IS THE COLUMN, AND A LINK MAY NEVER SIT INSIDE ONE.
+  // `sankey-layout` pins each node's column from `depth` via `nodeAlign`, so two nodes joined by a
+  // link must have different depths — d3 throws otherwise, the catch returns an empty layout, and
+  // the chart silently disappears. That is exactly what the first version of this did: every new
+  // node was left at depth 0 alongside the segments feeding it, and Samsung's whole diagram
+  // vanished while the caption beside it still rendered.
+  // `buildFlow` puts revenue at 1, so the gross total takes 0 and the segments move left to -1.
+  const segDepth = gross ? -1 : 0;
 
   for (const [i, l] of usable.entries()) {
     const key = `stream:${i}`;
-    nodes.push({ key, label: l.label, value: l.revenue, tone: 'revenue', derived: false, depth: 0, yoy: null });
-    links.push({ from: key, to: sink, value: l.revenue });
+    nodes.push({
+      key, label: l.label, value: l.revenue, tone: 'revenue', derived: false,
+      depth: segDepth, yoy: null,
+    });
+    links.push({ from: key, to: gross ? GROSS : 'revenue', value: l.revenue });
   }
 
-  if (basis === 'disclosed') {
+  if (gross) {
     nodes.push({
       key: GROSS, label: 'Disclosed segments', value: disclosed,
       tone: 'revenue', derived: false, depth: 0, yoy: null,
@@ -285,7 +297,8 @@ export function streamsInto(
         key: 'stream:eliminated', label: 'Intersegment eliminations', value: eliminated,
         // DERIVED: no filer reports this as a line here — it is the difference the reconciliation
         // implies, and the chart says so rather than presenting it as a disclosed figure.
-        tone: 'cost', derived: true, depth: 0, yoy: null,
+        // Depth 1 puts it beside revenue: both are outcomes of the gross total.
+        tone: 'cost', derived: true, depth: 1, yoy: null,
       });
       links.push({ from: GROSS, to: 'stream:eliminated', value: eliminated });
     }
