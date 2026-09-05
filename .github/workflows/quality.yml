@@ -44,3 +44,20 @@ jobs:
       # that from a post-merge surprise into a failed check.
       - name: Build the web bundle
         run: npm run build:web
+      # BUILDING IS NOT RENDERING. `build:web` proves the bundle compiles; it cannot
+      # see a component that mounts and draws nothing, and this repo's two worst UI
+      # defects were exactly that. Every skeleton in the app was an invisible
+      # zero-height box for WEEKS (the className landed on a Reanimated view, which
+      # NativeWind does not style), and the segment Sankey shipped as a 34px-tall
+      # empty card. Both compiled perfectly.
+      #
+      # These two drive real Chrome over the `dist/` just built, serving it locally
+      # and MOCKING Supabase — so they need no credentials and no deployment, which
+      # is what makes them gate material rather than a live probe. `verify:universe`
+      # deliberately stays out: it asserts properties of the DEPLOYED server as anon
+      # (server-side filtering, the true total, the 3s statement timeout) and cannot
+      # be answered without one. ~15s each.
+      - name: Verify the rendered app
+        run: |
+          npm run verify:skeletons
+          npm run verify:market
