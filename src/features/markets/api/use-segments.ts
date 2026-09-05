@@ -27,6 +27,7 @@ import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import { parseArray } from '@/lib/agent/schemas';
+import { memberLabel } from '@/features/markets/segment-label';
 import { getSupabase } from '@/lib/auth/client';
 
 import { MarketUnavailableError } from './market-client';
@@ -94,30 +95,6 @@ export interface NestedLine {
   currency: string | null;
 }
 
-/**
- * `amzn:AmazonWebServicesSegmentMember` -> `Amazon Web Services`.
- *
- * A LAST RESORT, and it is why `concept_name` and `member_label` are preferred above it. Measured
- * across the universe, 320 of 380 member codes are the filer's own extension in its own namespace,
- * so most lines land here — but a code is not a name and this only makes one legible.
- */
-function prettify(code: string): string {
-  const bare = code.includes(':') ? code.slice(code.indexOf(':') + 1) : code;
-  // DART NAMES A MEMBER BY ITS WHOLE PATH, AND ONLY THE HEAD IS THE NAME.
-  // Korean filers use `<Name>MemberOf<Parent>MemberOf<Table>TableOfMember`, so stripping one
-  // trailing `Member` leaves the scaffolding behind: Samsung's DX division rendered on the
-  // deployed page as "Dx Division Member Of Reportable Segments Member Of Disclosure Of Operating
-  // Segments Table Of". Everything from the first `MemberOf` onwards is the path, not the name.
-  // SEC codes (`amzn:AmazonWebServicesSegmentMember`) contain no `MemberOf` and are untouched.
-  const head = bare.includes('MemberOf') ? bare.slice(0, bare.indexOf('MemberOf')) : bare;
-  return head
-    .replace(/Member$/, '')
-    .replace(/Segment$/, '')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/\s+/g, ' ')
-    .trim() || code;
-}
-
 const KINDS: SegmentKind[] = ['product', 'business', 'geography'];
 const isKind = (k: string): k is SegmentKind => (KINDS as string[]).includes(k);
 
@@ -174,7 +151,7 @@ export function useSegments(securityId: string | null | undefined) {
   for (const n of query.data?.nested ?? []) {
     const child: NestedLine = {
       memberCode: n.member_code,
-      label: n.concept_name ?? prettify(n.member_code),
+      label: n.concept_name ?? memberLabel(n.member_code),
       revenue: n.revenue ?? null,
       operatingIncome: n.operating_income ?? null,
       shareOfParentPct: n.share_of_parent_pct ?? null,
@@ -190,7 +167,7 @@ export function useSegments(securityId: string | null | undefined) {
       axis: r.axis,
       kind: r.kind as SegmentKind,
       memberCode: r.member_code,
-      label: r.concept_name ?? r.member_label ?? prettify(r.member_code),
+      label: r.concept_name ?? r.member_label ?? memberLabel(r.member_code),
       revenue: r.revenue ?? null,
       operatingIncome: r.operating_income ?? null,
       capex: r.capital_expenditure ?? null,
