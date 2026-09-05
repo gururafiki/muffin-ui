@@ -18,6 +18,7 @@
  * every row, because a percentage with an unstated denominator is just a wrong number.
  */
 import { useState } from 'react';
+import { shareBasis } from './share-basis';
 import { Pressable, View } from 'react-native';
 
 import { Card, Collapsible, Segmented, Text } from '@/components/ui';
@@ -82,12 +83,16 @@ export function SegmentBreakdown({
   // Samsung's segments sum to KRW 363.72T against a reported 333.61T because the filer discloses
   // them before intersegment eliminations. Same test and same basis as the Sankey above: the two
   // describe one split and must never disagree about whether it can be shown as shares.
+  // THE RULE LIVES IN `share-basis.ts`, because it is pure and this module cannot be driven
+  // offline. It used to be inline here and the code did not match its own comment: taking REVENUE
+  // whenever the split reconciled — which reconciling is exactly what makes `overCovered` false —
+  // so Chevron rendered 77.2% + 47.9% + 0.3% = 125.4% under a caption correctly saying the shares
+  // were of the $231.37B the filing totals those lines to.
   const filedTotal = withRevenue.find((l) => l.filedTotal !== null)?.filedTotal ?? null;
-  const reconciles =
-    filedTotal !== null && filedTotal > 0 && Math.abs(disclosed - filedTotal) <= filedTotal * 0.01;
-  const overCovered =
-    revenue !== null && revenue > 0 && disclosed > revenue * 1.01 && !reconciles;
-  const revTotal = revenue !== null && revenue > 0 && !overCovered ? revenue : disclosed;
+  const { total: basisTotal, basis } = shareBasis({ revenue, disclosed, filedTotal });
+  const reconciles = basis === 'filed' && filedTotal !== null;
+  const overCovered = basis === 'none';
+  const revTotal = basisTotal ?? disclosed;
   const undisclosed = revTotal - disclosed;
   const showUndisclosed = !overCovered && undisclosed > revTotal * 0.01;
 
