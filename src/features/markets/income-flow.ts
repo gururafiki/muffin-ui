@@ -251,10 +251,44 @@ export function streamsInto(
 
   const nodes: FlowNode[] = [];
   const links: FlowLink[] = [];
+
+  // A GROSS SPLIT DOES NOT FLOW STRAIGHT INTO REVENUE — THE DIFFERENCE IS A REAL LINE.
+  //
+  // When the split is drawn on its own total, its members sum to MORE than the revenue node the
+  // P&L waterfall reports. Linking them straight to it leaves that node receiving 363.72T while
+  // labelled 333.61T — Samsung, measured — and d3-sankey does not object: it relabels an
+  // unbalanced node to max(inflow, outflow), so the geometry and the caption then disagree. This
+  // chart has already shipped that once, captioning pretax income as "Operating income $97.31B".
+  //
+  // The gap is not arbitrary. 363.72 - 333.61 = 30.11 is the intersegment elimination the filer
+  // removed, so it gets a node and the arithmetic closes: the members flow into their own gross
+  // total, and that splits into reported revenue and the eliminations. Every node balances, and
+  // the diagram explains the discrepancy by itself rather than relying on the caption.
+  const GROSS = 'stream:gross';
+  const sink = basis === 'disclosed' ? GROSS : 'revenue';
+
   for (const [i, l] of usable.entries()) {
     const key = `stream:${i}`;
     nodes.push({ key, label: l.label, value: l.revenue, tone: 'revenue', derived: false, depth: 0, yoy: null });
-    links.push({ from: key, to: 'revenue', value: l.revenue });
+    links.push({ from: key, to: sink, value: l.revenue });
+  }
+
+  if (basis === 'disclosed') {
+    nodes.push({
+      key: GROSS, label: 'Disclosed segments', value: disclosed,
+      tone: 'revenue', derived: false, depth: 0, yoy: null,
+    });
+    links.push({ from: GROSS, to: 'revenue', value: trunk });
+    const eliminated = disclosed - trunk;
+    if (eliminated > 0) {
+      nodes.push({
+        key: 'stream:eliminated', label: 'Intersegment eliminations', value: eliminated,
+        // DERIVED: no filer reports this as a line here — it is the difference the reconciliation
+        // implies, and the chart says so rather than presenting it as a disclosed figure.
+        tone: 'cost', derived: true, depth: 0, yoy: null,
+      });
+      links.push({ from: GROSS, to: 'stream:eliminated', value: eliminated });
+    }
   }
 
   // Under the trunk: name the gap rather than letting the ribbons quietly fall short of it.
