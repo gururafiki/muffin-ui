@@ -18,7 +18,7 @@ import { IncomeFlowSection } from './income-flow-section';
 import { SegmentBreakdown } from './segment-breakdown';
 
 export function BusinessLines({ securityId }: { securityId: string | null | undefined }) {
-  const { kinds, byKind, currency, periodEnding, loading, empty } = useSegments(securityId);
+  const { kinds, byKind, currency, periodByKind, loading, empty } = useSegments(securityId);
   // THE COMPANY'S OWN REVENUE, so the breakdown can check the split the way the chart does. This is
   // the SAME query `IncomeFlowSection` runs — identical queryKey, so React Query serves it from
   // cache and no second request is made.
@@ -41,7 +41,7 @@ export function BusinessLines({ securityId }: { securityId: string | null | unde
           onKindChange={setChosen}
           lines={lines}
           currency={currency}
-          periodEnding={periodEnding}
+          periodEnding={kind ? (periodByKind.get(kind) ?? null) : null}
           revenue={revenue}
         />
       ) : null}
