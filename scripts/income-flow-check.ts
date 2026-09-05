@@ -235,12 +235,13 @@ console.log('\nthe revenue streams join the trunk');
   const grossSum = gross.reduce((a, l) => a + l.revenue, 0);
   const drawn = streamsInto(gross, bn(333.61), grossSum);
   check('a split that adds up to its own filed total is drawn against THAT total',
-    drawn.basis === 'disclosed' && drawn.nodes.length === 4,
-    `${drawn.basis}, ${drawn.nodes.length} streams`);
+    drawn.basis === 'disclosed' && drawn.nodes.filter((n) => /^stream:\d+$/.test(n.key)).length === 4,
+    `${drawn.basis}, ${drawn.nodes.length} nodes`);
   check('...with no invented remainder, because it fills its own trunk exactly',
     drawn.nodes.every((n) => n.key !== 'stream:undisclosed'));
-  check('...and the ribbons sum to the disclosed total, not to reported revenue',
-    Math.abs(drawn.links.reduce((a, l) => a + l.value, 0) - grossSum) < 1
+  check('...and the members flow into their own gross total, not into reported revenue',
+    Math.abs(drawn.links.filter((l) => l.to === 'stream:gross')
+      .reduce((a, l) => a + l.value, 0) - grossSum) < 1
     && Math.abs(drawn.disclosed - grossSum) < 1);
   // The SAME numbers with a filed total that does not match: an artifact, and it must not be drawn.
   check('an equally over-revenue split that reconciles to NOTHING is still refused',
@@ -251,6 +252,64 @@ console.log('\nthe revenue streams join the trunk');
     streamsInto(gross, bn(333.61), null).nodes.length === 0);
   check('a split UNDER revenue is unaffected by the filed total',
     streamsInto([{ label: 'Europe', revenue: bn(37) }], bn(100), bn(37)).basis === 'revenue');
+
+  // ── EVERY NODE BALANCES, WHICH IS THE GENERAL FORM OF THE LESSON ────────────────────────────
+  //
+  // The assertions above check `streamsInto` in isolation, and that is exactly how the first
+  // version of this feature shipped broken: the streams were correct, and they were linked
+  // straight into the `revenue` node, which the P&L waterfall values at the REPORTED figure. Four
+  // ribbons totalling 363.72T entered a block labelled 333.61T — a 30.11T imbalance — and it was
+  // found by LOOKING at the rendered page, not here.
+  //
+  // d3-sankey does not object to that: it relabels an unbalanced node to max(inflow, outflow), so
+  // the geometry silently disagrees with the caption. This chart has shipped that failure once
+  // before, captioning pretax income as "Operating income $97.31B".
+  //
+  // So the check is no longer about streams: for EVERY node that both receives and emits, inflow
+  // must equal outflow. That is the property, it holds for the whole diagram, and it does not need
+  // to know which feature introduced the node.
+  {
+    const flow = buildFlow(AMZN_2025, AMZN_2024);
+    // THE TRUNK MUST BE THE FLOW'S OWN REVENUE, not another company's. The first version of this
+    // fed Samsung's trillions into Amazon's waterfall and the check fired on the mismatch — which
+    // is the check working, and a reminder that a balance assertion is only meaningful when both
+    // halves describe one company.
+    const rev = flow.nodes.find((n) => n.key === 'revenue')?.value ?? 0;
+    const segs = [
+      { label: 'A', revenue: rev * 0.60 }, { label: 'B', revenue: rev * 0.30 },
+      { label: 'C', revenue: rev * 0.19 },
+    ];
+    const segSum = segs.reduce((a, l) => a + l.revenue, 0);   // 109% of revenue
+    const joined = streamsInto(segs, rev, segSum);
+    const nodes = [...joined.nodes, ...flow.nodes];
+    const links = [...joined.links, ...flow.links];
+    const inflow = new Map<string, number>();
+    const outflow = new Map<string, number>();
+    for (const l of links) {
+      inflow.set(l.to, (inflow.get(l.to) ?? 0) + l.value);
+      outflow.set(l.from, (outflow.get(l.from) ?? 0) + l.value);
+    }
+    const unbalanced: string[] = [];
+    for (const n of nodes) {
+      const i = inflow.get(n.key);
+      const o = outflow.get(n.key);
+      if (i === undefined || o === undefined) continue;   // a source or a leaf balances trivially
+      if (Math.abs(i - o) > Math.max(1, i * 0.001)) {
+        unbalanced.push(`${n.key} in=${(i / 1e12).toFixed(2)}T out=${(o / 1e12).toFixed(2)}T`);
+      }
+    }
+    check('every node that receives AND emits is balanced, segments included',
+      unbalanced.length === 0, unbalanced.join('; ') || `${nodes.length} nodes checked`);
+
+    // And the gap is named rather than absorbed: the difference between the gross split and
+    // reported revenue is the elimination, and it exists as its own node.
+    const elim = joined.nodes.find((n) => n.key === 'stream:eliminated');
+    check('the gross-to-reported gap is an explicit node, not a silent relabel',
+      elim !== undefined && Math.abs(elim.value - (segSum - rev)) < 1,
+      elim ? `${(elim.value / 1e9).toFixed(1)}bn` : 'absent');
+    check('...and it is marked derived, because no filer reported it as a line here',
+      elim?.derived === true);
+  }
   check('...and 1% of rounding is tolerated, not rejected',
     streamsInto([{ label: 'A', revenue: bn(703) }], bn(700)).nodes.length === 1);
 
@@ -317,6 +376,29 @@ console.log('\nthe geometry is drawable');
   const withStreams = layoutFlow(
     [...streams.nodes, ...waterfallOnly.nodes], [...streams.links, ...waterfallOnly.links],
     { width: 600, height: 320 });
+  // A GROSS-BASIS SPLIT MUST STILL LAY OUT — the balance fix nearly cost the whole chart.
+  // `sankey-layout` pins a node's column from `depth`, so two nodes joined by a link must differ.
+  // The first version left the gross total and the eliminations at depth 0 beside the segments
+  // feeding them; d3 threw, the catch returned an empty layout, and Samsung's diagram vanished
+  // while the caption beside it still rendered. Checking `streamsInto` alone could never see that
+  // — the node set was correct, and only the LAYOUT rejected it.
+  {
+    const rev = flow.nodes.find((n) => n.key === 'revenue')?.value ?? 0;
+    const segs = [{ label: 'A', revenue: rev * 0.6 }, { label: 'B', revenue: rev * 0.49 }];
+    const sum = segs.reduce((a, l) => a + l.revenue, 0);
+    const g = streamsInto(segs, rev, sum);
+    const laid = layoutFlow([...g.nodes, ...flow.nodes], [...g.links, ...flow.links], 800, 300);
+    check('a gross-basis split lays out rather than vanishing',
+      g.basis === 'disclosed' && laid.nodes.length > flow.nodes.length,
+      `${laid.nodes.length} nodes, ${laid.columns} columns`);
+    check('...and every node it adds sits in its own column, never beside what feeds it',
+      g.links.every((l) => {
+        const from = g.nodes.find((n) => n.key === l.from);
+        const to = [...g.nodes, ...flow.nodes].find((n) => n.key === l.to);
+        return !from || !to || from.depth !== to.depth;
+      }));
+  }
+
   check('adding segments adds exactly one column',
     withStreams.columns === laid.columns + 1, `${withStreams.columns} vs ${laid.columns}`);
   check('and the streams sit in it, left of revenue',
