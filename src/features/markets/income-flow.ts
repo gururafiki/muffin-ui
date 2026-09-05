@@ -204,18 +204,50 @@ export function buildFlow(now: MetricsAt, prior: MetricsAt = new Map()): Flow {
 export function streamsInto(
   lines: { label: string; revenue: number | null }[],
   trunk: number | null,
-): { nodes: FlowNode[]; links: FlowLink[] } {
-  if (trunk === null || !Number.isFinite(trunk) || trunk <= 0) return { nodes: [], links: [] };
+  /**
+   * The figure the filing itself accepted this split against, from
+   * `security_segment_current.reconciled_to`. Optional: without it the old rule applies.
+   */
+  filedTotal?: number | null,
+): { nodes: FlowNode[]; links: FlowLink[]; basis: 'revenue' | 'disclosed'; disclosed: number } {
+  const none = { nodes: [], links: [], basis: 'revenue' as const, disclosed: 0 };
+  if (trunk === null || !Number.isFinite(trunk) || trunk <= 0) return none;
 
   const usable = lines.filter(
     (l): l is { label: string; revenue: number } =>
       l.revenue !== null && Number.isFinite(l.revenue) && l.revenue > 0,
   );
-  if (usable.length === 0) return { nodes: [], links: [] };
+  if (usable.length === 0) return none;
 
   const disclosed = usable.reduce((a, l) => a + l.revenue, 0);
-  // Over the trunk: the split contradicts the company's own revenue. Draw none of it.
-  if (disclosed > trunk * 1.01) return { nodes: [], links: [] };
+
+  // OVER THE TRUNK: DRAW IT AGAINST ITS OWN TOTAL, BUT ONLY IF THAT TOTAL IS A FILED FIGURE.
+  //
+  // A split exceeding consolidated revenue is usually not a defect. Samsung's business segments
+  // sum to KRW 363.72T against a reported 333.61T because the filer discloses segments BEFORE
+  // intersegment eliminations — both numbers are real and they are measuring different things.
+  // Drawing nothing there loses a correct disclosure; drawing it against consolidated revenue is
+  // arithmetically impossible, and d3-sankey does not fail on an unbalanced node — it silently
+  // relabels it to max(inflow, outflow), which is how this chart once captioned pretax income as
+  // "Operating income $97.31B".
+  //
+  // So the trunk becomes the split's OWN total, which is self-consistent by construction, and the
+  // caller marks the gap. The gate is that the sum must match what the FILING accepted it against:
+  // that is what distinguishes a real gross-basis disclosure from a double count, where the sum is
+  // an artifact and drawing it proportionally would present fiction. Measured 2026-09-05: of 18
+  // served splits disagreeing with their target, 9 carry a target belonging to a different metric
+  // entirely — so `reconciled_to` is trusted only when the members actually add up to it.
+  let basis: 'revenue' | 'disclosed' = 'revenue';
+  let effective = trunk;
+  if (disclosed > trunk * 1.01) {
+    const reconciles =
+      filedTotal !== null && filedTotal !== undefined && Number.isFinite(filedTotal) &&
+      filedTotal > 0 && Math.abs(disclosed - filedTotal) <= filedTotal * 0.01;
+    if (!reconciles) return { ...none, disclosed };
+    basis = 'disclosed';
+    effective = disclosed;
+  }
+  const trunkValue = effective;
 
   const nodes: FlowNode[] = [];
   const links: FlowLink[] = [];
@@ -226,8 +258,10 @@ export function streamsInto(
   }
 
   // Under the trunk: name the gap rather than letting the ribbons quietly fall short of it.
-  const undisclosed = trunk - disclosed;
-  if (undisclosed > trunk * 0.01) {
+  // Against the EFFECTIVE trunk, so a split drawn on its own total never invents a remainder —
+  // by construction it fills that trunk exactly.
+  const undisclosed = trunkValue - disclosed;
+  if (undisclosed > trunkValue * 0.01) {
     nodes.push({
       key: 'stream:undisclosed', label: 'Not disclosed', value: undisclosed,
       tone: 'revenue', derived: true, depth: 0, yoy: null,
@@ -235,5 +269,5 @@ export function streamsInto(
     links.push({ from: 'stream:undisclosed', to: 'revenue', value: undisclosed });
   }
 
-  return { nodes, links };
+  return { nodes, links, basis, disclosed };
 }

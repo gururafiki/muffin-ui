@@ -18,6 +18,7 @@ import { Card, Text } from '@/components/ui';
 import { useIncomeFlow } from './api/use-income-flow';
 import { IncomeSankey } from './charts/sankey';
 import { streamsInto } from './income-flow';
+import { formatMoney } from './money';
 import type { SegmentLine } from './api/use-segments';
 
 export function IncomeFlowSection({
@@ -44,13 +45,22 @@ export function IncomeFlowSection({
   // THE STREAMS MUST BE THE FLAT SPLIT ONLY. A nested member reconciles to its PARENT, so mixing
   // the two would feed the trunk a number larger than the company's own revenue.
   //
-  // AND THEY ARE CHECKED AGAINST THE TRUNK, not taken on trust — `streamsInto` draws nothing when a
-  // split exceeds the company's own revenue, and names the remainder when it falls short. The
-  // pipeline has been wrong in both directions: a serving view that unioned periods put Apple at
-  // 143% of its revenue, and 32 splits still carry a wrong reconciliation target from the parser.
+  // AND THEY ARE CHECKED AGAINST THE TRUNK, not taken on trust. A split that exceeds the company's
+  // own revenue is drawn against ITS OWN filed total instead — Samsung's segments sum to KRW
+  // 363.72T against a reported 333.61T because the filer discloses them before intersegment
+  // eliminations, and refusing to draw that loses a correct disclosure. `streamsInto` only does so
+  // when the members actually add up to what the filing accepted them against; otherwise the sum
+  // is an artifact and it still draws nothing. The pipeline has been wrong in both directions: a
+  // serving view that unioned periods put Apple at 143% of its revenue, and 9 of 18 served splits
+  // carry a reconciliation target belonging to a different metric entirely.
   const trunk = nodes.find((n) => n.key === 'revenue')?.value ?? null;
   const flat = (streams ?? []).filter((l) => l.revenue !== null && l.revenue > 0);
-  const joined = streamsInto(flat.map((l) => ({ label: l.label, revenue: l.revenue })), trunk);
+  // The filed total is a property of the SPLIT, not of a member — every member of one carries the
+  // same value, so the first is the split's.
+  const filedTotal = flat.find((l) => l.filedTotal !== null)?.filedTotal ?? null;
+  const joined = streamsInto(
+    flat.map((l) => ({ label: l.label, revenue: l.revenue })), trunk, filedTotal,
+  );
 
   const allNodes = [...joined.nodes, ...nodes];
   const allLinks = [...joined.links, ...links];
@@ -76,6 +86,21 @@ export function IncomeFlowSection({
           height={height}
           animationKey={`${securityId ?? ''}:${flat.length}`}
         />
+        {/*
+          THE TRUNK IS NOT ALWAYS REPORTED REVENUE, AND THE CHART MUST SAY SO.
+          When a split is drawn against its own filed total, every ribbon is still exactly
+          proportional — but to a DIFFERENT figure from the one the statement above reports, and a
+          reader comparing the two would otherwise see an unexplained gap. Naming the basis and the
+          size of the gap is what makes the diagram honest rather than merely drawable.
+        */}
+        {joined.basis === 'disclosed' && trunk ? (
+          <Text variant="muted" className="mt-2">
+            Segments are drawn against the {formatMoney(joined.disclosed, currency)} the filing
+            totals them to — {Math.round(((joined.disclosed - trunk) / trunk) * 100)}% above
+            reported revenue of {formatMoney(trunk, currency)}, which usually means the filer
+            discloses segments before intersegment eliminations.
+          </Text>
+        ) : null}
       </Card>
     </>
   );

@@ -43,6 +43,7 @@ const zLine = z.looseObject({
   member_code: z.string(),
   member_label: z.string().nullish(),
   concept_name: z.string().nullish(),
+  reconciled_to: z.coerce.number().nullish(),
   revenue: z.coerce.number().nullish(),
   operating_income: z.coerce.number().nullish(),
   capital_expenditure: z.coerce.number().nullish(),
@@ -72,6 +73,13 @@ export interface SegmentLine {
   memberCode: string;
   /** What to call it: the shared concept, else the published label, else the code tidied up. */
   label: string;
+  /**
+   * The consolidated figure the FILING accepted this split against. Same for every member of a
+   * split. A consumer uses it to tell a split that adds up to a real filed total from one whose
+   * sum is an artifact — the difference between a gross-basis disclosure worth drawing and a
+   * double count that must not be.
+   */
+  filedTotal: number | null;
   revenue: number | null;
   operatingIncome: number | null;
   capex: number | null;
@@ -111,7 +119,7 @@ export function useSegments(securityId: string | null | undefined) {
         .schema('market')
         .from('security_segment_current')
         .select(
-          'axis,kind,member_code,member_label,concept_name,revenue,operating_income,' +
+          'axis,kind,member_code,member_label,concept_name,revenue,operating_income,reconciled_to,' +
             'capital_expenditure,depreciation,total_assets,operating_margin_pct,' +
             'revenue_share_pct,currency_code,period_ending',
         )
@@ -167,6 +175,7 @@ export function useSegments(securityId: string | null | undefined) {
       axis: r.axis,
       kind: r.kind as SegmentKind,
       memberCode: r.member_code,
+      filedTotal: r.reconciled_to ?? null,
       label: r.concept_name ?? r.member_label ?? memberLabel(r.member_code),
       revenue: r.revenue ?? null,
       operatingIncome: r.operating_income ?? null,

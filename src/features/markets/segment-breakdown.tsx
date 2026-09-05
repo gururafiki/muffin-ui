@@ -76,7 +76,17 @@ export function SegmentBreakdown({
   // Over the revenue: show the figures, withhold every percentage, say why. Under it: the filer
   // disclosed only part of itself (Novo Nordisk covers 37% by geography), which is legitimate, so
   // shares are taken against REVENUE and the gap is named.
-  const overCovered = revenue !== null && revenue > 0 && disclosed > revenue * 1.01;
+  //
+  // UNLESS THE SPLIT ADDS UP TO A FILED TOTAL, in which case the denominator is not fiction — it
+  // is a figure the company published, and shares against it are exactly what a reader wants.
+  // Samsung's segments sum to KRW 363.72T against a reported 333.61T because the filer discloses
+  // them before intersegment eliminations. Same test and same basis as the Sankey above: the two
+  // describe one split and must never disagree about whether it can be shown as shares.
+  const filedTotal = withRevenue.find((l) => l.filedTotal !== null)?.filedTotal ?? null;
+  const reconciles =
+    filedTotal !== null && filedTotal > 0 && Math.abs(disclosed - filedTotal) <= filedTotal * 0.01;
+  const overCovered =
+    revenue !== null && revenue > 0 && disclosed > revenue * 1.01 && !reconciles;
   const revTotal = revenue !== null && revenue > 0 && !overCovered ? revenue : disclosed;
   const undisclosed = revTotal - disclosed;
   const showUndisclosed = !overCovered && undisclosed > revTotal * 0.01;
@@ -164,6 +174,17 @@ export function SegmentBreakdown({
             These lines add up to more than the company&rsquo;s reported revenue, so they are shown
             as filed figures without a share of the total. Usually the filer disclosed the same
             business more than one way.
+          </Text>
+        ) : null}
+
+        {/* Drawn against a filed total that is not reported revenue — say which, and by how much. */}
+        {!overCovered && reconciles && revenue !== null && revenue > 0
+          && disclosed > revenue * 1.01 ? (
+          <Text variant="muted" className="text-[11px]">
+            Shares are of the {formatMoney(disclosed, currency)} the filing totals these lines to,
+            {' '}{Math.round(((disclosed - revenue) / revenue) * 100)}% above reported revenue of
+            {' '}{formatMoney(revenue, currency)} — usually segments disclosed before intersegment
+            eliminations.
           </Text>
         ) : null}
 
