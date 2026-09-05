@@ -37,7 +37,15 @@ export function useIncomeFlow(securityId: string | null | undefined) {
       if (!supabase) throw new MarketUnavailableError();
       const { data, error } = await supabase
         .schema('market')
-        .from('security_metric')
+        // THE SERVING VIEW, NOT THE RAW TABLE, BECAUSE THE CURRENCY LIVES THERE.
+        // `security_metric.currency_code` comes straight from the statement, and the yfinance
+        // income/balance/cash endpoints carry no currency field — so it is NULL for 990,847 rows
+        // (Korea 116 of 116, Germany 151, Japan 55). `money.ts` correctly refuses to guess, so the
+        // Sankey drew bare numbers on every non-US page beside a segment breakdown that said KRW.
+        // `security_metric_series` exposes the EFFECTIVE currency, coalescing the company's
+        // reporting currency — the same expression `security_ratio_series` already uses, which is
+        // why P/E worked while the metric behind it had no currency.
+        .from('security_metric_series')
         .select('metric_code,value,as_of,currency_code')
         .eq('security_id', securityId as string)
         .eq('period_type', 'annual')
@@ -46,8 +54,8 @@ export function useIncomeFlow(securityId: string | null | undefined) {
         // open-ended: a filer with twenty years of history would otherwise send every one of them.
         .order('as_of', { ascending: false })
         .limit(FLOW_METRICS.length * 3);
-      if (error) throw new Error(`market.security_metric read failed: ${error.message}`);
-      return parseArray(zMetric, data ?? [], 'security_metric');
+      if (error) throw new Error(`market.security_metric_series read failed: ${error.message}`);
+      return parseArray(zMetric, data ?? [], 'security_metric_series');
     },
     enabled: !!securityId,
     // Annual statements change once a year; the resource re-reads on its own cursor.
