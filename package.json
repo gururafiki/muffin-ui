@@ -74,13 +74,14 @@
     "verify:money": "tsx scripts/money-check.ts",
     "verify:skeletons": "node scripts/skeleton-check.mjs",
     "verify:market": "node scripts/smoke-market.mjs",
-    "check": "npm run typecheck && npm run lint:all && npm run verify:offline && npm run verify:money && npm run verify:filter && npm run verify:macro && npm run verify:income-flow && npm run verify:segment-label && npm run verify:auth",
+    "check": "npm run typecheck && npm run lint:all && npm run verify:offline && npm run verify:money && npm run verify:filter && npm run verify:macro && npm run verify:income-flow && npm run verify:segment-label && npm run verify:segment-dimensions && npm run verify:auth",
     "verify:auth": "tsx scripts/auth-check.ts",
     "verify:filter": "tsx scripts/filter-check.ts",
     "verify:universe": "tsx scripts/universe-check.ts",
     "verify:macro": "tsx scripts/macro-panel-check.ts",
     "verify:income-flow": "tsx scripts/income-flow-check.ts",
-    "verify:segment-label": "tsx scripts/segment-label-check.ts"
+    "verify:segment-label": "tsx scripts/segment-label-check.ts",
+    "verify:segment-dimensions": "tsx scripts/segment-dimensions-check.ts"
   },
   "private": true,
   "overrides": {

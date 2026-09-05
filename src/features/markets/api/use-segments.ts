@@ -24,6 +24,7 @@
  * symbol is a different question from the fetch key.
  */
 import { useQuery } from '@tanstack/react-query';
+import { groupByDimension } from '../segment-dimensions';
 import { z } from 'zod';
 
 import { parseArray } from '@/lib/agent/schemas';
@@ -192,23 +193,23 @@ export function useSegments(securityId: string | null | undefined) {
   // ONE AXIS PER KIND. A filer can disclose two axes of the same kind — `srt:ProductOrServiceAxis`
   // and a coarse Product/Service split are both `product` — and they are ALTERNATIVE descriptions
   // of the same company, not additive. The richest one is the useful one.
-  const byKind = new Map<SegmentKind, SegmentLine[]>();
-  for (const kind of KINDS) {
-    const ofKind = lines.filter((l) => l.kind === kind);
-    if (ofKind.length === 0) continue;
-    const axes = [...new Set(ofKind.map((l) => l.axis))];
-    const richest = axes
-      .map((axis) => ofKind.filter((l) => l.axis === axis))
-      .sort((a, b) => b.length - a.length)[0];
-    byKind.set(kind, richest);
-  }
+  // A PERIOD BELONGS TO A DIMENSION, NOT TO A COMPANY — see `segment-dimensions.ts`. Extracted
+  // there because it is pure and this module cannot be driven offline.
+  const grouped = groupByDimension(lines, KINDS);
+  const byKind = grouped.byKind as Map<SegmentKind, SegmentLine[]>;
+  const periodByKind = grouped.periodByKind as Map<SegmentKind, string | null>;
 
   return {
     /** Dimensions this filer actually discloses, in the order the tabs should offer them. */
     kinds: KINDS.filter((k) => byKind.has(k)),
     byKind,
     currency: lines.find((l) => l.currency)?.currency ?? null,
-    periodEnding: lines.find((l) => l.periodEnding)?.periodEnding ?? null,
+    /**
+     * PER DIMENSION, deliberately. A single `periodEnding` was wrong for 66 of the 210 securities
+     * that disclose more than one — the panel showed one year above whichever tab was selected, so
+     * switching the dimension changed the numbers and not the caption.
+     */
+    periodByKind,
     loading: query.isPending && !!securityId,
     // PENDING IS NOT MISSING. 66 securities have business lines against ~12,000 in the universe,
     // so "nothing yet" is by far the common state and must not flash on every stock page.
