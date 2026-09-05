@@ -103,7 +103,14 @@ export interface NestedLine {
  */
 function prettify(code: string): string {
   const bare = code.includes(':') ? code.slice(code.indexOf(':') + 1) : code;
-  return bare
+  // DART NAMES A MEMBER BY ITS WHOLE PATH, AND ONLY THE HEAD IS THE NAME.
+  // Korean filers use `<Name>MemberOf<Parent>MemberOf<Table>TableOfMember`, so stripping one
+  // trailing `Member` leaves the scaffolding behind: Samsung's DX division rendered on the
+  // deployed page as "Dx Division Member Of Reportable Segments Member Of Disclosure Of Operating
+  // Segments Table Of". Everything from the first `MemberOf` onwards is the path, not the name.
+  // SEC codes (`amzn:AmazonWebServicesSegmentMember`) contain no `MemberOf` and are untouched.
+  const head = bare.includes('MemberOf') ? bare.slice(0, bare.indexOf('MemberOf')) : bare;
+  return head
     .replace(/Member$/, '')
     .replace(/Segment$/, '')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
