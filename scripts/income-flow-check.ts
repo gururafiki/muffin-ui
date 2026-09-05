@@ -212,6 +212,45 @@ console.log('\nthe revenue streams join the trunk');
   check('a split exceeding the company\'s own revenue is not drawn at all',
     streamsInto(twice, bn(700)).nodes.length === 0,
     `${(twice.reduce((a, l) => a + (l.revenue ?? 0), 0) / 1e9).toFixed(0)}bn against a 700bn trunk`);
+  check('...not even when a filed total is supplied that it does NOT add up to',
+    streamsInto(twice, bn(700), bn(700)).nodes.length === 0,
+    'the sum is 1,400bn — a target it misses is not a licence to draw it');
+
+  // ── A SPLIT MAY EXCEED REVENUE AND STILL BE REAL ────────────────────────────────────────────
+  //
+  // Samsung's business segments sum to KRW 363.72T against a reported 333.61T, because the filer
+  // discloses them BEFORE intersegment eliminations. Both numbers are the company's own. Refusing
+  // to draw that loses a correct disclosure; drawing it against reported revenue is arithmetically
+  // impossible, and d3-sankey silently relabels an unbalanced node rather than failing — which is
+  // how this chart once captioned pretax income as "Operating income $97.31B".
+  //
+  // THE FIXTURE MAKES THE TWO CANDIDATE RULES DISAGREE. Both splits below exceed the trunk by the
+  // same 9%; only one adds up to what the filing accepted it against. A rule that keyed on "does
+  // it exceed revenue" alone would treat them identically, and a rule that trusted `reconciled_to`
+  // without checking the arithmetic would draw both — including the double count, proportionally.
+  const gross = [
+    { label: 'DX', revenue: bn(187.97) }, { label: 'DS', revenue: bn(130.13) },
+    { label: 'SDC', revenue: bn(29.84) }, { label: 'Harman', revenue: bn(15.78) },
+  ];
+  const grossSum = gross.reduce((a, l) => a + l.revenue, 0);
+  const drawn = streamsInto(gross, bn(333.61), grossSum);
+  check('a split that adds up to its own filed total is drawn against THAT total',
+    drawn.basis === 'disclosed' && drawn.nodes.length === 4,
+    `${drawn.basis}, ${drawn.nodes.length} streams`);
+  check('...with no invented remainder, because it fills its own trunk exactly',
+    drawn.nodes.every((n) => n.key !== 'stream:undisclosed'));
+  check('...and the ribbons sum to the disclosed total, not to reported revenue',
+    Math.abs(drawn.links.reduce((a, l) => a + l.value, 0) - grossSum) < 1
+    && Math.abs(drawn.disclosed - grossSum) < 1);
+  // The SAME numbers with a filed total that does not match: an artifact, and it must not be drawn.
+  check('an equally over-revenue split that reconciles to NOTHING is still refused',
+    streamsInto(gross, bn(333.61), bn(500)).nodes.length === 0,
+    'same members, same 9% excess — only the arithmetic differs');
+  check('a missing filed total is refusal, not a free pass',
+    streamsInto(gross, bn(333.61)).nodes.length === 0 &&
+    streamsInto(gross, bn(333.61), null).nodes.length === 0);
+  check('a split UNDER revenue is unaffected by the filed total',
+    streamsInto([{ label: 'Europe', revenue: bn(37) }], bn(100), bn(37)).basis === 'revenue');
   check('...and 1% of rounding is tolerated, not rejected',
     streamsInto([{ label: 'A', revenue: bn(703) }], bn(700)).nodes.length === 1);
 
