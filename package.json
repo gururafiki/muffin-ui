@@ -82,5 +82,14 @@
     "verify:income-flow": "tsx scripts/income-flow-check.ts",
     "verify:segment-label": "tsx scripts/segment-label-check.ts"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "browserslist": "^4.28.7",
+    "@xmldom/xmldom": "^0.8.15",
+    "plist": {
+      "@xmldom/xmldom": "^0.9.12"
+    },
+    "decode-uri-component": "^0.5.0",
+    "uuid": "^11.1.1"
+  }
 }
