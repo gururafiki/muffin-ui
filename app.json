@@ -7,6 +7,9 @@
     "icon": "./assets/images/icon.png",
     "scheme": "muffinui",
     "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.gururafiki.muffinui"
+    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#5A3C77",
