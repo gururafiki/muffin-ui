@@ -61,3 +61,57 @@ jobs:
         run: |
           npm run verify:skeletons
           npm run verify:market
+
+      # NOTHING HERE HAS EVER EXERCISED A NATIVE PATH ON A PULL REQUEST.
+      # `build:web` and the render checks above are Metro's WEB target; the only
+      # native build in the repo lives in build.yml, which runs on push-to-main
+      # and whose android job "never gates the deploy" by design. So a change
+      # could break iOS and Android completely and every PR check would still be
+      # green — the same hole the web build was added to close, one platform over.
+      #
+      # Both steps run on Linux: prebuild only writes files, and `expo export`
+      # runs Metro. Neither needs Xcode, a Mac, a device or a secret, which is
+      # what makes this gate material rather than a nightly.
+      #
+      # WHAT IT ACTUALLY CATCHES. `package.json` pins five npm overrides to clear
+      # transitive advisories, and three of them are reached ONLY through native
+      # tooling: `uuid` (via xcode, which writes project.pbxproj), and
+      # `@xmldom/xmldom` twice (via plist, which writes Info.plist). A bad bump
+      # there is invisible to the web build. `decode-uri-component` is pinned to
+      # 0.5.0 because that is the ONLY version without the DoS advisory, and it
+      # is ESM-only while its consumer `query-string` uses require() — which
+      # means a bare `node -e "require('query-string')"` throws ERR_REQUIRE_ESM
+      # today. Metro transpiles it and every path this app uses is fine (verified
+      # 2026-09-06: web static render of 27 pages, web bundle, iOS bundle), but
+      # that is a property of the bundler, not a given. Exporting for iOS is what
+      # keeps it a checked fact.
+      - name: Prebuild the native projects
+        run: |
+          npx expo prebuild -p ios --no-install
+          npx expo prebuild -p android --no-install
+      # A prebuild that writes GARBAGE still exits 0, so assert the two files the
+      # overridden libraries actually produce: the plist must parse and carry the
+      # bundle identifier app.json pins, and the manifest must parse.
+      - name: The generated native config must be well-formed
+        run: |
+          python3 - <<'PY'
+          import plistlib, sys, xml.etree.ElementTree as ET
+          with open('ios/muffinui/Info.plist', 'rb') as f:
+              info = plistlib.load(f)
+          # Prebuild writes the identifier as a build-setting reference, so the
+          # literal lives in project.pbxproj — assert on that, not on the plist.
+          pbx = open('ios/muffinui.xcodeproj/project.pbxproj').read()
+          if 'com.gururafiki.muffinui' not in pbx:
+              sys.exit('project.pbxproj carries no PRODUCT_BUNDLE_IDENTIFIER for this app — '
+                       'an iOS bundle identifier is the app identity, and prebuild INVENTS one '
+                       'from the account when app.json does not pin it')
+          if not info.get('CFBundleDisplayName'):
+              sys.exit('Info.plist has no CFBundleDisplayName — plist/@xmldom/xmldom wrote a '
+                       'file that parses and says nothing')
+          ET.parse('android/app/src/main/AndroidManifest.xml')
+          print('ok  Info.plist, project.pbxproj and AndroidManifest.xml are all well-formed')
+          PY
+      # The bundle itself. Metro's native resolver is not its web resolver: a
+      # module that resolves for web can fail here, which is the whole point.
+      - name: Build the native bundle
+        run: npx expo export --platform ios --output-dir /tmp/native-bundle
