@@ -18,6 +18,7 @@
  * every row, because a percentage with an unstated denominator is just a wrong number.
  */
 import { useState } from 'react';
+import { holdingParts } from './segment-holdings';
 import { shareBasis } from './share-basis';
 import { Pressable, View } from 'react-native';
 
@@ -173,6 +174,31 @@ export function SegmentBreakdown({
           ) : null}
         </View>
         )}
+
+        {/*
+          WHAT THE SELECTED LINE OWNS — on selection, not always.
+          THE DONUTS ARE FLOWS AND THESE ARE STOCKS, so they cannot share a ring: a donut of assets
+          beside a donut of revenue invites reading one as a share of the other. They are also the
+          answer to a question a reader only asks about ONE line ("what does AWS actually own?"),
+          which is why they appear on selection rather than crowding every row — the per-line row
+          already carries revenue, share and margin.
+
+          EACH FIELD IS RENDERED ONLY IF THE FILING CARRIES IT. A filer discloses segment assets, or
+          long-lived assets by geography, or goodwill, or none of them, and showing a dash for the
+          rest implies the split is incomplete rather than that the disclosure is.
+        */}
+        {sel && holdingParts(sel).length > 0 ? (
+          <View className="gap-0.5">
+            <Text variant="muted" className="text-[11px]">
+              {sel.label} — as filed at {sel.periodEnding ?? 'the period end'}
+            </Text>
+            <Text variant="body" className="text-[13px]">
+              {holdingParts(sel)
+                .map((h) => `${h.label} ${formatMoney(h.value, sel.currency ?? currency)}`)
+                .join('  ·  ')}
+            </Text>
+          </View>
+        ) : null}
 
         {overCovered ? (
           <Text variant="muted" className="text-[11px]">

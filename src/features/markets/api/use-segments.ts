@@ -50,6 +50,8 @@ const zLine = z.looseObject({
   capital_expenditure: z.coerce.number().nullish(),
   depreciation: z.coerce.number().nullish(),
   total_assets: z.coerce.number().nullish(),
+  long_lived_assets: z.coerce.number().nullish(),
+  goodwill: z.coerce.number().nullish(),
   operating_margin_pct: z.coerce.number().nullish(),
   revenue_share_pct: z.coerce.number().nullish(),
   currency_code: z.string().nullish(),
@@ -86,6 +88,16 @@ export interface SegmentLine {
   capex: number | null;
   depreciation: number | null;
   assets: number | null;
+  /**
+   * WHAT THE LINE OWNS, and all three are INSTANTS rather than flows.
+   *
+   * `longLivedAssets` is the geographic figure ASC 280 requires beside geographic revenue —
+   * Amazon reports US $180bn and non-US $61.3bn — and `goodwill` is per segment because that is
+   * where impairment is tested. They arrive from the same filing as the revenue beside them, taken
+   * at the most recent instant AT OR BEFORE the line's own period.
+   */
+  longLivedAssets: number | null;
+  goodwill: number | null;
   marginPct: number | null;
   sharePct: number | null;
   currency: string | null;
@@ -121,7 +133,7 @@ export function useSegments(securityId: string | null | undefined) {
         .from('security_segment_current')
         .select(
           'axis,kind,member_code,member_label,concept_name,revenue,operating_income,reconciled_to,' +
-            'capital_expenditure,depreciation,total_assets,operating_margin_pct,' +
+            'capital_expenditure,depreciation,total_assets,long_lived_assets,goodwill,operating_margin_pct,' +
             'revenue_share_pct,currency_code,period_ending',
         )
         .eq('security_id', securityId as string)
@@ -183,6 +195,8 @@ export function useSegments(securityId: string | null | undefined) {
       capex: r.capital_expenditure ?? null,
       depreciation: r.depreciation ?? null,
       assets: r.total_assets ?? null,
+      longLivedAssets: r.long_lived_assets ?? null,
+      goodwill: r.goodwill ?? null,
       marginPct: r.operating_margin_pct ?? null,
       sharePct: r.revenue_share_pct ?? null,
       currency: r.currency_code ?? null,
