@@ -35,6 +35,7 @@ import { NewsPanel } from '@/features/markets/news-panel';
 import { CompanyProfile } from '@/features/markets/company-profile';
 import { Leadership } from '@/features/markets/leadership';
 import { NextEarnings } from '@/features/markets/next-earnings';
+import { AnalystActions } from '@/features/markets/analyst-actions';
 import { InsiderActivity } from '@/features/markets/insider-activity';
 import { SecurityFilings } from '@/features/markets/security-filings';
 import { PeerList } from '@/features/markets/peer-list';
@@ -202,6 +203,7 @@ export default function StockScreen() {
       <CompanyProfile securityId={inst?.securityId} />
       <Leadership securityId={inst?.securityId} />
       <InsiderActivity securityId={inst?.securityId} />
+      <AnalystActions securityId={inst?.securityId} />
       <SecurityFilings securityId={inst?.securityId} />
       <PeerList securityId={inst?.securityId} />
       <ValuationHistory symbol={symbol} />
