@@ -7,15 +7,16 @@
  * `promoted: true`, and `security-refresh` then gives it a market cap, seven return periods,
  * fundamentals and twelve statement rows). Nothing called it. This is the button.
  *
- * ADMIN ONLY, and shown only to admins — the same rule and the same reason as `RefreshButton`:
- * `market-refresh` rejects a non-admin token, so a button everyone can see is a button that fails
- * for almost everyone. The client boolean decides what the UI OFFERS; the server checks the claim
- * on the verified token and is the actual permission.
+ * ADMIN ONLY, and shown only to admins — the same rule and the same reason as `RefreshButton`: the
+ * `promote_listing` RPC checks the JWT's `app_metadata.role`, so a button everyone can see is a
+ * button that fails for almost everyone. The client boolean decides what the UI OFFERS; the RPC
+ * checks the claim on the verified token and is the actual permission.
  *
- * PROMOTED BY FIGI, not by ticker. The directory row carries the exact FIGI the sweep enumerated,
- * and `promote-listing` resolves a bare ticker through `/v3/mapping` only because it has to when a
- * caller has nothing better. We have something better, and a ticker is ambiguous across venues —
- * `005930` is Samsung in Seoul and an unrelated line elsewhere.
+ * THE RPC, NOT THE EDGE FUNCTION. Promotion was `market-refresh/promote-listing` until the serving
+ * cutover moved it into the database, and it was invoked with `{ resource: 'promote-listing',
+ * figi }`. The RPC reads the directory the sweep populated, drops the edge handler's OpenFIGI
+ * fallback (a listing the sweep has not reached cannot be promoted — there is nothing to promote
+ * it FROM), and returns the same `{ promoted: true }` shape this button has always required.
  *
  * IT DOES NOT PRICE THE SECURITY. Promotion creates the security and its identifiers; the sector,
  * returns, fundamentals and statements arrive from the ordinary backlogs on their next run. Saying
@@ -27,10 +28,9 @@ import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui';
+import { getSupabase } from '@/lib/auth/client';
 import { useAuth } from '@/lib/auth/store';
 import { palette } from '@/theme/colors';
-
-import { triggerRefresh } from './api/market-client';
 
 export function TrackListingButton({
   figi,
@@ -45,23 +45,26 @@ export function TrackListingButton({
   const isAdmin = useAuth((s) => s.session?.isAdmin ?? false);
 
   const track = useMutation({
-    // A 200 FROM THIS FUNCTION IS NOT PROOF THE WORK HAPPENED, and this is the one caller that
-    // cannot treat it as such. `promote-listing` answers `{ skipped: true, reason: 'fresh or in
-    // flight' }` when the TTL has not elapsed or another invocation holds the lock — measured
-    // directly against production — and it answers `{ promoted: false }` when it resolved a FIGI it
-    // could not build a security from. Both are 200s. A button that says "added" for either is the
-    // same silent no-op this pipeline keeps producing, except now a person is watching it.
+    // A 200 FROM THIS RPC IS NOT PROOF THE WORK HAPPENED, and this is the one caller that cannot
+    // treat it as such. `promote_listing` answers `{ promoted: false, reason: 'already tracked' }`
+    // when the row is ours and `{ promoted: false, reason: 'unknown figi' }` when the sweep has
+    // not catalogued it — both are successes, and a button that says "added" for either would be
+    // the silent no-op this pipeline keeps producing, except now a person is watching it.
     mutationFn: async () => {
-      const body = await triggerRefresh('promote-listing', { figi });
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('no supabase client');
+      const { data, error } = await supabase.rpc('promote_listing', { p_figi: figi });
+      if (error) throw new Error(error.message);
+      const body = (data ?? null) as Record<string, unknown> | null;
       if (!body || body.promoted !== true) {
-        const why = String(body?.reason ?? body?.error ?? 'the server did not promote it');
+        const why = String(body?.reason ?? body?.error ?? 'the database did not promote it');
         throw new Error(why);
       }
       return body;
     },
     onSuccess: () => onTracked?.(),
     // A failure must not blank the row: the listing is still findable, it just is not tracked.
-    onError: (e) => console.warn(`[market] promote-listing did not promote: ${String(e)}`),
+    onError: (e) => console.warn(`[market] promote_listing did not promote: ${String(e)}`),
   });
 
   if (!isAdmin) return null;
