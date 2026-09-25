@@ -1,30 +1,26 @@
 /**
  * Country equity-market performance for a timeframe, keyed by ISO-3166 alpha-2.
  *
- * Same contract as `useSectorPerformance` — see that file for the three properties
- * this shares (instant paint from the bundled seed, stale-while-revalidate, one
- * auto-refresh per period per mount).
+ * Same contract as `useSectorPerformance` — see that file: instant paint from the
+ * bundled seed, and read-only. The numbers come from Dagster's `daily_indices`; the
+ * `country-performance` refresh this hook used to trigger is retired (410).
  *
  * The numbers are single-country ETF PRICE returns (dividends excluded), computed
  * server-side from daily closes; `market.countries.etf_symbol` holds the proxy and is
  * editable in Studio.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { COUNTRIES } from '@/features/markets/taxonomy';
 
 import {
   fetchPerformance,
-  isStale,
   latestAsOf,
   MarketUnavailableError,
-  triggerRefresh,
   type PerformanceRow,
 } from './market-client';
 import { COUNTRY_PERIODS, type Period } from './periods';
 
-const RESOURCE = 'country-performance';
 const COUNTRY_KEY = ['market', 'performance', 'country'] as const;
 const NO_ROWS: PerformanceRow[] = [];
 
@@ -34,12 +30,9 @@ export interface CountryPerformance {
   asOf: Date | null;
   source: string | null;
   sample: boolean;
-  refreshing: boolean;
 }
 
 export function useCountryPerformance(period: Period): CountryPerformance {
-  const queryClient = useQueryClient();
-
   const query = useQuery({
     queryKey: [...COUNTRY_KEY, period],
     queryFn: () => fetchPerformance('country', period),
@@ -48,22 +41,7 @@ export function useCountryPerformance(period: Period): CountryPerformance {
     retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,
   });
 
-  const refresh = useMutation({
-    mutationFn: () => triggerRefresh(RESOURCE),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: COUNTRY_KEY }),
-    onError: (e) => console.warn(`[market] country refresh failed, keeping existing: ${String(e)}`),
-  });
-
   const rows = query.data ?? NO_ROWS;
-  const stale = !query.isPending && !query.isError && isStale(rows);
-
-  const triggeredFor = useRef<Period | null>(null);
-  const { mutate: startRefresh } = refresh;
-  useEffect(() => {
-    if (!stale || triggeredFor.current === period) return;
-    triggeredFor.current = period;
-    startRefresh();
-  }, [stale, period, startRefresh]);
 
   const byIso = new Map<string, number>();
   for (const r of rows) if (r.change_pct !== null) byIso.set(r.scope_id, r.change_pct);
@@ -75,7 +53,6 @@ export function useCountryPerformance(period: Period): CountryPerformance {
       asOf: null,
       source: null,
       sample: true,
-      refreshing: refresh.isPending,
     };
   }
 
@@ -84,7 +61,6 @@ export function useCountryPerformance(period: Period): CountryPerformance {
     asOf: latestAsOf(rows),
     source: rows.find((r) => r.source)?.source ?? null,
     sample: false,
-    refreshing: refresh.isPending,
   };
 }
 

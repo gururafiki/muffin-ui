@@ -19,7 +19,6 @@ import { ListSearch, useListSearch } from '@/features/markets/list-search';
 import { Freshness } from '@/features/markets/freshness';
 import { useCountry } from '@/features/markets/api/use-countries';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
-import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { analyseSector, getRegion, getSector } from '@/features/markets/taxonomy';
 
 export default function SectorScreen() {
@@ -138,7 +137,6 @@ export default function SectorScreen() {
           sample={constituents.sample}
           asOf={constituents.asOf}
           source={constituents.source}
-          refreshing={constituents.refreshing}
           right={<PeriodPicker periods={SECTOR_PERIODS} />}
         />
       </View>
@@ -156,11 +154,6 @@ export default function SectorScreen() {
             sample={constituents.sample}
             asOf={constituents.asOf}
             source={constituents.source}
-            refreshing={constituents.refreshing}
-          />
-          <RefreshButton
-            resources={[...PAGE_RESOURCES.sector]}
-            invalidate={[['market', 'sector-constituents'], ['market', 'performance', 'instrument']]}
           />
         </View>
       </View>

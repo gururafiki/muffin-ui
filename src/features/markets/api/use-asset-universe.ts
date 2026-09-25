@@ -9,9 +9,13 @@
  * `priced = false` rows (cash, a bond yield) are kept in the LIST — they are part of
  * the universe — but carry no number, because a price return for them would be
  * meaningless rather than merely missing.
+ *
+ * READ-ONLY. Since the D2 cutover (2026-09-12) returns come from Dagster's `security_return` on
+ * its own schedule, and `market.performance` is a view over it. This hook used to ask
+ * `market-refresh` for `instrument-performance` whenever the rows looked stale; that resource is
+ * retired and the function answers 410, so reading the page triggers nothing.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { parseArray } from '@/lib/agent/schemas';
 import { getSupabase } from '@/lib/auth/client';
@@ -19,16 +23,13 @@ import { ASSETS, type AssetType } from '@/features/markets/taxonomy';
 
 import {
   fetchPerformance,
-  isStale,
   latestAsOf,
   MarketUnavailableError,
-  triggerRefresh,
   type PerformanceRow,
 } from './market-client';
 import type { Period } from './periods';
 import { zInstrument } from './market-instruments';
 
-const RESOURCE = 'instrument-performance';
 const INSTRUMENT_KEY = ['market', 'performance', 'instrument'] as const;
 const NO_ROWS: PerformanceRow[] = [];
 
@@ -63,12 +64,9 @@ export interface AssetUniverse {
   asOf: Date | null;
   source: string | null;
   sample: boolean;
-  refreshing: boolean;
 }
 
 export function useAssetUniverse(period: Period, filter: AssetType | 'all'): AssetUniverse {
-  const queryClient = useQueryClient();
-
   const universe = useQuery({
     queryKey: ['market', 'instruments', 'all'],
     queryFn: fetchUniverse,
@@ -85,23 +83,8 @@ export function useAssetUniverse(period: Period, filter: AssetType | 'all'): Ass
     retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,
   });
 
-  const refresh = useMutation({
-    mutationFn: () => triggerRefresh(RESOURCE),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: INSTRUMENT_KEY }),
-    onError: (e) => console.warn(`[market] universe refresh failed, keeping existing: ${String(e)}`),
-  });
-
   const perfRows = performance.data ?? NO_ROWS;
   const rows = universe.data ?? [];
-  const stale = !performance.isPending && !performance.isError && rows.length > 0 && isStale(perfRows);
-
-  const triggeredFor = useRef<Period | null>(null);
-  const { mutate: startRefresh } = refresh;
-  useEffect(() => {
-    if (!stale || triggeredFor.current === period) return;
-    triggeredFor.current = period;
-    startRefresh();
-  }, [stale, period, startRefresh]);
 
   if (rows.length === 0) {
     // Bundled seed. Note this is the fallback that used to be the ONLY path, and it
@@ -115,7 +98,7 @@ export function useAssetUniverse(period: Period, filter: AssetType | 'all'): Ass
       country: a.country ?? null,
       changePct: a.changePct,
     }));
-    return { items: seed, asOf: null, source: null, sample: true, refreshing: refresh.isPending };
+    return { items: seed, asOf: null, source: null, sample: true };
   }
 
   const byId = new Map(perfRows.map((r) => [r.scope_id, r.change_pct]));
@@ -136,6 +119,5 @@ export function useAssetUniverse(period: Period, filter: AssetType | 'all'): Ass
     asOf: latestAsOf(perfRows),
     source: perfRows.find((r) => r.source)?.source ?? null,
     sample: false,
-    refreshing: refresh.isPending,
   };
 }

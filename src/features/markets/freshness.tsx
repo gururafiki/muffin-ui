@@ -24,18 +24,15 @@ export function Freshness({
   sample,
   asOf,
   source,
-  refreshing,
 }: {
   sample: boolean;
   asOf?: Date | null;
   source?: string | null;
-  refreshing?: boolean;
 }) {
   if (sample) return <Badge label="sample" tone="info" />;
 
   return (
     <View className="flex-row items-center gap-2">
-      {refreshing ? <Badge label="updating" tone="info" /> : null}
       <Text variant="muted" className="text-xs">
         {asOf ? relativeAge(asOf) : 'live'}
         {source ? ` · ${source}` : ''}

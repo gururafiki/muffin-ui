@@ -83,7 +83,6 @@ export default function RegionScreen() {
           sample={perf.sample}
           asOf={perf.asOf}
           source={perf.source}
-          refreshing={perf.refreshing}
         />
       </View>
       <View className="mt-2">

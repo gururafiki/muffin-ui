@@ -139,12 +139,6 @@ export async function triggerRefresh(
   return (data ?? null) as Record<string, unknown> | null;
 }
 
-/** True when every row has passed its `stale_after`, or there are no rows at all. */
-export function isStale(rows: PerformanceRow[], now = Date.now()): boolean {
-  if (rows.length === 0) return true;
-  return rows.every((r) => new Date(r.stale_after).getTime() <= now);
-}
-
 /** The freshest `as_of` in a set of rows — what the UI shows as the data's age. */
 export function latestAsOf(rows: PerformanceRow[]): Date | null {
   let newest: number | null = null;

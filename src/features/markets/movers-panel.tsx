@@ -68,7 +68,6 @@ export function MoversPanel({
   sample = true,
   asOf,
   source,
-  refreshing,
   right,
 }: {
   title: string;
@@ -78,7 +77,6 @@ export function MoversPanel({
   sample?: boolean;
   asOf?: Date | null;
   source?: string | null;
-  refreshing?: boolean;
   /** Extra control rendered under the header — e.g. the timeframe picker. */
   right?: React.ReactNode;
 }) {
@@ -91,7 +89,7 @@ export function MoversPanel({
     <Card className="gap-3">
       <View className="flex-row items-center justify-between">
         <Text variant="heading">{title}</Text>
-        <Freshness sample={sample} asOf={asOf} source={source} refreshing={refreshing} />
+        <Freshness sample={sample} asOf={asOf} source={source} />
       </View>
       {right}
 

@@ -11,7 +11,6 @@ import { MoversPanel } from '@/features/markets/movers-panel';
 import { useCountry } from '@/features/markets/api/use-countries';
 import { useCountrySectorPerformance } from '@/features/markets/api/use-country-sector-performance';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
-import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { analyseCountry, getRegion, getSector, marketLabel, SECTORS } from '@/features/markets/taxonomy';
 
 export default function CountryScreen() {
@@ -110,16 +109,7 @@ export default function CountryScreen() {
           sample={false}
           asOf={own.asOf}
           source={'weighted constituents'}
-          refreshing={sectors.refreshing}
-          right={
-            <View className="flex-row items-center gap-2">
-              <RefreshButton
-                resources={[...PAGE_RESOURCES.country]}
-                invalidate={[['market', 'performance', 'country'], ['market', 'performance', 'sector']]}
-              />
-              <PeriodPicker />
-            </View>
-          }
+          right={<PeriodPicker />}
         />
         )}
       </View>

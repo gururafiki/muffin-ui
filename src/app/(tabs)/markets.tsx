@@ -61,7 +61,6 @@ export default function MarketsScreen() {
           sample={sectors.sample}
           asOf={sectors.asOf}
           source={sectors.source}
-          refreshing={sectors.refreshing}
           right={<PeriodPicker />}
         />
       </View>
@@ -78,7 +77,7 @@ export default function MarketsScreen() {
             <Freshness sample={allocation.sample} asOf={allocation.asOf} />
             <RefreshButton
               resources={[...PAGE_RESOURCES.markets]}
-              invalidate={[['market', 'fund-sector-weight'], ['market', 'performance', 'sector']]}
+              invalidate={[['market', 'instruments']]}
             />
           </View>
         </View>
@@ -118,7 +117,6 @@ export default function MarketsScreen() {
           sample={universe.sample}
           asOf={universe.asOf}
           source={universe.source}
-          refreshing={universe.refreshing}
         />
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
