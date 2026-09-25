@@ -6,9 +6,14 @@
  * the UI OFFERS; the server checks the same claim on the verified token and is the actual
  * permission. A client-side boolean is a convenience, never a gate.
  *
- * Refreshing is normally automatic (a cron warm-up, plus stale-while-revalidate when a reader
- * touches a stale row). This exists for the case those do not cover: data that is fresh by the
- * TTL's reckoning and WRONG — a provider correction, or a fund whose holdings were just re-filed.
+ * Refreshing is normally automatic: the cron warm-up and the Dagster lanes run on their own
+ * schedules, and reading a page never triggers one. This exists for the case those do not cover:
+ * data that is fresh by the TTL's reckoning and WRONG — a provider correction, or a fund whose
+ * holdings were just re-filed.
+ *
+ * Prices, returns and FX are NOT offered. Since the D2 cutover (2026-09-12) Dagster owns them and
+ * `market-refresh` answers 410 for their old resources, so a page whose data is all Dagster's has
+ * no refresh button at all rather than one that can only fail.
  *
  * It deliberately does NOT pass `force`: that needs the service-role key, and bypassing the TTL
  * from a button is how a provider's rate limit gets hit by someone clicking twice.
@@ -32,13 +37,7 @@ import { triggerRefresh } from './api/market-client';
  * Keyed per RESOURCE rather than per page, so the two cannot drift apart.
  */
 export const RESOURCE_INFO: Record<string, string> = {
-  'sector-performance': 'US sector returns — finviz (US-listed only)',
-  'country-performance': 'Each country ETF\u2019s returns — yfinance',
-  'group-performance': 'Each tier\u2019s proxy-ETF returns — yfinance',
-  'instrument-performance': 'Returns for the 35 curated instruments — yfinance',
-  'instrument-profile': 'Sector, industry and market cap for those instruments — yfinance',
-  'instrument-prices': '~400 days of prices for them — yfinance',
-  'security-performance': 'Returns for every security with a symbol — yfinance',
+  'instrument-profile': 'Sector, industry and market cap for the curated instruments — yfinance',
   'security-profiles': 'Sector for securities that lack one — yfinance',
   'security-industries': 'Sub-sector (industry) and market cap — yfinance',
   'security-fundamentals': 'P/E, margins, ROE and the rest — yfinance',
@@ -47,7 +46,7 @@ export const RESOURCE_INFO: Record<string, string> = {
   'fund-holdings': 'ETF holdings from their latest filings — SEC N-PORT',
   'derive-classifications': 'Sector and country membership — computed from holdings, no provider',
   'exchange-listings': 'Every listed company on one exchange — OpenFIGI',
-  'security-refresh': 'This stock\u2019s returns, market cap and fundamentals — yfinance',
+  'security-refresh': 'This stock\u2019s market cap, fundamentals and statements — yfinance',
 };
 
 export function RefreshButton({
@@ -137,14 +136,13 @@ export function RefreshButton({
   );
 }
 
-/** The resources behind each screen, so a page names what it refreshes in one place. */
+/**
+ * The resources behind each screen, so a page names what it refreshes in one place. Only pages
+ * with something refreshable are listed: sector, country, group and globe pages read Dagster's
+ * data alone, and the stock page has `SecurityRefreshButton`.
+ */
 export const PAGE_RESOURCES = {
-  globe: ['country-performance', 'group-performance'],
-  markets: ['sector-performance', 'instrument-performance', 'instrument-profile'],
-  sector: ['sector-performance', 'security-performance'],
-  country: ['country-performance', 'sector-performance'],
-  group: ['group-performance', 'country-performance'],
-  stock: ['instrument-performance', 'instrument-prices', 'instrument-profile'],
+  markets: ['instrument-profile'],
 } as const;
 
 /** Empty view used where a page has no admin — keeps the header row's layout stable. */

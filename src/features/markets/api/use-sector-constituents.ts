@@ -19,9 +19,12 @@
  * "Semiconductors", "Banks - Regional" and "Insurance - Life", each hanging off its own sector.
  * They were removed when the only source was `instruments.industry`, which covered 35 securities
  * of 9,786: chips that partition 7% of a list imply a grouping the data cannot support.
+ *
+ * READ-ONLY. Returns come from Dagster's `security_return` since the D2 cutover (2026-09-12); the
+ * `instrument-performance` refresh this hook used to trigger on stale rows is retired and
+ * `market-refresh` answers 410 for it.
  */
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import { parseArray } from '@/lib/agent/schemas';
@@ -30,15 +33,12 @@ import { getCountryByIso, stocksInSector } from '@/features/markets/taxonomy';
 
 import {
   fetchPerformance,
-  isStale,
   latestAsOf,
   MarketUnavailableError,
-  triggerRefresh,
   type PerformanceRow,
 } from './market-client';
 import type { Period } from './periods';
 
-const RESOURCE = 'instrument-performance';
 const INSTRUMENT_KEY = ['market', 'performance', 'instrument'] as const;
 const NO_ROWS: PerformanceRow[] = [];
 
@@ -122,7 +122,6 @@ export interface SectorConstituents {
   asOf: Date | null;
   source: string | null;
   sample: boolean;
-  refreshing: boolean;
   /** True when the server may hold more rows than `limit` returned. */
   hasMore: boolean;
   loadingMore: boolean;
@@ -138,7 +137,6 @@ export function useSectorConstituents(
   period: Period,
   options: { countryIso2?: string; limit?: number } = {},
 ): SectorConstituents {
-  const queryClient = useQueryClient();
   const { countryIso2, limit = SECTOR_PAGE_SIZE } = options;
 
   const constituents = useQuery({
@@ -177,26 +175,7 @@ export function useSectorConstituents(
     retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,
   });
 
-  const refresh = useMutation({
-    mutationFn: () => triggerRefresh(RESOURCE),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: INSTRUMENT_KEY }),
-    onError: (e) => console.warn(`[market] instrument refresh failed, keeping existing: ${String(e)}`),
-  });
-
   const perfRows = performance.data ?? NO_ROWS;
-  const stale =
-    !performance.isPending &&
-    !performance.isError &&
-    (constituents.data?.length ?? 0) > 0 &&
-    isStale(perfRows);
-
-  const triggeredFor = useRef<Period | null>(null);
-  const { mutate: startRefresh } = refresh;
-  useEffect(() => {
-    if (!stale || triggeredFor.current === period) return;
-    triggeredFor.current = period;
-    startRefresh();
-  }, [stale, period, startRefresh]);
 
   const rows = constituents.data ?? [];
   // Never fall back to the sample while a fetch is in flight: the seed is a DIFFERENT, shorter
@@ -225,7 +204,6 @@ export function useSectorConstituents(
       asOf: null,
       source: null,
       sample: true,
-      refreshing: refresh.isPending,
       hasMore: false,
       loadingMore: false,
       fundSymbol: null,
@@ -257,7 +235,6 @@ export function useSectorConstituents(
     asOf: latestAsOf(perfRows),
     source: perfRows.find((r) => r.source)?.source ?? null,
     sample: false,
-    refreshing: refresh.isPending,
     // A full page probably means there is another; the next fetch settles it.
     hasMore: rows.length >= limit,
     loadingMore: constituents.isFetching && !constituents.isPending,

@@ -3,7 +3,8 @@
  *
  * The page-level `RefreshButton` triggers whole-resource refreshes, which are budgeted as backlogs
  * and would refuse on their TTL — and refreshing 10,060 securities to see one is the wrong trade.
- * `security-refresh` does returns, market cap, fundamentals AND statements for a single symbol.
+ * `security-refresh` does market cap, fundamentals AND statements for a single symbol. Not returns:
+ * since the D2 cutover (2026-09-12) those come from Dagster's `security_return`.
  *
  * Statements are here for a reason worth knowing: the backlog that fills them fetches one security
  * at a time (the provider does not accept several symbols on those endpoints — measured), so at 60
@@ -35,7 +36,6 @@ export function SecurityRefreshButton({ symbol }: { symbol: string }) {
     mutationFn: () => triggerRefresh('security-refresh', { symbol }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['market', 'fundamentals', symbol] });
-      queryClient.invalidateQueries({ queryKey: ['market', 'performance', 'instrument'] });
       queryClient.invalidateQueries({ queryKey: ['market', 'instrument', symbol] });
     },
     onError: (e) => console.warn(`[market] ${symbol} refresh failed, keeping existing: ${String(e)}`),

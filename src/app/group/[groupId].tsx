@@ -11,7 +11,6 @@ import { DrillList } from '@/features/markets/drill-list';
 import { ListSearch, useListSearch } from '@/features/markets/list-search';
 import { Freshness } from '@/features/markets/freshness';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
-import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { WORLD_GEO } from '@/features/markets/world-geo';
 import { WorldMap } from '@/features/markets/world-map';
 import { analyseRegion, getCountryByIso, marketLabel } from '@/features/markets/taxonomy';
@@ -86,10 +85,6 @@ export default function GroupScreen() {
             {growth.changePct !== null ? (
               <Freshness sample={growth.sample} asOf={growth.asOf} source={growth.source} />
             ) : null}
-            <RefreshButton
-              resources={[...PAGE_RESOURCES.group]}
-              invalidate={[['market', 'performance', 'group']]}
-            />
           </View>
         </View>
       </Card>
@@ -118,7 +113,6 @@ export default function GroupScreen() {
               sample={perf.sample}
               asOf={perf.asOf}
               source={perf.source}
-              refreshing={perf.refreshing}
             />
           </View>
           <View className="mt-2">
