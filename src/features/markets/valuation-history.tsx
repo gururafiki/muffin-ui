@@ -30,6 +30,7 @@ import {
   type RatioOption,
   type RatioRange,
 } from './api/use-ratio-series';
+import { basisNote, withheldNote } from './ratio-notes';
 
 const RANGES = Object.keys(RATIO_RANGES) as RatioRange[];
 
@@ -43,7 +44,7 @@ export function ValuationHistory({ symbol }: { symbol: string | undefined }) {
   const [range, setRange] = useState<RatioRange>('5Y');
 
   const option = RATIO_OPTIONS.find((o) => o.code === ratio) ?? RATIO_OPTIONS[0];
-  const { points, loading, currencyComparable, reportCurrency, quoteCurrency, empty } =
+  const { points, loading, currencyComparable, reportCurrency, quoteCurrency, epsBasis, empty } =
     useRatioSeries(symbol, ratio, range);
 
   // A bar with no value is a bar the ratio is withheld for — a loss-making quarter, or a period
@@ -112,9 +113,7 @@ export function ValuationHistory({ symbol }: { symbol: string | undefined }) {
 
       <Card tone="muted" className="mt-2 gap-2">
         {withheld ? (
-          <Text variant="muted">
-            {`No ${option.name}: this company reports in ${reportCurrency ?? 'another currency'} and trades in ${quoteCurrency ?? 'a different one'}. Dividing one by the other would give a number that looks ordinary and is wrong by the exchange rate.`}
-          </Text>
+          <Text variant="muted">{withheldNote(option.name, reportCurrency, quoteCurrency)}</Text>
         ) : series ? (
           <>
             {stats ? (
@@ -129,6 +128,11 @@ export function ValuationHistory({ symbol }: { symbol: string | undefined }) {
               </View>
             ) : null}
             <TimeSeriesChart data={series} />
+            {option.usesEps && basisNote(epsBasis) ? (
+              <Text variant="muted" className="text-xs">
+                {basisNote(epsBasis)}
+              </Text>
+            ) : null}
           </>
         ) : (
           <Text variant="muted">

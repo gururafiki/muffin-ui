@@ -35,7 +35,7 @@ async function fetchInstrument(symbol: string) {
         // `security_current`, so only the curated hit was affected and only the sections that came
         // later (market stats, dividends) noticed. Nothing errored: an undefined id disables a
         // query rather than failing it.
-        'security_id,symbol,name,sector_id,provider_sector,industry,country,market_cap,currency,asset_type,priced',
+        'security_id,symbol,name,sector_id,provider_sector,industry,country,market_cap,currency,asset_type,priced,quote_currency,market_cap_currency',
       )
       .eq('symbol', symbol)
       .limit(1),
@@ -57,6 +57,8 @@ async function fetchInstrument(symbol: string) {
       (profile.data ?? []).map((row) => ({
         ...(row as Record<string, unknown>),
         securityId: (row as Record<string, unknown>).security_id,
+        quoteCurrency: (row as Record<string, unknown>).quote_currency,
+        marketCapCurrency: (row as Record<string, unknown>).market_cap_currency,
       })),
       'market.instrument_current',
     )[0] ?? null;
@@ -71,7 +73,9 @@ async function fetchInstrument(symbol: string) {
   if (!instrument) {
     const { data, error } = await market
       .from('security_current')
-      .select('security_id,symbol,name,sector_id,industry,country_name,country_iso2,market_cap,currency_code')
+      .select(
+        'security_id,symbol,name,sector_id,industry,country_name,country_iso2,market_cap,currency_code,quote_currency,market_cap_currency',
+      )
       .eq('symbol', symbol)
       .limit(1);
     if (error) throw new Error(`market.security_current read failed: ${error.message}`);
@@ -88,6 +92,8 @@ async function fetchInstrument(symbol: string) {
         // re-keying by hand while anything joined on security_id needed nothing.
         securityId: row.security_id,
         currency: row.currency_code,
+        quoteCurrency: row.quote_currency,
+        marketCapCurrency: row.market_cap_currency,
         // The fund-derived model has no `asset_type` and no `priced` flag. Both are hand-authored
         // columns on the curated table; absent is the honest answer, and `priced === false` is
         // load-bearing elsewhere (cash and bond yields render no number), so it must not default

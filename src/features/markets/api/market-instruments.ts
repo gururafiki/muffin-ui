@@ -32,6 +32,13 @@ export const zInstrument = z.looseObject({
   // Written by `instrument-profile` from yfinance. It is what labels `market_cap` — NESN's is in
   // CHF, and an unlabelled figure defaults to reading as dollars.
   currency: z.string().nullish(),
+  // The currency the LISTING trades in, from the price lane's newest bar, which carries the
+  // currency Yahoo states for that line. Pence, agorot and fils are codes of their own (GBX, ILA,
+  // KWF), so a London price is never read as pounds. It labels the price and a dividend.
+  quoteCurrency: z.string().nullish(),
+  // The currency `market_cap` is in, chosen by the view (a fundamentals cap states its own; the
+  // legacy column falls back to the security's). Read, never re-derived here.
+  marketCapCurrency: z.string().nullish(),
   // `z.coerce` is a driver guard: PostgREST sends `numeric` as a JSON number today, but a version
   // that quoted it would make every row fail to parse and silently empty the list.
   market_cap: z.coerce.number().nullish(),

@@ -3,9 +3,10 @@
  *
  * The dividend figure is a PER-SHARE amount, so it uses `formatPerShare` rather than `formatMoney`:
  * the latter drops decimals below a million (correct on a $4.57T market cap) and would render a
- * $1.2087 dividend as "$1" and a sub-cent one as "$0". And the currency comes from the SECURITY,
- * because the table stores a bare number — a dividend is paid in the currency its listing trades
- * in, and with no currency known the amount is left unlabelled rather than assumed to be dollars.
+ * $1.2087 dividend as "$1" and a sub-cent one as "$0". And the currency is the LISTING's quote
+ * currency, because the table stores a bare number — a dividend is paid in the currency its listing
+ * trades in (pence on a London line, so `GBX`), and with no currency known the amount is left
+ * unlabelled rather than assumed to be dollars.
  *
  * A SPLIT IS A RATIO, NOT MONEY. `value: 20` is Amazon's 20-for-1 — running it through a currency
  * formatter would print "$20", which is a plausible-looking share price rather than a split.

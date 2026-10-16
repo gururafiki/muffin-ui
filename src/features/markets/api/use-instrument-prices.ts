@@ -96,7 +96,15 @@ export interface InstrumentPrices {
   loading: boolean;
 }
 
-export function useInstrumentPrices(symbol: string, range: ChartRange): InstrumentPrices {
+/**
+ * `currency` names the unit of the line: the quote currency of the listing, so a London price in
+ * pence reads `VOD.L (GBX)` rather than looking like pounds. Unlabelled when unknown.
+ */
+export function useInstrumentPrices(
+  symbol: string,
+  range: ChartRange,
+  currency?: string | null,
+): InstrumentPrices {
   const spec = CHART_RANGES.find((r) => r.id === range) ?? CHART_RANGES[3];
 
   // The weekly series is fetched regardless of the selected range, because whether it EXISTS is
@@ -151,7 +159,7 @@ export function useInstrumentPrices(symbol: string, range: ChartRange): Instrume
     series: {
       lines: [
         {
-          label: symbol,
+          label: currency ? `${symbol} (${currency})` : symbol,
           points: windowed.map((r) => ({ x: new Date(r.date).getTime(), y: r.close })),
         },
       ],

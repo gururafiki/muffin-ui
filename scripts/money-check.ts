@@ -60,6 +60,16 @@ check('no currency means NO symbol, not dollars', got(7_800_000_000, null) === '
 check('a malformed currency is not passed to Intl', got(7_800_000_000, 'dollars') === '7.80B', got(7_800_000_000, 'dollars'));
 check('a lowercase code from the DB still works', got(7_800_000_000, 'usd') === '$7.80B', got(7_800_000_000, 'usd'));
 
+console.log('\n## a subunit names itself, never its major currency');
+// Since muffin-deployment#433 a London line is labelled in pence (`GBX`), Tel Aviv in agorot
+// (`ILA`), Johannesburg in cents (`ZAC`) and Kuwait in fils (`KWF`). CLDR has no symbol for them,
+// so the code itself is the label: `GBX 116.70`, never `£116.70`, which would read a hundred
+// times too high. Lowercase `GBp` is Yahoo's spelling; the price lane maps it before it is stored.
+for (const code of ['GBX', 'ILA', 'ZAC', 'KWF']) {
+  const s = nb(formatPerShare(116.7, code));
+  check(`${code} labels a per-share amount with its own code`, s === `${code} 116.70`, JSON.stringify(s));
+}
+
 console.log('\n## sign and scale');
 check('a negative keeps its sign', got(-3_400_000_000, 'USD') === '-$3.40B', got(-3_400_000_000, 'USD'));
 // A negative net income must scale on its MAGNITUDE — comparing the signed value against the
