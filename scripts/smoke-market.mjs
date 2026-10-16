@@ -98,11 +98,19 @@ const INSTRUMENTS = [
     industry: 'Consumer Electronics',
     country: 'United States',
     market_cap: 4572794322944,
-    // WITHOUT THIS THE MONEY PATH IS NEVER EXERCISED. `formatMoney` and `formatPerShare` both leave
+    // WITHOUT THESE THE MONEY PATH IS NEVER EXERCISED. `formatMoney` and `formatPerShare` both leave
     // a figure UNLABELLED when the currency is absent, which is the correct behaviour and also
     // means a fixture with no currency asserts nothing about labelling — the market-cap check had
     // been failing for exactly that reason.
-    currency: 'USD',
+    //
+    // THE LEGACY FIELD DISAGREES ON PURPOSE. Since muffin-deployment#428 the page labels the price
+    // and a dividend by `quote_currency` (the listing's own, from the price lane) and the cap by
+    // `market_cap_currency`. `currency` is the old guess. With all three USD the old and new rules
+    // agree and nothing here could tell which one the page reads; with `currency` GBP, a page that
+    // went back to it prints £ and the dividend, cap and legend checks below fail.
+    currency: 'GBP',
+    quote_currency: 'USD',
+    market_cap_currency: 'USD',
     sort_order: 1,
   },
   {
@@ -386,6 +394,9 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
               country_iso2: 'US',
               market_cap: 3_410_000_000_000,
               currency_code: 'USD',
+              // The two columns muffin-deployment#428 adds; the page reads these, not `currency_code`.
+              quote_currency: 'USD',
+              market_cap_currency: 'USD',
             },
           ]),
         });
@@ -761,6 +772,8 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
             currency_comparable: !withheld,
             report_currency: withheld ? 'DKK' : 'USD',
             quote_currency: 'USD',
+            // Which earnings the P/E divides by (muffin-deployment#428); the chart says so.
+            eps_basis: 'ttm',
           }));
       return r.respond({
         status: 200,
@@ -1069,7 +1082,11 @@ try {
     check('the REAL sub-sector renders', has(body, 'Consumer Electronics'));
     check('the country renders', has(body, 'United States'));
     check('a return renders in the strip', has(body, '17.8'));
-    check('market cap is formatted', /\$\d+\.\d{2}[TBM]/.test(body), (body.match(/\$[\d.]+[TBM]/) || [])[0] ?? '');
+    // SPECIFIC, because a page carries other dollar figures (peers, the income flow) and a check for
+    // "any $X.XXT" passed while the cap itself was unlabelled.
+    check('market cap is labelled by its own currency', has(body, 'Market cap $4.57T'),
+      (body.match(/Market cap.{0,12}/) || [])[0] ?? 'no market cap line');
+    check('market cap is not labelled by the legacy field', !has(body, 'Market cap £'));
     check('the agent launchers survive', has(body, 'Investor Council') || has(body, 'Criteria'));
 
     // --- past runs for this ticker --------------------------------------------
@@ -1087,6 +1104,9 @@ try {
     );
     check('the chart drew a line', svgPaths > 0, `${svgPaths} svg shapes`);
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
+    // The price line names the listing's currency: a London line in pence reads `VOD.L (GBX)`.
+    check('the price line names its currency', has(body, 'AAPL (USD)'),
+      (body.match(/AAPL \([A-Z]{3}\)/) || [])[0] ?? 'no currency on the price line');
 
     // --- the valuation section (ratios computed per price bar) ----------------
     // --- the last quarter's surprise -------------------------------------------------
@@ -1207,13 +1227,18 @@ try {
     // The current-vs-average line is the reason the section exists: a P/E of 37 says nothing, a
     // P/E of 37 against a 5Y average of 28 is a statement.
     check('current is compared to the average', /avg\s+\d+\.\d+x/i.test(body));
+    // The P/E says which earnings it divides by: a trailing twelve months, or the fiscal year for a
+    // company that has none (semi-annual reporters).
+    check('the P/E says which earnings it uses', has(body, 'trailing twelve-month earnings'));
 
     // --- dividends, splits and news -------------------------------------------
     check('corporate actions were read', seen.some((u) => u.includes('security_corporate_action')));
     check('the dividends section renders', has(body, 'Dividends'));
     // A per-share amount keeps its cents. `formatMoney` would print "$1" here — the market-cap
     // formatter rounds decimals away below a million, which on a dividend is the whole value.
-    check('a dividend keeps its cents', has(body, '$1.21'), (body.match(/\$1[.\d]*/) || [])[0] ?? '');
+    // And it is labelled by the LISTING's currency: the fixture's legacy `currency` is GBP, so a
+    // page reading that field prints "£1.21".
+    check('a dividend keeps its cents', has(body, '$1.21'), (body.match(/[$£]1[.\d]*/) || [])[0] ?? '');
     check('a dividend is not rendered as a market cap', !/\$1\b(?!\.)/.test(body));
     // A split is a RATIO. Through a currency formatter it would read "$20", a plausible share price.
     check('a split renders as a ratio', has(body, '20-for-1'));
