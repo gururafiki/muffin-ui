@@ -103,13 +103,14 @@ const INSTRUMENTS = [
     // means a fixture with no currency asserts nothing about labelling — the market-cap check had
     // been failing for exactly that reason.
     //
-    // THE LEGACY FIELD DISAGREES ON PURPOSE. Since muffin-deployment#428 the page labels the price
-    // and a dividend by `quote_currency` (the listing's own, from the price lane) and the cap by
-    // `market_cap_currency`. `currency` is the old guess. With all three USD the old and new rules
-    // agree and nothing here could tell which one the page reads; with `currency` GBP, a page that
-    // went back to it prints £ and the dividend, cap and legend checks below fail.
+    // THE OTHER FIELDS DISAGREE ON PURPOSE. The page labels the cap by `market_cap_currency`, and
+    // the price line and a dividend by the BARS' own `currency_code` (Phase 4 decision 20), which
+    // the price-series stub below serves as USD. `currency` is the old guess and `quote_currency`
+    // the view column whose fallback is that guess. With all of them USD, nothing here could tell
+    // which one the page reads. A page that went back to `currency` prints £, and one that read
+    // `quote_currency` prints `AAPL (EUR)` and €1.21, so the cap, legend and dividend checks fail.
     currency: 'GBP',
-    quote_currency: 'USD',
+    quote_currency: 'EUR',
     market_cap_currency: 'USD',
     sort_order: 1,
   },
@@ -358,6 +359,8 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         rows.push({
           date: new Date(start + i * 86400000).toISOString().slice(0, 10),
           close: (100 + Math.sin(i / 12) * 18 + i * 0.08).toFixed(4),
+          // Each bar's own label, which the page names the line and the dividends by.
+          currency_code: 'USD',
         });
       }
       return r.respond({
@@ -394,8 +397,9 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
               country_iso2: 'US',
               market_cap: 3_410_000_000_000,
               currency_code: 'USD',
-              // The two columns muffin-deployment#428 adds; the page reads these, not `currency_code`.
-              quote_currency: 'USD',
+              // The page reads `market_cap_currency` for the cap. `quote_currency` is EUR on purpose:
+              // the price line and dividends take the bars' own label, so EUR must appear nowhere.
+              quote_currency: 'EUR',
               market_cap_currency: 'USD',
             },
           ]),
@@ -1104,9 +1108,11 @@ try {
     );
     check('the chart drew a line', svgPaths > 0, `${svgPaths} svg shapes`);
     check('chart ranges are offered', has(body, '1M') && has(body, '1Y'));
-    // The price line names the listing's currency: a London line in pence reads `VOD.L (GBX)`.
+    // The price line names its bars' currency: a London line in pence reads `VOD.L (GBX)`.
     check('the price line names its currency', has(body, 'AAPL (USD)'),
       (body.match(/AAPL \([A-Z]{3}\)/) || [])[0] ?? 'no currency on the price line');
+    // ...from the BARS, not from `quote_currency`, whose fallback is the legacy guess (EUR here).
+    check('the price line does not take quote_currency', !has(body, 'AAPL (EUR)'));
 
     // --- the valuation section (ratios computed per price bar) ----------------
     // --- the last quarter's surprise -------------------------------------------------
