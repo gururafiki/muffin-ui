@@ -41,6 +41,8 @@ export interface RatioOption {
   unit: RatioUnit;
   /** False for the margin/return ratios, which are computed entirely inside the filing. */
   needsPrice: boolean;
+  /** True where the denominator is earnings per share, whose basis the view states. */
+  usesEps: boolean;
 }
 
 /**
@@ -49,15 +51,15 @@ export interface RatioOption {
  * itself performs.
  */
 export const RATIO_OPTIONS: RatioOption[] = [
-  { code: 'pe_ratio', name: 'P/E', unit: 'multiple', needsPrice: true },
-  { code: 'ps_ratio', name: 'P/S', unit: 'multiple', needsPrice: true },
-  { code: 'pb_ratio', name: 'P/B', unit: 'multiple', needsPrice: true },
-  { code: 'price_to_fcf', name: 'P/FCF', unit: 'multiple', needsPrice: true },
-  { code: 'earnings_yield_pct', name: 'Earnings yield', unit: 'percent', needsPrice: true },
-  { code: 'fcf_yield_pct', name: 'FCF yield', unit: 'percent', needsPrice: true },
-  { code: 'net_margin_pct', name: 'Net margin', unit: 'percent', needsPrice: false },
-  { code: 'roe_pct', name: 'ROE', unit: 'percent', needsPrice: false },
-  { code: 'roa_pct', name: 'ROA', unit: 'percent', needsPrice: false },
+  { code: 'pe_ratio', name: 'P/E', unit: 'multiple', needsPrice: true, usesEps: true },
+  { code: 'ps_ratio', name: 'P/S', unit: 'multiple', needsPrice: true, usesEps: false },
+  { code: 'pb_ratio', name: 'P/B', unit: 'multiple', needsPrice: true, usesEps: false },
+  { code: 'price_to_fcf', name: 'P/FCF', unit: 'multiple', needsPrice: true, usesEps: false },
+  { code: 'earnings_yield_pct', name: 'Earnings yield', unit: 'percent', needsPrice: true, usesEps: true },
+  { code: 'fcf_yield_pct', name: 'FCF yield', unit: 'percent', needsPrice: true, usesEps: false },
+  { code: 'net_margin_pct', name: 'Net margin', unit: 'percent', needsPrice: false, usesEps: false },
+  { code: 'roe_pct', name: 'ROE', unit: 'percent', needsPrice: false, usesEps: false },
+  { code: 'roa_pct', name: 'ROA', unit: 'percent', needsPrice: false, usesEps: false },
 ];
 
 /**
@@ -84,6 +86,9 @@ const zRatioRow = z.looseObject({
   currency_comparable: z.boolean().nullish(),
   report_currency: z.string().nullish(),
   quote_currency: z.string().nullish(),
+  // 'ttm' or 'annual': the view takes a trailing twelve months where the company has one and its
+  // fiscal year where it has none (semi-annual reporters), and says which.
+  eps_basis: z.string().nullish(),
 });
 
 export interface RatioPoint {
@@ -98,7 +103,10 @@ export interface RatioSeries {
   /** False when the filer's reporting currency differs from the currency it trades in. */
   currencyComparable: boolean;
   reportCurrency: string | null;
+  /** The listing's currency, from the bar. Null while the price lane has not labelled the line. */
   quoteCurrency: string | null;
+  /** The earnings behind the P/E on the newest bar: 'ttm' or 'annual'. */
+  epsBasis: string | null;
   /** True once loaded and genuinely empty — the security has no bars or no metrics at all. */
   empty: boolean;
 }
@@ -118,7 +126,7 @@ export function useRatioSeries(
       const { data, error } = await supabase
         .schema('market')
         .from('security_ratio_series')
-        .select(`date,close,currency_comparable,report_currency,quote_currency,value:${ratio}`)
+        .select(`date,close,currency_comparable,report_currency,quote_currency,eps_basis,value:${ratio}`)
         .eq('symbol', symbol as string)
         .eq('grain', grain)
         // NEWEST FIRST, then reversed below. A bound must drop the far past, never a middle.
@@ -149,6 +157,7 @@ export function useRatioSeries(
     currencyComparable: head?.currency_comparable ?? true,
     reportCurrency: head?.report_currency ?? null,
     quoteCurrency: head?.quote_currency ?? null,
+    epsBasis: head?.eps_basis ?? null,
     // PENDING IS NOT MISSING — reporting empty mid-flight flashes "no data" on every stock page.
     // A DISABLED QUERY IS NOT A PENDING ONE. React Query reports `isPending` for a query that is
     // switched off, so `!isPending && <empty>` is FALSE while the id is null — and the section then

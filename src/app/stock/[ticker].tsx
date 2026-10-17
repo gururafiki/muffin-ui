@@ -213,7 +213,7 @@ export default function StockScreen() {
       <SecurityCompleteness securityId={inst?.securityId} />
       <MetricHistory symbol={symbol} />
       <MarketStats securityId={inst?.securityId} />
-      <CorporateActions securityId={inst?.securityId} currency={inst?.currency} />
+      <CorporateActions securityId={inst?.securityId} currency={prices.currency} />
       <NewsPanel symbol={symbol} />
 
       {/* WHO OWNS IT. The universe is built from fund holdings, so "which funds hold this" is not a
@@ -276,7 +276,7 @@ export default function StockScreen() {
 
           {inst?.market_cap ? (
             <Text variant="muted" className="text-xs">
-              Market cap {formatMoney(inst.market_cap, inst.currency)}
+              Market cap {formatMoney(inst.market_cap, inst.marketCapCurrency)}
             </Text>
           ) : null}
         </Card>

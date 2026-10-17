@@ -29,6 +29,9 @@ import { MarketUnavailableError } from './market-client';
 const zPrice = z.looseObject({
   date: z.string(),
   close: z.coerce.number(),
+  // The currency Yahoo states for this bar's line (muffin-ingest#104), or null where the price lane
+  // could not label it. Served with the bar since muffin-deployment#440.
+  currency_code: z.string().nullish(),
 });
 
 /**
@@ -68,7 +71,7 @@ async function fetchPrices(symbol: string, grain: string) {
       // unions the curated series with the fund-derived one (`security_price`, keyed on security_id
       // so a symbol change cannot orphan it) and picks one row per (symbol, grain, date).
       .from('price_series')
-      .select('date,close')
+      .select('date,close,currency_code')
       .eq('symbol', symbol)
       .eq('grain', grain)
       .order('date')
@@ -93,6 +96,17 @@ export interface InstrumentPrices {
    * picker follows — never offer a range the data cannot support.
    */
   ranges: { id: ChartRange; label: string }[];
+  /**
+   * The currency of the newest bar drawn, so a London price in pence reads `VOD.L (GBX)` rather
+   * than looking like pounds. Null where the bar carries no label: the line then goes unlabelled.
+   *
+   * FROM THE BARS, NEVER FROM THE SECURITY (Phase 4 decision 20). `security_current.quote_currency`
+   * falls back to the listing's and the security's legacy currency, which the edge filled with the
+   * REPORTING currency: rendered against live data it put `(EUR)` over Vodafone's pence, `(USD)`
+   * over Lenovo's Hong Kong dollars and `(TWD)` over the TSM ADR's dollars. The bars say what they
+   * are in. The page labels the dividends with the same value.
+   */
+  currency: string | null;
   loading: boolean;
 }
 
@@ -131,6 +145,7 @@ export function useInstrumentPrices(symbol: string, range: ChartRange): Instrume
   }));
 
   const rows = (spec.grain === 'weekly' ? weekly.data : query.data) ?? [];
+  const currency = rows.length > 0 ? (rows[rows.length - 1].currency_code ?? null) : null;
   const days = spec.days;
   // Anchored on the LAST BAR, not `Date.now()`. Wall-clock in render is impure (the
   // window would differ between renders), and anchoring on the data is also more
@@ -144,14 +159,14 @@ export function useInstrumentPrices(symbol: string, range: ChartRange): Instrume
 
   // The chart needs a couple of points to mean anything; one bar is a dot.
   if (windowed.length < 3) {
-    return { series: null, ranges, loading: query.isPending || weekly.isPending };
+    return { series: null, ranges, currency, loading: query.isPending || weekly.isPending };
   }
 
   return {
     series: {
       lines: [
         {
-          label: symbol,
+          label: currency ? `${symbol} (${currency})` : symbol,
           points: windowed.map((r) => ({ x: new Date(r.date).getTime(), y: r.close })),
         },
       ],
@@ -159,6 +174,7 @@ export function useInstrumentPrices(symbol: string, range: ChartRange): Instrume
       endLabel: windowed[windowed.length - 1].date,
     },
     ranges,
+    currency,
     loading: false,
   };
 }
