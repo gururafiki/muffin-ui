@@ -15,7 +15,6 @@ import { DrillList } from '@/features/markets/drill-list';
 import { Freshness } from '@/features/markets/freshness';
 import { MoversPanel } from '@/features/markets/movers-panel';
 import { PeriodPicker, useActivePeriod } from '@/features/markets/period-picker';
-import { PAGE_RESOURCES, RefreshButton } from '@/features/markets/refresh-button';
 import { SectorPie } from '@/features/markets/sector-pie';
 import { SecuritySearch } from '@/features/markets/security-search';
 import {
@@ -75,10 +74,6 @@ export default function MarketsScreen() {
           </Text>
           <View className="flex-row items-center gap-2">
             <Freshness sample={allocation.sample} asOf={allocation.asOf} />
-            <RefreshButton
-              resources={[...PAGE_RESOURCES.markets]}
-              invalidate={[['market', 'instruments']]}
-            />
           </View>
         </View>
         <SectorPie

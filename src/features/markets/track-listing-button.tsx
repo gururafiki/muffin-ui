@@ -7,10 +7,10 @@
  * `promoted: true`, and `security-refresh` then gives it a market cap, seven return periods,
  * fundamentals and twelve statement rows). Nothing called it. This is the button.
  *
- * ADMIN ONLY, and shown only to admins — the same rule and the same reason as `RefreshButton`: the
- * `promote_listing` RPC checks the JWT's `app_metadata.role`, so a button everyone can see is a
- * button that fails for almost everyone. The client boolean decides what the UI OFFERS; the RPC
- * checks the claim on the verified token and is the actual permission.
+ * ADMIN ONLY, and shown only to admins — the same rule and the same reason as
+ * `SecurityRefreshButton`: the `promote_listing` RPC checks the JWT's `app_metadata.role`, so a
+ * button everyone can see is a button that fails for almost everyone. The client boolean decides
+ * what the UI OFFERS; the RPC checks the claim on the verified token and is the actual permission.
  *
  * THE RPC, NOT THE EDGE FUNCTION. Promotion was `market-refresh/promote-listing` until the serving
  * cutover moved it into the database, and it was invoked with `{ resource: 'promote-listing',
@@ -19,7 +19,7 @@
  * it FROM), and returns the same `{ promoted: true }` shape this button has always required.
  *
  * IT DOES NOT PRICE THE SECURITY. Promotion creates the security and its identifiers; the sector,
- * returns, fundamentals and statements arrive from the ordinary backlogs on their next run. Saying
+ * returns, fundamentals and statements arrive from the Dagster lanes on their next visit. Saying
  * so is the point — a button that implied instant data would be a promise the pipeline does not
  * make, and the row would sit there looking broken for an hour.
  */
