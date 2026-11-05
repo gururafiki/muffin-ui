@@ -5,6 +5,8 @@
  * current one, an arrow asserting a move that did not happen, and a dash where the analyst simply
  * gave no number.
  */
+import { readFileSync } from 'node:fs';
+
 import { ratingFor, targetFor } from '../src/features/markets/analyst-action-parts';
 
 let failures = 0;
@@ -56,6 +58,30 @@ check(ratingFor({ ratingChange: 'Neutral' }) === 'Neutral',
   'a bare rating is kept — it is the rating the analyst affirmed, not a missing transition');
 check(ratingFor({ ratingChange: '   ' }) === null && ratingFor({ ratingChange: null }) === null,
   'blank and absent both yield nothing to render');
+
+// ── THE HOOK'S MAPPING, CHECKED AT SOURCE LEVEL ───────────────────────────────────────────────
+//
+// Everything above tests `targetFor` directly, so it cannot see the one mistake that would survive
+// all of it: the HOOK swapping the two columns on the way in. `targetFor` would then be handed a
+// correct-looking object and render the superseded number as the current one — plausible on a
+// page, and invisible to a test that constructs its own input.
+//
+// A behavioural test cannot reach it: `use-analyst-actions.ts` imports the Supabase client, so
+// `tsx` cannot transform it. Read as SOURCE instead. Brittle to refactoring on purpose — a rename
+// fails loudly, where a silent swap is the failure being guarded.
+{
+  const src = readFileSync(
+    new URL('../src/features/markets/api/use-analyst-actions.ts', import.meta.url), 'utf8');
+  check(/targetFrom:\s*r\.target_from\s*\?\?\s*null/.test(src),
+    'the hook maps targetFrom <- target_from',
+    'a swap here renders the superseded target as the current one, and every check above still passes');
+  check(/targetTo:\s*r\.target_to\s*\?\?\s*null/.test(src),
+    'the hook maps targetTo <- target_to',
+    'the same swap, from the other side');
+  check(/\.order\('published_date',\s*\{\s*ascending:\s*false/.test(src),
+    'the hook asks for the most recent actions first',
+    'ascending order would show a 2020 rating as the latest news about the company');
+}
 
 console.log(failures === 0 ? '\nALL ANALYST ACTION CHECKS PASSED\n' : `\n${failures} CHECK(S) FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);
