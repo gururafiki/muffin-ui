@@ -50,6 +50,13 @@ check(bare?.text === '400.00',
   'with no currency the figure is left UNLABELLED rather than assumed to be dollars',
   JSON.stringify(bare));
 
+// A LONDON LINE'S TARGETS ARE IN PENCE, and the row says so. Labelled with the code rather than a
+// pound sign, which would overstate the target a hundredfold.
+const pence = targetFor({ targetFrom: null, targetTo: 121.88 }, 'GBX');
+check(!!pence && !pence.text.includes('£') && pence.text.includes('121.88'),
+  'a pence target is never shown in pounds',
+  JSON.stringify(pence));
+
 console.log('\nthe rating line is shown verbatim, in both forms the provider sends');
 check(ratingFor({ ratingChange: 'Neutral → Buy' }) === 'Neutral → Buy', 'a transition is kept whole');
 check(ratingFor({ ratingChange: 'Neutral' }) === 'Neutral',
