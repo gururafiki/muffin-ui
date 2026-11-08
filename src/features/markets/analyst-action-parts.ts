@@ -12,6 +12,8 @@
 import { formatPerShare } from './money';
 
 export interface AnalystAction {
+  /** When the action was published. finviz's rows, which carried a date only, are at midnight UTC. */
+  publishedAt: string;
   publishedDate: string;
   analystCompany: string;
   /** The analyst's PREVIOUS target. Null when the action opens coverage. */
@@ -20,6 +22,8 @@ export interface AnalystAction {
   targetTo: number | null;
   status: string | null;
   ratingChange: string | null;
+  /** The currency the targets are in: the quote's own, pence for a London line. Null if unknown. */
+  currency: string | null;
 }
 
 export interface ActionTarget {
@@ -34,8 +38,8 @@ export interface ActionTarget {
  *
  * A CURRENCY IS PASSED, NEVER DEFAULTED. `formatPerShare` leaves an unrecognised code unlabelled
  * rather than inventing a dollar sign — the rule that exists because Alibaba's CNY revenue once
- * rendered as "$1.02T". The caller supplies USD because this whole table is US-listed by
- * construction, not because dollars are a safe default.
+ * rendered as "$1.02T". The caller passes the row's own currency, which the lane withholds when it
+ * cannot name it.
  */
 export function targetFor(
   action: Pick<AnalystAction, 'targetFrom' | 'targetTo'>,
