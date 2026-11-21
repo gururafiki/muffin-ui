@@ -517,15 +517,22 @@ async function openPage(browser, port, path, { mockRows, uncoveredWeights = fals
         body: JSON.stringify(rows),
       });
     }
-    // The last quarter's surprise. NEGATIVE on both sides on purpose: a company expected to lose
-    // 0.10 that lost 0.05 has BEATEN the estimate, and the panel must say "beat by 50%" rather
-    // than deriving a direction from the sign of either number.
-    if (u.includes('/supabase/rest/v1/security_earnings_surprise')) {
+    // The last quarters. The NEWEST is NEGATIVE on both sides on purpose: a company expected to
+    // lose 0.10 that lost 0.05 has BEATEN the estimate, and the panel must say "beat by 50%" rather
+    // than deriving a direction from the sign of either number. Then a miss, and a quarter with no
+    // estimate, which has no verdict to give. Yahoo's, so the source line must not say Nasdaq.
+    if (u.includes('/supabase/rest/v1/security_earnings_history')) {
       seen.push(u);
       const rows = !mockRows
         ? []
-        : [{ report_date: '2026-08-01', expected: -0.10, actual: -0.05, surprise_pct: 50.0,
-             beat: true }];
+        : [
+            { period_ending: '2026-06-30', reported_date: '2026-07-30', actual: -0.05,
+              estimate: -0.10, surprise_pct: 50.0, beat: true, source_code: 'yfinance' },
+            { period_ending: '2026-03-31', reported_date: '2026-04-30', actual: 1.2,
+              estimate: 1.25, surprise_pct: -4.0, beat: false, source_code: 'yfinance' },
+            { period_ending: '2025-12-31', reported_date: null, actual: 0.9,
+              estimate: null, surprise_pct: null, beat: null, source_code: 'yfinance' },
+          ];
       return r.respond({
         status: 200,
         contentType: 'application/json',
@@ -1115,13 +1122,22 @@ try {
     check('the price line does not take quote_currency', !has(body, 'AAPL (EUR)'));
 
     // --- the valuation section (ratios computed per price bar) ----------------
-    // --- the last quarter's surprise -------------------------------------------------
-    check('the surprise was read', seen.some((u) => u.includes('security_earnings_surprise')));
+    // --- the last quarters --------------------------------------------------------------
+    check('the earnings history was read', seen.some((u) => u.includes('security_earnings_history')));
+    // The view it replaced is contracted in Phase 6b step 7; nothing may still read it.
+    check('the old surprise view is not read', !seen.some((u) => u.includes('security_earnings_surprise')));
     // Both figures are NEGATIVE and it is still a BEAT: losing 0.05 when 0.10 was expected.
     // A panel deriving direction from the sign would say "missed".
     check('a smaller loss than expected reads as a beat', has(body, 'Last quarter beat by'));
     check('it does not read as a miss', !has(body, 'Last quarter missed by'));
     check('the magnitude is shown', has(body, '50.0%'));
+    check('the recent quarters are listed', has(body, 'Recent quarters'));
+    check('a quarter is named by the month it ended', has(body, 'Jun 2026') && has(body, 'Mar 2026'));
+    check('a miss says so, with its size', has(body, 'Missed 4.0%'));
+    check('a beat says so, with its size', has(body, 'Beat 50.0%'));
+    check('a quarter with no estimate gives no verdict', has(body, 'no estimate'));
+    check('the estimate is shown beside the actual', has(body, 'vs 1.25 est.'));
+    check('the source is named', has(body, 'Source: Yahoo Finance') && !has(body, 'Source: Nasdaq'));
 
     // --- peers ----------------------------------------------------------------------
     check('the peer list was read', seen.some((u) => u.includes('security_peers')));

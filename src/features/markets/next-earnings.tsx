@@ -1,5 +1,5 @@
 /**
- * When this company reports, and what the street expects.
+ * When this company reports, what the street expects, and how its last quarters went.
  *
  * THE TENSE IS THE POINT. `upcoming` comes from the server, which chooses the next scheduled report
  * where there is one and the most recent past one otherwise. Rendering "Reports" above a date that
@@ -13,8 +13,9 @@
 import { View } from 'react-native';
 
 import { Card, Text } from '@/components/ui';
+import { palette } from '@/theme/colors';
 
-import { useLastSurprise, useNextEarnings } from './api/use-next-earnings';
+import { type EarningsQuarter, useEarningsHistory, useNextEarnings } from './api/use-next-earnings';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -38,14 +39,91 @@ function formatTime(t: string): string | null {
   return t.replace(/-/g, ' ');
 }
 
+/** `2026-06-30` -> `Jun 2026`: the quarter by the month it ended, as both sources date it. */
+function quarterLabel(iso: string): string {
+  const [y, m] = iso.split('-').map((p) => Number(p));
+  if (!y || !m) return iso;
+  return `${MONTHS[m - 1] ?? ''} ${y}`;
+}
+
+/** Whose figures these are. A code we do not know is shown as it is rather than dropped. */
+const SOURCES: Record<string, string> = { nasdaq: 'Nasdaq', yfinance: 'Yahoo Finance' };
+
+/** One quarter: the reported EPS, the estimate before it, and how far it beat or missed. */
+function QuarterRow({ quarter }: { quarter: EarningsQuarter }) {
+  const { actual, estimate, surprisePct, beat } = quarter;
+  const color = beat === null ? palette.inkMuted : beat ? palette.bullish : palette.bearish;
+  const verdict =
+    beat === null
+      ? null
+      : `${beat ? 'Beat' : 'Missed'}${surprisePct === null ? '' : ` ${Math.abs(surprisePct).toFixed(1)}%`}`;
+  return (
+    <View className="flex-row items-baseline justify-between gap-3">
+      <Text variant="muted" className="w-20">
+        {quarterLabel(quarter.periodEnding)}
+      </Text>
+      <Text variant="body" className="flex-1 tabular-nums">
+        {actual === null ? '—' : actual.toFixed(2)}
+        {estimate === null ? '' : (
+          <Text variant="muted">{` vs ${estimate.toFixed(2)} est.`}</Text>
+        )}
+      </Text>
+      {verdict ? (
+        <Text className="font-semibold text-sm tabular-nums" style={{ color }}>
+          {verdict}
+        </Text>
+      ) : (
+        <Text variant="muted">no estimate</Text>
+      )}
+    </View>
+  );
+}
+
 export function NextEarnings({ securityId }: { securityId: string | null | undefined }) {
-  const { earnings, loading, empty } = useNextEarnings(securityId);
-  const { surprise } = useLastSurprise(securityId);
+  const { earnings, loading } = useNextEarnings(securityId);
+  const { quarters, loading: historyLoading } = useEarningsHistory(securityId);
 
-  // The calendar is US-listed, so most securities have no row at all. No section rather than an
-  // empty one — the rule every panel here follows.
-  if (loading || empty || !earnings) return null;
+  // A company may have a date and no history, history and no date, or neither. No section rather
+  // than an empty one — the rule every panel here follows.
+  if (loading || historyLoading) return null;
+  if (!earnings && quarters.length === 0) return null;
 
+  // HOW THE LAST ONE WENT, from the newest quarter the history holds.
+  const last = quarters[0] ?? null;
+
+  return (
+    <>
+      {earnings ? <DateCard earnings={earnings} last={last} /> : null}
+      {quarters.length > 0 ? <RecentQuarters quarters={quarters} /> : null}
+    </>
+  );
+}
+
+function RecentQuarters({ quarters }: { quarters: EarningsQuarter[] }) {
+  const sources = [...new Set(quarters.map((q) => SOURCES[q.source] ?? q.source))];
+  return (
+    <>
+      <View className="mt-5">
+        <Text variant="label">Recent quarters</Text>
+      </View>
+      <Card tone="muted" className="mt-2 gap-2">
+        <Text variant="muted">EPS reported, against the estimate before it</Text>
+        {quarters.map((q) => (
+          <QuarterRow key={q.periodEnding} quarter={q} />
+        ))}
+        <Text variant="muted" className="text-xs">{`Source: ${sources.join(', ')}`}</Text>
+      </Card>
+    </>
+  );
+}
+
+function DateCard({
+  earnings,
+  last,
+}: {
+  earnings: NonNullable<ReturnType<typeof useNextEarnings>['earnings']>;
+  last: EarningsQuarter | null;
+}) {
   const when = [formatDate(earnings.reportDate), earnings.reportingTime ? formatTime(earnings.reportingTime) : null]
     .filter(Boolean)
     .join(' · ');
@@ -79,15 +157,15 @@ export function NextEarnings({ securityId }: { securityId: string | null | undef
             both already stored — a company that has just beaten or missed is the context a reader
             brings to the next date. Shown even on an UPCOMING report, because that is precisely
             when the previous quarter's result is the useful thing to know. */}
-        {surprise && surprise.actual !== null && surprise.expected !== null ? (
+        {last && last.actual !== null && last.estimate !== null && last.beat !== null ? (
           <View className="flex-row items-baseline justify-between">
             <Text variant="muted">
-              {surprise.beat ? 'Last quarter beat by' : 'Last quarter missed by'}
+              {last.beat ? 'Last quarter beat by' : 'Last quarter missed by'}
             </Text>
             <Text variant="body">
-              {surprise.surprisePct === null
-                ? `${Math.abs(surprise.actual - surprise.expected).toFixed(2)}`
-                : `${Math.abs(surprise.surprisePct).toFixed(1)}%`}
+              {last.surprisePct === null
+                ? `${Math.abs(last.actual - last.estimate).toFixed(2)}`
+                : `${Math.abs(last.surprisePct).toFixed(1)}%`}
             </Text>
           </View>
         ) : null}

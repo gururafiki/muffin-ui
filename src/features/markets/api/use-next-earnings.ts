@@ -7,8 +7,9 @@
  * that has passed is worse than showing nothing — the reader cannot tell from the date alone that
  * the consensus beside it is now history.
  *
- * The feed (`equity/calendar/earnings`, nasdaq) covers US-listed companies, so most non-US
- * securities have no row. That is the ordinary case and renders as no section.
+ * Two sources since Phase 6b (2026-11-21): nasdaq's daily calendar for US listings, and Yahoo's next
+ * date from the company lane's weekly summaries for everything else. The view picks ONE source per
+ * company, so a security with neither has no row, which renders as no section.
  */
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -18,12 +19,15 @@ import { getSupabase } from '@/lib/auth/client';
 
 import { MarketUnavailableError } from './market-client';
 
-const zSurprise = z.looseObject({
-  report_date: z.string(),
-  expected: z.coerce.number().nullish(),
+const zQuarter = z.looseObject({
+  period_ending: z.string(),
+  reported_date: z.string().nullish(),
+  // PostgREST v14 sends `numeric` as a JSON number; coerce guards a driver that quotes it.
   actual: z.coerce.number().nullish(),
+  estimate: z.coerce.number().nullish(),
   surprise_pct: z.coerce.number().nullish(),
   beat: z.boolean().nullish(),
+  source_code: z.string(),
 });
 
 const zEarnings = z.looseObject({
@@ -48,47 +52,60 @@ export interface NextEarnings {
   upcoming: boolean;
 }
 
+export interface EarningsQuarter {
+  /** The quarter's last month-end, `2026-06-30`. */
+  periodEnding: string;
+  reportedDate: string | null;
+  actual: number | null;
+  estimate: number | null;
+  /** Of the estimate's MAGNITUDE, server-side, so a smaller loss than expected is a positive beat. */
+  surprisePct: number | null;
+  beat: boolean | null;
+  /** Whose figures these are: `nasdaq` or `yfinance`. One source per company, never mixed. */
+  source: string;
+}
+
+/** How many quarters the stock page shows: two years. */
+export const EARNINGS_QUARTERS = 8;
+
 /**
- * How the LAST report went — actual against the consensus that preceded it.
+ * The last quarters' reported EPS against the estimate that preceded them.
  *
- * Derived server-side from two things this schema already holds rather than fetched:
- * `equity/fundamental/historical_eps` (alpha_vantage) allows 25 calls a DAY and covers US listings
- * only, which cannot serve 12,350 equities.
+ * `market.security_earnings_history` picks ONE source per company (Phase 6b): nasdaq and Yahoo
+ * agree on a quarter's EPS only 65% of the time — ADR ratios and other adjusted bases — so a series
+ * mixing them would put two bases side by side. Global where Yahoo covers the company.
  */
-export function useLastSurprise(securityId: string | null | undefined) {
+export function useEarningsHistory(securityId: string | null | undefined) {
   const query = useQuery({
-    queryKey: ['market', 'earnings-surprise', securityId ?? null],
+    queryKey: ['market', 'earnings-history', securityId ?? null],
     queryFn: async () => {
       const supabase = getSupabase();
       if (!supabase) throw new MarketUnavailableError();
       const { data, error } = await supabase
         .schema('market')
-        .from('security_earnings_surprise')
-        .select('report_date,expected,actual,surprise_pct,beat')
+        .from('security_earnings_history')
+        .select('period_ending,reported_date,actual,estimate,surprise_pct,beat,source_code')
         .eq('security_id', securityId as string)
-        .order('report_date', { ascending: false })
-        .limit(1);
-      if (error) throw new Error(`market.security_earnings_surprise read failed: ${error.message}`);
-      return parseArray(zSurprise, data ?? [], 'security_earnings_surprise');
+        .order('period_ending', { ascending: false })
+        .limit(EARNINGS_QUARTERS);
+      if (error) throw new Error(`market.security_earnings_history read failed: ${error.message}`);
+      return parseArray(zQuarter, data ?? [], 'security_earnings_history');
     },
     enabled: !!securityId,
     staleTime: 6 * 60 * 60_000,
     gcTime: 24 * 60 * 60_000,
     retry: (count, error) => !(error instanceof MarketUnavailableError) && count < 1,
   });
-  const row = (query.data ?? [])[0];
-  return {
-    surprise: row
-      ? {
-          reportDate: row.report_date,
-          expected: row.expected ?? null,
-          actual: row.actual ?? null,
-          surprisePct: row.surprise_pct ?? null,
-          beat: row.beat ?? null,
-        }
-      : null,
-    loading: query.isPending && !!securityId,
-  };
+  const quarters: EarningsQuarter[] = (query.data ?? []).map((row) => ({
+    periodEnding: row.period_ending,
+    reportedDate: row.reported_date ?? null,
+    actual: row.actual ?? null,
+    estimate: row.estimate ?? null,
+    surprisePct: row.surprise_pct ?? null,
+    beat: row.beat ?? null,
+    source: row.source_code,
+  }));
+  return { quarters, loading: query.isPending && !!securityId };
 }
 
 export function useNextEarnings(securityId: string | null | undefined) {
