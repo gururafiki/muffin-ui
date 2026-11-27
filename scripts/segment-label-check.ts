@@ -53,6 +53,15 @@ check('a standard member does too', memberLabel('us-gaap:ProductMember') === 'Pr
 check('a country member is left alone', memberLabel('dart:USMember') === 'US');
 check('a namespace is never part of the label', !memberLabel('amzn:AmazonWebServicesSegmentMember').includes(':'));
 
+console.log('\nCNINFO, EDINET and ESEF — a printed name passes through whole');
+check('a CNINFO name with a unit is not split', memberLabel('cninfo:1.5MW-2MW') === '1.5MW-2MW', memberLabel('cninfo:1.5MW-2MW'));
+check('a CNINFO name with a product code is not split', memberLabel('cninfo:3C数码') === '3C数码', memberLabel('cninfo:3C数码'));
+check('an EDINET name passes through', memberLabel('edinet:自動車事業') === '自動車事業');
+check('an EDINET name ending in a Latin word keeps it', memberLabel('edinet:ICT Segment') === 'ICT Segment', memberLabel('edinet:ICT Segment'));
+check('an ESEF name keeps its camel case', memberLabel('esef:iPhone') === 'iPhone', memberLabel('esef:iPhone'));
+check('a printed name ending in Member keeps it', memberLabel('esef:Other Member') === 'Other Member');
+check('an XBRL code in a filer namespace is still split', memberLabel('cninfox:FooBarMember') === 'Foo Bar');
+
 console.log('\ndegenerate input');
 check('a code that reduces to nothing falls back to itself', memberLabel('Member') === 'Member');
 check('an empty string does not throw', memberLabel('') === '');
